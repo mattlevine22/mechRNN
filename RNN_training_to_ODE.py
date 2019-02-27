@@ -8,7 +8,7 @@
 import torch
 from torch.autograd import Variable
 import numpy as np
-import pylab as pl
+#import pylab as pl
 import torch.nn.init as init
 from scipy.integrate import odeint
 import pdb
@@ -37,7 +37,7 @@ x = np.zeros([len(tmp),2])
 x[:,0] = tmp
 x[:,1] = 10*np.random.rand(len(x))
 y0 = yb
-y = odeint(model, y0, tspan, args=(yb,c_gamma,x))
+y = odeint(model, y0, tspan, args=(yb,c_gamma,x))/100.0
 
 ## 2. Plot ODE
 fig, ax1 = plt.subplots()
@@ -81,9 +81,9 @@ def forward(input, hidden_state, w1, w2, b, c, v):
 
 dtype = torch.FloatTensor
 input_size, hidden_size, output_size = 1, 6, 1
-epochs = 30
+epochs = 40
 seq_length = x0.shape[0]
-lr = 0.5
+lr = 0.02
 
 # now, TRAIN to fit the output from the previous model
 w1 = torch.FloatTensor(hidden_size, hidden_size).type(dtype)
@@ -108,10 +108,9 @@ v =  Variable(v, requires_grad=True)
 
 for i in range(epochs):
   total_loss = 0
-  hidden_state = torch.FloatTensor(hidden_size, 1).type(dtype)
-  init.normal_(hidden_state, 0.0, 1)
-  hidden_state = Variable(hidden_state, requires_grad=True)
-  # hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=True)
+  #init.normal_(hidden_state, 0.0, 1)
+  #hidden_state = Variable(hidden_state, requires_grad=True)
+  hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=True)
   for j in range(seq_length):
     target = output[j:(j+1)]
     (pred, hidden_state) = forward(input[j:j+1], hidden_state, w1, w2, b, c, v)
@@ -130,7 +129,7 @@ for i in range(epochs):
     c.grad.data.zero_()
     v.grad.data.zero_()
 
-    hidden_state = Variable(hidden_state.data)
+    hidden_state = hidden_state.detach()
   if i % 10 == 0:
      print("Epoch: {}. Output-loss {}".format(
           i,
