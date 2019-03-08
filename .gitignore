@@ -1,0 +1,8 @@
+*.pyc
+**/*.pyc
+results/
+output/
+.DS_Store
+
+.python_history
+__pycache__/
