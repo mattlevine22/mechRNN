@@ -189,29 +189,36 @@ def train_RNN(forward,
 	fig.savefig(fname=output_dir+'/PERFECT_MechRnn_fit_ode')
 	plt.close(fig)
 
+	# Initilize parameters for training
+	w1 = torch.FloatTensor(hidden_size, hidden_size).type(dtype)
+	w2 = torch.FloatTensor(hidden_size, input_size).type(dtype)
+	b = torch.FloatTensor(hidden_size, 1).type(dtype)
+	c = torch.FloatTensor(output_size, 1).type(dtype)
+	v = torch.FloatTensor(output_size, hidden_size).type(dtype)
+
 	# trivial_init trains the mechRNN starting from parameters (specified above)
 	# that trivialize the RNN to the forward ODE model
-	if not trivial_init:
-		# now, TRAIN to fit the output from the previous model
-		w1 = torch.FloatTensor(hidden_size, hidden_size).type(dtype)
+	# now, TRAIN to fit the output from the previous model
+	if trivial_init:
+		init.zeros_(w1)
+		init.zeros_(w2)
+		init.zeros_(b)
+		init.zeros_(c)
+		init.zeros_(v)
+		w1[0,0] = 1.
+		v[0] = 1.
+	else:
 		init.normal_(w1, 0.0, 0.1)
-		w1 =  Variable(w1, requires_grad=True)
-
-		w2 = torch.FloatTensor(hidden_size, input_size).type(dtype)
 		init.normal_(w2, 0.0, 0.1)
-		w2 = Variable(w2, requires_grad=True)
-
-		b = torch.FloatTensor(hidden_size, 1).type(dtype)
 		init.normal_(b, 0.0, 0.1)
-		b =  Variable(b, requires_grad=True)
-
-		c = torch.FloatTensor(output_size, 1).type(dtype)
 		init.normal_(c, 0.0, 0.1)
-		c =  Variable(c, requires_grad=True)
-
-		v = torch.FloatTensor(output_size, hidden_size).type(dtype)
 		init.normal_(v, 0.0, 0.1)
-		v =  Variable(v, requires_grad=True)
+
+	w1 =  Variable(w1, requires_grad=True)
+	w2 = Variable(w2, requires_grad=True)
+	b =  Variable(b, requires_grad=True)
+	c =  Variable(c, requires_grad=True)
+	v =  Variable(v, requires_grad=True)
 
 	loss_vec_train = np.zeros(n_epochs)
 	loss_vec_clean_train = np.zeros(n_epochs)
