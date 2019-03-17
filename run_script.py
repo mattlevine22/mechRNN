@@ -113,7 +113,7 @@ for i in range(n_sims):
 	forward = forward_mech
 	hidden_size = 7
 
-	# train on clean data
+	# train on clean data (random init)
 	normz_info = normz_info_clean
 	run_output_dir = output_dir + '/mechRNN_clean'
 	all_dirs.append(run_output_dir)
@@ -127,8 +127,18 @@ for i in range(n_sims):
       y_clean_test_norm, y_noisy_test_norm, x_test,
       rnn_model_params, hidden_size, n_epochs, lr,
       run_output_dir, normz_info_clean, rnn_sim_model)
+	# train on clean data (trivial init)
+	run_output_dir = output_dir + '/mechRNN_clean_trivialInit'
+	all_dirs.append(run_output_dir)
+	torch.manual_seed(0)
+	train_RNN(forward,
+      y_clean_train_norm, y_clean_train_norm, x_train,
+      y_clean_test_norm, y_noisy_test_norm, x_test,
+      rnn_model_params, hidden_size, n_epochs, lr,
+      run_output_dir, normz_info_clean, rnn_sim_model,
+      trivial_init=True)
 
-	# train on noisy data
+	# train on noisy data (regular initialization)
 	normz_info = normz_info_noisy
 	run_output_dir = output_dir + '/mechRNN_noisy'
 	all_dirs.append(run_output_dir)
@@ -142,6 +152,16 @@ for i in range(n_sims):
       y_clean_test_norm, y_noisy_test_norm, x_test,
       rnn_model_params, hidden_size, n_epochs, lr,
       run_output_dir, normz_info_noisy, rnn_sim_model)
+	# train on noisy data (trivial initialization)
+	run_output_dir = output_dir + '/mechRNN_noisy_trivialInit'
+	all_dirs.append(run_output_dir)
+	torch.manual_seed(0)
+	train_RNN(forward,
+      y_clean_train_norm, y_noisy_train_norm, x_train,
+      y_clean_test_norm, y_noisy_test_norm, x_test,
+      rnn_model_params, hidden_size, n_epochs, lr,
+      run_output_dir, normz_info_noisy, rnn_sim_model,
+      trivial_init=True)
 
 	#### run mechRNN w/ BAD parameter ###
 	forward = forward_mech

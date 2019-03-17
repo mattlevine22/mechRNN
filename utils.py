@@ -128,7 +128,8 @@ def train_RNN(forward,
 			y_clean_train, y_noisy_train, x_train,
 			y_clean_test, y_noisy_test, x_test,
 			model_params, hidden_size=6, n_epochs=100, lr=0.05,
-			output_dir='.', normz_info=None, model=None):
+			output_dir='.', normz_info=None, model=None,
+			trivial_init=False):
 
 	if not os.path.exists(output_dir):
 		os.makedirs(output_dir)
@@ -188,26 +189,29 @@ def train_RNN(forward,
 	fig.savefig(fname=output_dir+'/PERFECT_MechRnn_fit_ode')
 	plt.close(fig)
 
-	# now, TRAIN to fit the output from the previous model
-	w1 = torch.FloatTensor(hidden_size, hidden_size).type(dtype)
-	init.normal_(w1, 0.0, 0.1)
-	w1 =  Variable(w1, requires_grad=True)
+	# trivial_init trains the mechRNN starting from parameters (specified above)
+	# that trivialize the RNN to the forward ODE model
+	if not trivial_init:
+		# now, TRAIN to fit the output from the previous model
+		w1 = torch.FloatTensor(hidden_size, hidden_size).type(dtype)
+		init.normal_(w1, 0.0, 0.1)
+		w1 =  Variable(w1, requires_grad=True)
 
-	w2 = torch.FloatTensor(hidden_size, input_size).type(dtype)
-	init.normal_(w2, 0.0, 0.1)
-	w2 = Variable(w2, requires_grad=True)
+		w2 = torch.FloatTensor(hidden_size, input_size).type(dtype)
+		init.normal_(w2, 0.0, 0.1)
+		w2 = Variable(w2, requires_grad=True)
 
-	b = torch.FloatTensor(hidden_size, 1).type(dtype)
-	init.normal_(b, 0.0, 0.1)
-	b =  Variable(b, requires_grad=True)
+		b = torch.FloatTensor(hidden_size, 1).type(dtype)
+		init.normal_(b, 0.0, 0.1)
+		b =  Variable(b, requires_grad=True)
 
-	c = torch.FloatTensor(output_size, 1).type(dtype)
-	init.normal_(c, 0.0, 0.1)
-	c =  Variable(c, requires_grad=True)
+		c = torch.FloatTensor(output_size, 1).type(dtype)
+		init.normal_(c, 0.0, 0.1)
+		c =  Variable(c, requires_grad=True)
 
-	v = torch.FloatTensor(output_size, hidden_size).type(dtype)
-	init.normal_(v, 0.0, 0.1)
-	v =  Variable(v, requires_grad=True)
+		v = torch.FloatTensor(output_size, hidden_size).type(dtype)
+		init.normal_(v, 0.0, 0.1)
+		v =  Variable(v, requires_grad=True)
 
 	loss_vec_train = np.zeros(n_epochs)
 	loss_vec_clean_train = np.zeros(n_epochs)
