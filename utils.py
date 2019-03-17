@@ -216,8 +216,6 @@ def train_RNN(forward,
 	for i_epoch in range(n_epochs):
 		total_loss_train = 0
 		total_loss_clean_train = 0
-		total_loss_test = 0
-		total_loss_clean_test = 0
 		#init.normal_(hidden_state, 0.0, 1)
 		#hidden_state = Variable(hidden_state, requires_grad=True)
 		hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
@@ -243,9 +241,15 @@ def train_RNN(forward,
 			v.grad.data.zero_()
 
 			hidden_state = hidden_state.detach()
+		#normalize losses
+		total_loss_train = total_loss_train / train_seq_length
+		total_loss_clean_train = total_loss_clean_train / train_seq_length
+		#store losses
 		loss_vec_train[i_epoch] = total_loss_train
 		loss_vec_clean_train[i_epoch] = total_loss_clean_train
 
+		total_loss_test = 0
+		total_loss_clean_test = 0
 		hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
 		for j in range(test_seq_length):
 			target = output_test[j:(j+1)]
@@ -255,6 +259,10 @@ def train_RNN(forward,
 			total_loss_clean_test += (pred - target_clean).pow(2).sum()/2
 
 			hidden_state = hidden_state.detach()
+		#normalize losses
+		total_loss_test = total_loss_test / test_seq_length
+		total_loss_clean_test = total_loss_clean_test / test_seq_length
+		#store losses
 		loss_vec_test[i_epoch] = total_loss_test
 		loss_vec_clean_test[i_epoch] = total_loss_clean_test
 
@@ -277,7 +285,7 @@ def train_RNN(forward,
 
 			ax1.scatter(np.arange(len(y_noisy_train)), y_noisy_train, color='red', s=10, alpha=0.3, label='noisy data')
 			ax1.plot(y_clean_train, color='red', label='clean data')
-			ax1.plot(predictions, color='black', label='NN fit', linewidth=3, linestyle='--')
+			ax1.plot(predictions, color='black', label='NN fit')
 			ax1.set_xlabel('time')
 			ax1.set_ylabel('y(t)', color='red')
 			ax1.tick_params(axis='y', labelcolor='red')
@@ -301,7 +309,7 @@ def train_RNN(forward,
 
 			ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
 			ax3.plot(y_clean_test, color='red', label='clean data')
-			ax3.plot(predictions, color='black', label='NN fit', linewidth=3, linestyle='--')
+			ax3.plot(predictions, color='black', label='NN fit')
 			ax3.set_xlabel('time')
 			ax3.set_ylabel('y(t)', color='red')
 			ax3.tick_params(axis='y', labelcolor='red')
@@ -354,7 +362,7 @@ def train_RNN(forward,
 
 	ax1.scatter(np.arange(len(y_noisy_train)), y_noisy_train, color='red', s=10, alpha=0.3, label='noisy data')
 	ax1.plot(y_clean_train, color='red', label='clean data')
-	ax1.plot(predictions, color='black', label='NN fit', linewidth=3, linestyle='--')
+	ax1.plot(predictions, color='black', label='NN fit')
 	ax1.set_xlabel('time')
 	ax1.set_ylabel('y(t)', color='red')
 	ax1.tick_params(axis='y', labelcolor='red')
@@ -378,7 +386,7 @@ def train_RNN(forward,
 
 	ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
 	ax3.plot(y_clean_test, color='red', label='clean data')
-	ax3.plot(predictions, color='black', label='NN fit', linewidth=3, linestyle='--')
+	ax3.plot(predictions, color='black', label='NN fit')
 	ax3.set_xlabel('time')
 	ax3.set_ylabel('y(t)', color='red')
 	ax3.tick_params(axis='y', labelcolor='red')

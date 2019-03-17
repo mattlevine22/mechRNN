@@ -2,7 +2,7 @@ from utils import *
 import numpy as np
 import torch
 
-lr=0.05 # learning rate
+lr = 0.05 # learning rate
 tspan = np.arange(0,1001,1)
 yb = 100
 c_gamma = 0.05
@@ -13,7 +13,7 @@ sim_model = exp_decay_model
 rnn_sim_model = easy_exp_decay_model
 
 n_sims = 3
-n_epochs = 30
+n_epochs = 1000
 
 train_frac = 0.6
 for i in range(n_sims):
@@ -147,8 +147,7 @@ for i in range(n_sims):
 	forward = forward_mech
 	hidden_size = 7
 
-
-	for badness in [0.01, 0.1, 0.5, 0.9, 0.99]:
+	for badness in [0.1, 0.5, 0.9]:
 		rnn_BAD_model_params = (yb, badness*c_gamma)
 
 		# train on clean data
