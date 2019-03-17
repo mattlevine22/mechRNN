@@ -311,7 +311,7 @@ def train_RNN(forward,
 				hidden_state = hidden_state
 				predictions.append(pred.data.numpy().ravel()[0])
 
-			ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
+			# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
 			ax3.plot(y_clean_test, color='red', label='clean data')
 			ax3.plot(predictions, color='black', label='NN fit')
 			ax3.set_xlabel('time')
@@ -388,7 +388,7 @@ def train_RNN(forward,
 		hidden_state = hidden_state
 		predictions.append(pred.data.numpy().ravel()[0])
 
-	ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
+	# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
 	ax3.plot(y_clean_test, color='red', label='clean data')
 	ax3.plot(predictions, color='black', label='NN fit')
 	ax3.set_xlabel('time')
@@ -414,7 +414,7 @@ def train_RNN(forward,
 
 def compare_fits(my_dirs, output_fname="./training_comparisons"):
 
-	fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3,
+	fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=3,
 		figsize = [10, 4],
 		sharey=True, sharex=True)
 	for d in my_dirs:
@@ -423,8 +423,8 @@ def compare_fits(my_dirs, output_fname="./training_comparisons"):
 			ax1.plot(x, label=d_label)
 			x = np.loadtxt(d+"/loss_vec_clean_test.txt")
 			ax2.plot(x, label=d_label)
-			x = np.loadtxt(d+"/loss_vec_test.txt")
-			ax3.plot(x, label=d_label)
+			# x = np.loadtxt(d+"/loss_vec_test.txt")
+			# ax3.plot(x, label=d_label)
 
 	ax1.set_xlabel('Epochs')
 	ax1.set_ylabel('Error')
@@ -432,10 +432,10 @@ def compare_fits(my_dirs, output_fname="./training_comparisons"):
 	ax1.legend(fontsize=6, handlelength=2, loc='upper right')
 	ax2.set_xlabel('Epochs')
 	ax2.set_ylabel('Error')
-	ax2.set_title('Test Error (on clean data)')
-	ax3.set_xlabel('Epochs')
-	ax3.set_ylabel('Error')
-	ax3.set_title('Test Error (on noisy data)')
+	ax2.set_title('Test Error (predicting clean data)')
+	# ax3.set_xlabel('Epochs')
+	# ax3.set_ylabel('Error')
+	# ax3.set_title('Test Error (on noisy data)')
 
 	# fig.suptitle("Comparison of training efficacy (trained on noisy data)")
 	fig.savefig(fname=output_fname)
