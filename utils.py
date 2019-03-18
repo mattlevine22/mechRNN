@@ -220,10 +220,17 @@ def train_RNN(forward,
 	c =  Variable(c, requires_grad=True)
 	v =  Variable(v, requires_grad=True)
 
+	w1_history = np.zeros((n_epochs*train_seq_length,w1.shape[0],w1.shape[1]))
+	w2_history = np.zeros((n_epochs*train_seq_length,w2.shape[0],w2.shape[1]))
+	b_history = np.zeros((n_epochs*train_seq_length,b.shape[0],b.shape[1]))
+	c_history = np.zeros((n_epochs*train_seq_length,c.shape[0],c.shape[1]))
+	v_history = np.zeros((n_epochs*train_seq_length,v.shape[0],v.shape[1]))
+
 	loss_vec_train = np.zeros(n_epochs)
 	loss_vec_clean_train = np.zeros(n_epochs)
 	loss_vec_test = np.zeros(n_epochs)
 	loss_vec_clean_test = np.zeros(n_epochs)
+	cc = -1 # iteration counter for saving weight updates
 	for i_epoch in range(n_epochs):
 		total_loss_train = 0
 		total_loss_clean_train = 0
@@ -231,6 +238,7 @@ def train_RNN(forward,
 		#hidden_state = Variable(hidden_state, requires_grad=True)
 		hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
 		for j in range(train_seq_length):
+			cc += 1
 			target = output_train[j:(j+1)]
 			target_clean = output_clean_train[j:(j+1)]
 			(pred, hidden_state) = forward(x_train[:,j:j+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
@@ -252,6 +260,14 @@ def train_RNN(forward,
 			v.grad.data.zero_()
 
 			hidden_state = hidden_state.detach()
+
+			# save updated parameters
+			w1_history[cc,:] = w1.detach().numpy()
+			w2_history[cc,:] = w2.detach().numpy()
+			b_history[cc,:] = b.detach().numpy()
+			c_history[cc,:] = c.detach().numpy()
+			v_history[cc,:] = v.detach().numpy()
+
 		#normalize losses
 		total_loss_train = total_loss_train / train_seq_length
 		total_loss_clean_train = total_loss_clean_train / train_seq_length
@@ -277,8 +293,8 @@ def train_RNN(forward,
 		loss_vec_test[i_epoch] = total_loss_test
 		loss_vec_clean_test[i_epoch] = total_loss_clean_test
 
-		# print updates every iteration or in 10% incrememnts
-		if i_epoch % int( max(1, np.ceil(n_epochs/10)) ) == 0:
+		# print updates every 10 iterations or in 10% incrememnts
+		if i_epoch % int( max(10, np.ceil(n_epochs/10)) ) == 0:
 			print("Epoch: {}\nTraining Loss = {}\nTesting Loss = {}".format(
 						i_epoch,
 						total_loss_train.data.item(),
@@ -341,6 +357,9 @@ def train_RNN(forward,
 			fig.savefig(fname=output_dir+'/rnn_fit_ode_iterEpochs'+str(i_epoch))
 			plt.close(fig)
 
+			# Plot parameter convergence
+
+
 	## save loss_vec
 	np.savetxt(output_dir+'/loss_vec_train.txt',loss_vec_train)
 	np.savetxt(output_dir+'/loss_vec_clean_train.txt',loss_vec_clean_train)
@@ -358,8 +377,36 @@ def train_RNN(forward,
 	# print("c:",c)
 	# print("v:",v)
 
-	## now, inspect the quality of the learned model
+	# plot parameter convergence
+	fig, my_axes = plt.subplots(2, 3, sharex=True, figsize=[8,6])
 
+	x_vals = np.linspace(0,n_epochs,len(w1_history))
+	my_axes[0,0].plot(x_vals, np.linalg.norm(w1.detach().numpy() - w1_history, ord='fro', axis=(1,2)))
+	my_axes[0,0].set_title('W_1')
+	my_axes[0,0].set_xlabel('Epochs')
+
+	my_axes[0,1].plot(x_vals, np.linalg.norm(w2.detach().numpy() - w2_history, ord='fro', axis=(1,2)))
+	my_axes[0,1].set_title('W_2')
+	my_axes[0,1].set_xlabel('Epochs')
+
+	my_axes[1,0].plot(x_vals, np.linalg.norm(v.detach().numpy() - v_history, ord='fro', axis=(1,2)))
+	my_axes[1,0].set_title('v')
+	my_axes[1,0].set_xlabel('Epochs')
+
+	my_axes[1,1].plot(x_vals, np.linalg.norm(b.detach().numpy() - b_history, ord='fro', axis=(1,2)))
+	my_axes[1,1].set_title('b')
+	my_axes[1,1].set_xlabel('Epochs')
+
+	my_axes[1,2].plot(x_vals, np.linalg.norm(c.detach().numpy() - c_history, ord='fro', axis=(1,2)))
+	my_axes[1,2].set_title('c')
+	my_axes[1,2].set_xlabel('Epochs')
+
+
+	fig.suptitle("Parameter convergence")
+	fig.savefig(fname=output_dir+'/rnn_parameter_convergence')
+	plt.close(fig)
+
+	## now, inspect the quality of the learned model
 	# plot predictions vs truth
 	fig, (ax1, ax3) = plt.subplots(1, 2)
 
@@ -421,7 +468,7 @@ def train_RNN(forward,
 
 def compare_fits(my_dirs, output_fname="./training_comparisons"):
 
-	fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=3,
+	fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2,
 		figsize = [10, 4],
 		sharey=True, sharex=True)
 	for d in my_dirs:
