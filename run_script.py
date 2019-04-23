@@ -128,7 +128,7 @@ for i in range(n_sims):
       rnn_model_params, hidden_size, n_epochs, lr,
       run_output_dir, normz_info_clean, rnn_sim_model)
 	# train on clean data (trivial init)
-	run_output_dir = output_dir + '/mechRNN_clean_trivialInit'
+	run_output_dir = output_dir + '/mechRNN_trivialInit_clean'
 	all_dirs.append(run_output_dir)
 	torch.manual_seed(0)
 	train_RNN(forward,
@@ -153,7 +153,7 @@ for i in range(n_sims):
       rnn_model_params, hidden_size, n_epochs, lr,
       run_output_dir, normz_info_noisy, rnn_sim_model)
 	# train on noisy data (trivial initialization)
-	run_output_dir = output_dir + '/mechRNN_noisy_trivialInit'
+	run_output_dir = output_dir + '/mechRNN_trivialInit_noisy'
 	all_dirs.append(run_output_dir)
 	torch.manual_seed(0)
 	train_RNN(forward,
@@ -167,7 +167,7 @@ for i in range(n_sims):
 	forward = forward_mech
 	hidden_size = 7
 
-	for badness in [0.1, 0.5, 0.9]:
+	for badness in [0.01, 0.1, 0.5, 0.9, 0.99]:
 		rnn_BAD_model_params = (yb, badness*c_gamma)
 
 		# train on clean data
