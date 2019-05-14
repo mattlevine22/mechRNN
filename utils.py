@@ -141,6 +141,13 @@ def forward_chaos_pureML(data_input, hidden_state, A, B, C, a, b, *args):
 	out = b + torch.mm(C,hidden_state)
 	return  (out, hidden_state)
 
+def forward_chaos_pureML2(data_input, hidden_state, A, B, C, a, b, *args):
+	hidden_state = torch.tanh(a + torch.mm(A,hidden_state))
+	out = b + torch.mm(C,hidden_state)
+	return  (out, hidden_state)
+
+
+
 def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_info, model, model_params):
 	# unnormalize
 	# ymin = normz_info['Ymin']
@@ -362,7 +369,7 @@ def train_chaosRNN(forward,
 
 		total_loss_test = 0
 		total_loss_clean_test = 0
-		hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
+		# hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
 		for j in range(test_seq_length):
 			target = output_test[j,None]
 			target_clean = output_clean_test[j,None]
@@ -399,9 +406,10 @@ def train_chaosRNN(forward,
 
 			for kk in range(len(ax_list)):
 				ax1 = ax_list[kk]
-				ax1.scatter(np.arange(len(y_noisy_train[:,kk])), y_noisy_train[:,kk], color='red', s=10, alpha=0.3, label='noisy data')
-				ax1.plot(y_clean_train[:,kk], color='red', label='clean data')
-				ax1.plot(predictions[:,kk], color='black', label='NN fit')
+				t_plot = np.arange(0,len(y_noisy_train[:,kk])*model_params['delta_t'],model_params['delta_t'])
+				ax1.scatter(t_plot, y_noisy_train[:,kk], color='red', s=10, alpha=0.3, label='noisy data')
+				ax1.plot(t_plot, y_clean_train[:,kk], color='red', label='clean data')
+				ax1.plot(t_plot, predictions[:,kk], color='black', label='NN fit')
 				ax1.set_xlabel('time')
 				ax1.set_ylabel(model_params['state_names'][kk] + '(t)', color='red')
 				ax1.tick_params(axis='y', labelcolor='red')
@@ -424,9 +432,10 @@ def train_chaosRNN(forward,
 
 			for kk in range(len(ax_list)):
 				ax3 = ax_list[kk]
+				t_plot = np.arange(0,len(y_clean_test[:,kk])*model_params['delta_t'],model_params['delta_t'])
 				# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-				ax3.plot(y_clean_test[:,kk], color='red', label='clean data')
-				ax3.plot(predictions[:,kk], color='black', label='NN fit')
+				ax3.plot(t_plot, y_clean_test[:,kk], color='red', label='clean data')
+				ax3.plot(t_plot, predictions[:,kk], color='black', label='NN fit')
 				ax3.set_xlabel('time')
 				ax3.set_ylabel(model_params['state_names'][kk] +'(t)', color='red')
 				ax3.tick_params(axis='y', labelcolor='red')
@@ -502,9 +511,10 @@ def train_chaosRNN(forward,
 
 	for kk in range(len(ax_list)):
 		ax1 = ax_list[kk]
-		ax1.scatter(np.arange(len(y_noisy_train[:,kk])), y_noisy_train[:,kk], color='red', s=10, alpha=0.3, label='noisy data')
-		ax1.plot(y_clean_train[:,kk], color='red', label='clean data')
-		ax1.plot(predictions[:,kk], color='black', label='NN fit')
+		t_plot = np.arange(0,len(y_noisy_train[:,kk])*model_params['delta_t'],model_params['delta_t'])
+		ax1.scatter(t_plot, y_noisy_train[:,kk], color='red', s=10, alpha=0.3, label='noisy data')
+		ax1.plot(t_plot, y_clean_train[:,kk], color='red', label='clean data')
+		ax1.plot(t_plot, predictions[:,kk], color='black', label='NN fit')
 		ax1.set_xlabel('time')
 		ax1.set_ylabel(model_params['state_names'][kk] +'(t)', color='red')
 		ax1.tick_params(axis='y', labelcolor='red')
@@ -526,9 +536,10 @@ def train_chaosRNN(forward,
 	fig, (ax_list) = plt.subplots(y_clean_train.shape[1],1)
 	for kk in range(len(ax_list)):
 		ax3 = ax_list[kk]
+		t_plot = np.arange(0,len(y_clean_test[:,kk])*model_params['delta_t'],model_params['delta_t'])
 		# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-		ax3.plot(y_clean_test[:,kk], color='red', label='clean data')
-		ax3.plot(predictions[:,kk], color='black', label='NN fit')
+		ax3.plot(t_plot, y_clean_test[:,kk], color='red', label='clean data')
+		ax3.plot(t_plot, predictions[:,kk], color='black', label='NN fit')
 		ax3.set_xlabel('time')
 		ax3.set_ylabel(model_params['state_names'][kk] +'(t)', color='red')
 		ax3.tick_params(axis='y', labelcolor='red')

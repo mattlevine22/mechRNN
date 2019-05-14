@@ -2,9 +2,10 @@ from utils import *
 import numpy as np
 import torch
 
+hidden_size = 10
 lr = 0.05 # learning rate
-delta_t = 0.1
-tspan = np.arange(0,101,delta_t)
+delta_t = 0.01
+tspan = np.arange(0,167,delta_t)
 state_init = [-5, 0, 30]
 (a,b,c) = [10, 28, 8/3]
 sim_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b, c)}
@@ -16,7 +17,7 @@ rnn_sim_model = lorenz63
 drive_system = False
 
 n_sims = 1
-n_epochs = 1000
+n_epochs = 5000
 
 train_frac = 0.6
 for i in range(n_sims):
@@ -79,19 +80,23 @@ for i in range(n_sims):
 
 	#### run vanilla RNN ####
 	forward = forward_chaos_pureML
-	hidden_size = 100
 
 	# train on clean data
+	n_epochs = 5000
 	normz_info = normz_info_clean
-	run_output_dir = output_dir + '/vanillaRNN_clean'
-	all_dirs.append(run_output_dir)
-	torch.manual_seed(0)
-	train_chaosRNN(forward,
-      y_clean_train, y_clean_train,
-      y_clean_test, y_noisy_test,
-      rnn_model_params, hidden_size, n_epochs, lr,
-      run_output_dir, normz_info_clean, rnn_sim_model,
-      stack_hidden=False, stack_output=False)
+	for hidden_size in [10,50]:
+		run_output_dir = output_dir + '/vanillaRNN_clean' + '_hs' + str(hidden_size)
+		all_dirs.append(run_output_dir)
+		torch.manual_seed(0)
+		train_chaosRNN(forward,
+	      y_clean_train, y_clean_train,
+	      y_clean_test, y_noisy_test,
+	      rnn_model_params, hidden_size, n_epochs, lr,
+	      run_output_dir, normz_info_clean, rnn_sim_model,
+	      stack_hidden=False, stack_output=False)
+
+	hidden_size = 100
+	n_epochs = 1000
 
 	# train on noisy data
 	normz_info = normz_info_noisy
@@ -108,7 +113,6 @@ for i in range(n_sims):
 
 	#### run mechRNN ###
 	forward = forward_chaos_hybrid_full
-	hidden_size = 100
 
 	# train on clean data (random init)
 	normz_info = normz_info_clean
@@ -157,7 +161,6 @@ for i in range(n_sims):
 
 	#### run mechRNN w/ BAD parameter ###
 	forward = forward_chaos_hybrid_full
-	hidden_size = 100
 
 	for eps_badness in [0.0, 0.05]:
 		rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b*(1+eps_badness), c)}
