@@ -37,6 +37,14 @@ def lorenz63(Y,t,a,b,c):
 	dXdt = [dxdt, dydt, dzdt]
 	return dXdt
 
+def f_normalize_ztrans(norm_dict,y):
+	y_norm = (y - norm_dict['Xmean']) / norm_dict['Xsd']
+	return y_norm
+
+def f_unNormalize_ztrans(norm_dict,y_norm):
+	y = norm_dict['Xsd']*y + norm_dict['Xmean']
+	return y
+
 def f_normalize_minmax(norm_dict,y):
 	y_norm = (y - norm_dict['Ymin']) / (norm_dict['Ymax'] - norm_dict['Ymin'])
 	return y_norm
@@ -49,7 +57,8 @@ def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_d
 	# time points
 	# tau = 50 # window length of persistence
 	if drive_system:
-		tmp = np.arange(0,1000,tau)
+		# tmp = np.arange(0,1000,tau)
+		tmp = np.arange(0,tspan[-1],tau)
 		x = np.zeros([len(tmp),2])
 		x[:,0] = tmp
 		x[:,1] = 10*np.random.rand(len(x))
@@ -67,6 +76,9 @@ def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_d
 
 	## Plot clean ODE simulation
 	fig, (ax_list) = plt.subplots(y_clean.shape[1],1)
+	if y_clean.shape[1]==1:
+		# deal with axis plotter edge case when there is 1 subplot
+		ax_list = [ax_list]
 	for kk in range(len(ax_list)):
 		ax = ax_list[kk]
 		ax.plot(y_clean[:,kk], label='clean data')
@@ -213,7 +225,8 @@ def train_chaosRNN(forward,
 			model_params, hidden_size=6, n_epochs=100, lr=0.05,
 			output_dir='.', normz_info=None, model=None,
 			trivial_init=False,
-			stack_hidden=True, stack_output=True):
+			stack_hidden=True, stack_output=True,
+			x_train=None, x_test=None):
 
 	if hidden_size < 50:
 		keep_param_history = True
@@ -593,6 +606,7 @@ def train_RNN(forward,
 	predictions = []
 	# yb_normalized = (yb - YMIN)/(YMAX - YMIN)
 	# initializing y0 of hidden state to the true initial condition from the clean signal
+
 	hidden_state[0] = float(y_clean_test[0])
 	for i in range(test_seq_length):
 		(pred, hidden_state) = forward(x_test[:,i:i+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
@@ -788,7 +802,7 @@ def train_RNN(forward,
 
 			# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
 			ax3.plot(y_clean_test[:,0], color='red', label='clean data')
-			ax3.plot(predictions[:,0], color='black', label='NN fit')
+			ax3.plot(predictions, color='black', label='NN fit')
 			ax3.set_xlabel('time')
 			ax3.set_ylabel('y(t)', color='red')
 			ax3.tick_params(axis='y', labelcolor='red')
@@ -877,7 +891,7 @@ def train_RNN(forward,
 
 	ax1.scatter(np.arange(len(y_noisy_train[:,0])), y_noisy_train[:,0], color='red', s=10, alpha=0.3, label='noisy data')
 	ax1.plot(y_clean_train[:,0], color='red', label='clean data')
-	ax1.plot(predictions[:,0], color='black', label='NN fit')
+	ax1.plot(predictions, color='black', label='NN fit')
 	ax1.set_xlabel('time')
 	ax1.set_ylabel('y(t)', color='red')
 	ax1.tick_params(axis='y', labelcolor='red')
