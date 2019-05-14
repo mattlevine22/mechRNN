@@ -18,6 +18,11 @@ import pdb
 
 ### ODE simulation section
 ## 1. Simulate ODE
+#
+def double_well(y,t):
+	dydt = y - y**3
+	return dydt
+
 # function that returns dy/dt
 def exp_decay_model(y,t,yb,c_gamma,x):
 	x_t = x[np.where(x[:,0] <= t)[0][-1], 1]
@@ -218,7 +223,6 @@ def forward_mech(input, hidden_state, w1, w2, b, c, v, normz_info, model, model_
 	out = c + torch.mm(v,hidden_state)
 	return  (out, hidden_state)
 
-
 def train_chaosRNN(forward,
 			y_clean_train, y_noisy_train,
 			y_clean_test, y_noisy_test,
@@ -276,6 +280,8 @@ def train_chaosRNN(forward,
 
 		# plot predictions vs truth
 		fig, (ax_list) = plt.subplots(y_clean_train.shape[1],1)
+		if not isinstance(ax_list,list):
+			ax_list = [ax_list]
 
 		for kk in range(len(ax_list)):
 			ax1 = ax_list[kk]
@@ -407,7 +413,8 @@ def train_chaosRNN(forward,
 				 # plot predictions vs truth
 			# fig, (ax1, ax3) = plt.subplots(1, 2)
 			fig, (ax_list) = plt.subplots(y_clean_train.shape[1],1)
-
+			if not isinstance(ax_list,list):
+				ax_list = [ax_list]
 			# first run and plot training fits
 			hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
 			predictions = np.zeros([train_seq_length, output_size])
@@ -434,6 +441,8 @@ def train_chaosRNN(forward,
 			plt.close(fig)
 
 			fig, (ax_list) = plt.subplots(y_clean_train.shape[1],1)
+			if not isinstance(ax_list,list):
+				ax_list = [ax_list]
 
 			# NOW, show testing fit
 			# hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
@@ -512,6 +521,8 @@ def train_chaosRNN(forward,
 	# plot predictions vs truth
 	# fig, (ax1, ax3) = plt.subplots(1, 2)
 	fig, (ax_list) = plt.subplots(y_clean_train.shape[1],1)
+	if not isinstance(ax_list,list):
+		ax_list = [ax_list]
 
 	# first run and plot training fits
 	hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
@@ -547,6 +558,8 @@ def train_chaosRNN(forward,
 		predictions[i,:] = pred.data.numpy().ravel()
 
 	fig, (ax_list) = plt.subplots(y_clean_train.shape[1],1)
+	if not isinstance(ax_list,list):
+		ax_list = [ax_list]
 	for kk in range(len(ax_list)):
 		ax3 = ax_list[kk]
 		t_plot = np.arange(0,len(y_clean_test[:,kk])*model_params['delta_t'],model_params['delta_t'])
