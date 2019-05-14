@@ -19,8 +19,8 @@ import pdb
 ### ODE simulation section
 ## 1. Simulate ODE
 #
-def double_well(y,t):
-	dydt = y - y**3
+def double_well(y,t,a,b,c):
+	dydt = a*y - b*y**3 + c
 	return dydt
 
 # function that returns dy/dt
@@ -262,9 +262,9 @@ def train_chaosRNN(forward,
 		C = torch.zeros(output_size, hidden_size + (stack_output*output_size) ).type(dtype)
 		b = torch.zeros(output_size, 1).type(dtype)
 
-		C[0,0] = 1
-		C[1,1] = 1
-		C[2,2] = 1
+		for jj in range(output_size):
+			C[jj,jj] = 1
+
 
 		hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
 		predictions = np.zeros([test_seq_length, output_size])
@@ -313,9 +313,8 @@ def train_chaosRNN(forward,
 		init.zeros_(C)
 		init.zeros_(a)
 		init.zeros_(b)
-		C[0,0] = 1
-		C[1,1] = 1
-		C[2,2] = 1
+		for jj in range(output_size):
+			C[jj,jj] = 1
 	else:
 		init.normal_(A, 0.0, 0.1)
 		init.normal_(B, 0.0, 0.1)
@@ -426,7 +425,7 @@ def train_chaosRNN(forward,
 
 			for kk in range(len(ax_list)):
 				ax1 = ax_list[kk]
-				t_plot = np.arange(0,len(y_noisy_train[:,kk])*model_params['delta_t'],model_params['delta_t'])
+				t_plot = np.arange(0,round(len(y_noisy_train[:,kk])*model_params['delta_t'],8),model_params['delta_t'])
 				ax1.scatter(t_plot, y_noisy_train[:,kk], color='red', s=10, alpha=0.3, label='noisy data')
 				ax1.plot(t_plot, y_clean_train[:,kk], color='red', label='clean data')
 				ax1.plot(t_plot, predictions[:,kk], color='black', label='NN fit')
@@ -535,7 +534,7 @@ def train_chaosRNN(forward,
 
 	for kk in range(len(ax_list)):
 		ax1 = ax_list[kk]
-		t_plot = np.arange(0,len(y_noisy_train[:,kk])*model_params['delta_t'],model_params['delta_t'])
+		t_plot = np.arange(0,round(len(y_noisy_train[:,kk])*model_params['delta_t'],8),model_params['delta_t'])
 		ax1.scatter(t_plot, y_noisy_train[:,kk], color='red', s=10, alpha=0.3, label='noisy data')
 		ax1.plot(t_plot, y_clean_train[:,kk], color='red', label='clean data')
 		ax1.plot(t_plot, predictions[:,kk], color='black', label='NN fit')
