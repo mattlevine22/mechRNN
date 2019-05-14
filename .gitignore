@@ -3,6 +3,7 @@
 results/
 output/
 .DS_Store
+*output/
 
 .python_history
 __pycache__/
