@@ -19,6 +19,15 @@ import pdb
 ### ODE simulation section
 ## 1. Simulate ODE
 #
+
+def oscillator_2d(Y,t,a,b,c):
+	(x,y) = Y
+	dxdt = a*x + b*y -c*x*( x**2 + y**2 )
+	dydt = -a*x + b*y -c*y*( x**2 + y**2 )
+	dYdt = [dxdt, dydt]
+	return dYdt
+
+
 def double_well(y,t,a,b,c):
 	dydt = a*y - b*y**3 + c
 	return dydt
@@ -39,8 +48,8 @@ def lorenz63(Y,t,a,b,c):
 	dydt = b*x - y - x*z
 	dzdt = -c*z + x*y
 
-	dXdt = [dxdt, dydt, dzdt]
-	return dXdt
+	dYdt = [dxdt, dydt, dzdt]
+	return dYdt
 
 def f_normalize_ztrans(norm_dict,y):
 	y_norm = (y - norm_dict['Xmean']) / norm_dict['Xsd']
@@ -280,7 +289,7 @@ def train_chaosRNN(forward,
 
 		# plot predictions vs truth
 		fig, (ax_list) = plt.subplots(y_clean_train.shape[1],1)
-		if not isinstance(ax_list,list):
+		if not isinstance(ax_list,np.ndarray):
 			ax_list = [ax_list]
 
 		for kk in range(len(ax_list)):
@@ -412,7 +421,8 @@ def train_chaosRNN(forward,
 				 # plot predictions vs truth
 			# fig, (ax1, ax3) = plt.subplots(1, 2)
 			fig, (ax_list) = plt.subplots(y_clean_train.shape[1],1)
-			if not isinstance(ax_list,list):
+			if not isinstance(ax_list,np.ndarray):
+				pdb.set_trace()
 				ax_list = [ax_list]
 			# first run and plot training fits
 			hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
@@ -440,7 +450,7 @@ def train_chaosRNN(forward,
 			plt.close(fig)
 
 			fig, (ax_list) = plt.subplots(y_clean_train.shape[1],1)
-			if not isinstance(ax_list,list):
+			if not isinstance(ax_list,np.ndarray):
 				ax_list = [ax_list]
 
 			# NOW, show testing fit
@@ -520,7 +530,7 @@ def train_chaosRNN(forward,
 	# plot predictions vs truth
 	# fig, (ax1, ax3) = plt.subplots(1, 2)
 	fig, (ax_list) = plt.subplots(y_clean_train.shape[1],1)
-	if not isinstance(ax_list,list):
+	if not isinstance(ax_list,np.ndarray):
 		ax_list = [ax_list]
 
 	# first run and plot training fits
@@ -557,7 +567,7 @@ def train_chaosRNN(forward,
 		predictions[i,:] = pred.data.numpy().ravel()
 
 	fig, (ax_list) = plt.subplots(y_clean_train.shape[1],1)
-	if not isinstance(ax_list,list):
+	if not isinstance(ax_list,np.ndarray):
 		ax_list = [ax_list]
 	for kk in range(len(ax_list)):
 		ax3 = ax_list[kk]
