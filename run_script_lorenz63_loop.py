@@ -26,7 +26,7 @@ for state_init in [[-5, 0, 30]]:
 	np.random.seed()
 
 	# master output directory name
-	output_dir = 'lorenz63_output/experiment3_sim_init' + str(i+1)
+	output_dir = 'lorenz63_output/experiment3_LOOP_sim_init' + str(i+1)
 	# simulate clean and noisy data
 	input_data, y_clean, y_noisy = make_RNN_data(
 	              sim_model, tspan, sim_model_params, noise_frac=0.05, output_dir=output_dir, drive_system=False)
