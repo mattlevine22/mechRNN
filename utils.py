@@ -266,8 +266,10 @@ def train_chaosRNN(forward,
 			max_plot=2000):
 
 	if torch.cuda.is_available():
+		print('Using CUDA FloatTensor')
 		dtype = torch.cuda.FloatTensor
 	else:
+		print('Using regular torch.FloatTensor')
 		dtype = torch.FloatTensor
 
 	n_plttrain = y_clean_train.shape[0] - min(max_plot,y_clean_train.shape[0])
