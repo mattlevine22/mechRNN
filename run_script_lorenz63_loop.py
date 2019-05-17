@@ -15,7 +15,7 @@ drive_system = False
 n_sims = 1
 n_epochs = 10000
 
-train_frac = 0.9995
+train_frac = 0.995
 i = 0
 for state_init in [[-5, 0, 30]]:
 	i += 1
