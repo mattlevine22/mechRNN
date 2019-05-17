@@ -22,7 +22,7 @@ for i in range(n_sims):
 	np.random.seed()
 
 	# master output directory name
-	output_dir = 'output/experiment5/sim' + str(i+1)
+	output_dir = 'output/experiment6/sim' + str(i+1)
 	# simulate clean and noisy data
 	input_data, y_clean, y_noisy = make_RNN_data(
 	              sim_model, tspan, sim_model_params, noise_frac=0.1, output_dir=output_dir)

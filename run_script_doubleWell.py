@@ -2,9 +2,8 @@ from utils import *
 import numpy as np
 import torch
 
-hidden_size = 6
 lr = 0.05 # learning rate
-delta_t = 0.001
+delta_t = 0.05
 tspan = np.arange(0,1,delta_t)
 state_init = [3]
 (a, b, c) = [1, 1, 0]
@@ -15,7 +14,7 @@ rnn_sim_model = double_well
 drive_system = False
 
 n_sims = 1
-n_epochs = 5000
+n_epochs = 100000
 
 train_frac = 0.6
 i = 0
@@ -28,7 +27,7 @@ for state_init in [[3],[0.1]]:
 	np.random.seed()
 
 	# master output directory name
-	output_dir = 'doubleWell_output/experiment1/sim_init' + str(i+1)
+	output_dir = 'doubleWell_output/experiment2/sim_init' + str(i+1)
 	# simulate clean and noisy data
 	input_data, y_clean, y_noisy = make_RNN_data(
 	              sim_model, tspan, sim_model_params, noise_frac=0.05, output_dir=output_dir, drive_system=False)
@@ -83,7 +82,7 @@ for state_init in [[3],[0.1]]:
 
 	#### run vanilla RNN ####
 	forward = forward_chaos_pureML
-	for hidden_size in [10]:
+	for hidden_size in [100]:
 		# train on clean data
 		normz_info = normz_info_clean
 		(y_clean_train_norm, y_noisy_train_norm,

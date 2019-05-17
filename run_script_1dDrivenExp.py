@@ -6,7 +6,7 @@ lr = 0.05 # learning rate
 delta_t = 1
 tspan = np.arange(0,1001,delta_t)
 (y_equilb, c_gamma) = [100, 0.05]
-state_init = [100]
+state_init = [300]
 sim_model_params = {'state_names': ['y'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(y_equilb, c_gamma)}
 rnn_model_params = {'state_names': ['y'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(y_equilb, c_gamma)}
 
@@ -25,7 +25,7 @@ for i in range(n_sims):
 	np.random.seed()
 
 	# master output directory name
-	output_dir = '1dDrivenExp_output/experiment1/sim' + str(i+1)
+	output_dir = '1dDrivenExp_output/experiment2/sim' + str(i+1)
 	# simulate clean and noisy data
 	input_data, y_clean, y_noisy = make_RNN_data(
 	              sim_model, tspan, sim_model_params, noise_frac=0.05, output_dir=output_dir, drive_system=True)

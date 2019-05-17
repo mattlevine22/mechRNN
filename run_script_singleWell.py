@@ -3,30 +3,31 @@ import numpy as np
 import torch
 
 lr = 0.05 # learning rate
-delta_t = 0.1
-tspan = np.arange(0,2000,delta_t)
-(a, b, c) = [1, 1, 1]
+delta_t = 0.01
+tspan = np.arange(0,2,delta_t)
+state_init = [3]
+(a, b) = [0, -1]
 
-sim_model = oscillator_2d
-rnn_sim_model = oscillator_2d
+sim_model = single_well
+rnn_sim_model = single_well
 
 drive_system = False
 
 n_sims = 1
-n_epochs = 1
+n_epochs = 50
 
-train_frac = 0.8
+train_frac = 0.6
 i = 0
-for state_init in [[1,0]]:
+for state_init in [[3],[0.1]]:
 	i += 1
-	sim_model_params = {'state_names': ['x','y'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b, c)}
-	rnn_model_params = {'state_names': ['x','y'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b, c)}
+	sim_model_params = {'state_names': ['u'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b)}
+	rnn_model_params = {'state_names': ['u'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b)}
 	all_dirs = []
 
 	np.random.seed()
 
 	# master output directory name
-	output_dir = '2dOscillator_output/1epoch_experiment2_dt=0.1/sim_init' + str(i+1)
+	output_dir = 'singleWell_output/experiment3/sim_init' + str(i+1)
 	# simulate clean and noisy data
 	input_data, y_clean, y_noisy = make_RNN_data(
 	              sim_model, tspan, sim_model_params, noise_frac=0.05, output_dir=output_dir, drive_system=False)
@@ -81,7 +82,7 @@ for state_init in [[1,0]]:
 
 	#### run vanilla RNN ####
 	forward = forward_chaos_pureML
-	for hidden_size in [7,8,9]:
+	for hidden_size in [10]:
 		# train on clean data
 		normz_info = normz_info_clean
 		(y_clean_train_norm, y_noisy_train_norm,
@@ -97,23 +98,23 @@ for state_init in [[1,0]]:
 	      run_output_dir, normz_info, rnn_sim_model,
 	      stack_hidden=False, stack_output=False)
 
-		# # train on noisy data
-		# normz_info = normz_info_noisy
-		# (y_clean_train_norm, y_noisy_train_norm,
-		# 	y_clean_test_norm, y_noisy_test_norm) = [
-		# 		f_normalize_minmax(normz_info, y) for y in y_list]
-		# (y_clean_train_norm, y_noisy_train_norm,
-		# 	y_clean_test_norm, y_noisy_test_norm) = [
-		# 		f_normalize_minmax(normz_info, y) for y in y_list]
-		# run_output_dir = output_dir + '/vanillaRNN_noisy' + '_hs' + str(hidden_size)
-		# all_dirs.append(run_output_dir)
-		# torch.manual_seed(0)
-		# train_chaosRNN(forward,
-	 #      y_clean_train_norm, y_noisy_train_norm,
-	 #      y_clean_test_norm, y_noisy_test_norm,
-	 #      rnn_model_params, hidden_size, n_epochs, lr,
-	 #      run_output_dir, normz_info, rnn_sim_model,
-	 #      stack_hidden=False, stack_output=False)
+		# train on noisy data
+		normz_info = normz_info_noisy
+		(y_clean_train_norm, y_noisy_train_norm,
+			y_clean_test_norm, y_noisy_test_norm) = [
+				f_normalize_minmax(normz_info, y) for y in y_list]
+		(y_clean_train_norm, y_noisy_train_norm,
+			y_clean_test_norm, y_noisy_test_norm) = [
+				f_normalize_minmax(normz_info, y) for y in y_list]
+		run_output_dir = output_dir + '/vanillaRNN_noisy' + '_hs' + str(hidden_size)
+		all_dirs.append(run_output_dir)
+		torch.manual_seed(0)
+		train_chaosRNN(forward,
+	      y_clean_train_norm, y_noisy_train_norm,
+	      y_clean_test_norm, y_noisy_test_norm,
+	      rnn_model_params, hidden_size, n_epochs, lr,
+	      run_output_dir, normz_info, rnn_sim_model,
+	      stack_hidden=False, stack_output=False)
 
 
 	#### run mechRNN ###
@@ -174,7 +175,7 @@ for state_init in [[1,0]]:
 	forward = forward_chaos_hybrid_full
 
 	for eps_badness in [0.05, 1, 10]:
-		rnn_BAD_model_params = {'state_names': ['x','y'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b*(1+eps_badness), c)}
+		rnn_BAD_model_params = {'state_names': ['u'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b*(1+eps_badness))}
 
 		# train on clean data
 		normz_info = normz_info_clean
