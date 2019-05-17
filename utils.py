@@ -12,6 +12,7 @@ from scipy.integrate import odeint
 import torch
 from torch.autograd import Variable
 import torch.nn.init as init
+import torch.cuda
 
 import matplotlib
 matplotlib.use('Agg')
@@ -264,6 +265,11 @@ def train_chaosRNN(forward,
 			f_unNormalize_X = f_unNormalize_ztrans,
 			max_plot=2000):
 
+	if torch.cuda.is_available():
+		dtype = torch.cuda.FloatTensor
+	else:
+		dtype = torch.FloatTensor
+
 	n_plttrain = y_clean_train.shape[0] - min(max_plot,y_clean_train.shape[0])
 	n_plttest = y_clean_test.shape[0] - min(max_plot,y_clean_test.shape[0])
 
@@ -277,12 +283,11 @@ def train_chaosRNN(forward,
 
 	print('Starting RNN training for: ', output_dir)
 
-	output_train = torch.FloatTensor(y_noisy_train)
-	output_clean_train = torch.FloatTensor(y_clean_train)
-	output_test = torch.FloatTensor(y_noisy_test)
-	output_clean_test = torch.FloatTensor(y_clean_test)
+	output_train = torch.FloatTensor(y_noisy_train).type(dtype)
+	output_clean_train = torch.FloatTensor(y_clean_train).type(dtype)
+	output_test = torch.FloatTensor(y_noisy_test).type(dtype)
+	output_clean_test = torch.FloatTensor(y_clean_test).type(dtype)
 
-	dtype = torch.FloatTensor
 	output_size = output_train.shape[1]
 	train_seq_length = output_train.size(0)
 	test_seq_length = output_test.size(0)
