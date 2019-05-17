@@ -13,6 +13,8 @@ import torch
 from torch.autograd import Variable
 import torch.nn.init as init
 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 import pdb
@@ -78,6 +80,8 @@ def f_normalize_minmax(norm_dict,y):
 	return y_norm
 
 def f_unNormalize_minmax(norm_dict,y_norm):
+	# foo = np.matlib.repmat(norm_dict['Ymax'] - norm_dict['Ymin'], y_norm.shape[0], 1)
+	# y = norm_dict['Ymin'] + y_norm * foo
 	y = norm_dict['Ymin'] + y_norm * (norm_dict['Ymax'] - norm_dict['Ymin'])
 	return y
 
@@ -89,7 +93,7 @@ def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_d
 		tmp = np.arange(0,tspan[-1],tau)
 		x = np.zeros([len(tmp),2])
 		x[:,0] = tmp
-		x[:,1] = 10*np.random.rand(len(x))
+		x[:,1] = 0*10*np.random.rand(len(x))
 		my_args = sim_model_params['ode_params'] + (x,)
 	else:
 		my_args = sim_model_params['ode_params']
@@ -177,7 +181,8 @@ def forward_vanilla(data_input, hidden_state, w1, w2, b, c, v, *args):
 	return  (out, hidden_state)
 
 def forward_chaos_pureML(data_input, hidden_state, A, B, C, a, b, *args):
-	hidden_state = torch.tanh(a + torch.mm(A,hidden_state) + torch.mm(B,data_input))
+	hidden_state = torch.relu(a + torch.mm(A,hidden_state) + torch.mm(B,data_input))
+	# hidden_state = torch.relu(a + torch.mm(A,hidden_state))
 	out = b + torch.mm(C,hidden_state)
 	return  (out, hidden_state)
 
@@ -815,9 +820,9 @@ def train_RNN(forward,
 				(pred, hidden_state) = forward(x_train[:,j:j+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
 			else:
 				(pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
-			loss = (pred - target).pow(2).sum()/2
+			loss = (pred.squeeze() - target.squeeze()).pow(2).sum()/2
 			total_loss_train += loss
-			total_loss_clean_train += (pred - target_clean).pow(2).sum()/2
+			total_loss_clean_train += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()/2
 			loss.backward()
 
 			if drive_system:
@@ -861,8 +866,8 @@ def train_RNN(forward,
 				(pred, hidden_state) = forward(x_test[:,j:j+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
 			else:
 				(pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
-			total_loss_test += (pred - target).pow(2).sum()/2
-			total_loss_clean_test += (pred - target_clean).pow(2).sum()/2
+			total_loss_test += (pred.squeeze() - target.squeeze()).pow(2).sum()/2
+			total_loss_clean_test += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()/2
 
 			hidden_state = hidden_state.detach()
 		#normalize losses
