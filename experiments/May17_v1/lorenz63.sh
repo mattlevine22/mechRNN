@@ -9,7 +9,6 @@
 #SBATCH -c 1 # 1 core per task
 
 # LOAD MODULES, INSERT CODE, AND RUN YOUR PROGRAMS HERE
-cd /home/mlevine/mechRNN
 module purge
 module load cuda/9.0
 module load python/2.7.15-tf
