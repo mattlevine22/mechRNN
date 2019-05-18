@@ -99,7 +99,7 @@ def main():
 
 		#### run vanilla RNN ####
 		forward = forward_chaos_pureML
-		for hidden_size in [100,300,500,1000]:
+		for hidden_size in [10,50,100,300,500]:
 			# train on clean data
 			normz_info = normz_info_clean
 			(y_clean_train_norm, y_noisy_train_norm,
