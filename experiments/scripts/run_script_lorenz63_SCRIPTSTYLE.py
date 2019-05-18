@@ -97,7 +97,7 @@ def main():
 
 		#### run vanilla RNN ####
 		forward = forward_chaos_pureML
-		for hidden_size in [10,50,100,300,500]:
+		for hidden_size in [10,50,100]:
 			# train on clean data
 			normz_info = normz_info_clean
 			(y_clean_train_norm, y_noisy_train_norm,
@@ -132,34 +132,34 @@ def main():
 		 #      stack_hidden=False, stack_output=False)
 
 
-		#### run mechRNN ###
-		forward = forward_chaos_hybrid_full
+			#### run mechRNN ###
+			forward = forward_chaos_hybrid_full
 
-		# train on clean data (random init)
-		normz_info = normz_info_clean
-		(y_clean_train_norm, y_noisy_train_norm,
-			y_clean_test_norm, y_noisy_test_norm) = [
-				f_normalize_minmax(normz_info, y) for y in y_list]
+			# train on clean data (random init)
+			normz_info = normz_info_clean
+			(y_clean_train_norm, y_noisy_train_norm,
+				y_clean_test_norm, y_noisy_test_norm) = [
+					f_normalize_minmax(normz_info, y) for y in y_list]
 
-		# train on clean data (trivial init)
-		run_output_dir = output_dir + '/mechRNN_trivialInit_clean'
-		all_dirs.append(run_output_dir)
-		torch.manual_seed(0)
-		train_chaosRNN(forward,
-	      y_clean_train_norm, y_clean_train_norm,
-	      y_clean_test_norm, y_noisy_test_norm,
-	      rnn_model_params, hidden_size, n_epochs, lr,
-	      run_output_dir, normz_info_clean, rnn_sim_model,
-	      trivial_init=True)
+			# train on clean data (trivial init)
+			run_output_dir = output_dir + '/mechRNN_trivialInit_clean'
+			all_dirs.append(run_output_dir)
+			torch.manual_seed(0)
+			train_chaosRNN(forward,
+		      y_clean_train_norm, y_clean_train_norm,
+		      y_clean_test_norm, y_noisy_test_norm,
+		      rnn_model_params, hidden_size, n_epochs, lr,
+		      run_output_dir, normz_info_clean, rnn_sim_model,
+		      trivial_init=True)
 
-		run_output_dir = output_dir + '/mechRNN_clean'
-		all_dirs.append(run_output_dir)
-		torch.manual_seed(0)
-		train_chaosRNN(forward,
-	      y_clean_train_norm, y_clean_train_norm,
-	      y_clean_test_norm, y_noisy_test_norm,
-	      rnn_model_params, hidden_size, n_epochs, lr,
-	      run_output_dir, normz_info_clean, rnn_sim_model)
+			run_output_dir = output_dir + '/mechRNN_clean'
+			all_dirs.append(run_output_dir)
+			torch.manual_seed(0)
+			train_chaosRNN(forward,
+		      y_clean_train_norm, y_clean_train_norm,
+		      y_clean_test_norm, y_noisy_test_norm,
+		      rnn_model_params, hidden_size, n_epochs, lr,
+		      run_output_dir, normz_info_clean, rnn_sim_model)
 
 
 		# train on noisy data (regular initialization)
@@ -225,5 +225,5 @@ def main():
 		# compare_fits([d for d in all_dirs if "noisy" in d], output_fname=output_dir+'/model_comparisons_noisy')
 
 if __name__ == '__main__':
-    main()
+	main()
 
