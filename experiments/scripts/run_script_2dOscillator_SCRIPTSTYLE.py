@@ -13,11 +13,10 @@ parser.add_argument('--savedir', type=str, default='default_output', help='paren
 parser.add_argument('--model_solver', default=lorenz63, help='ode function')
 parser.add_argument('--drive_system', type=str2bool, default=False, help='whether to force the system with a time-dependent driver')
 parser.add_argument('--n_experiments', type=int, default=1, help='number of sim/fitting experiments to do')
-parser.add_argument(' ', type=int, default=1, help='placeholder')
 FLAGS = parser.parse_args()
 
-def main():
 
+def main():
 	(a, b, c) = [1, 1, 1]
 	my_state_inits = [[1,0]]
 
