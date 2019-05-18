@@ -1,7 +1,7 @@
 *.pyc
 **/*.pyc
 results/
-output/
+*output*/
 .DS_Store
 *output/
 
