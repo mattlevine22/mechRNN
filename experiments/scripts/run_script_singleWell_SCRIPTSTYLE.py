@@ -225,3 +225,6 @@ def main():
 		compare_fits([d for d in all_dirs if "clean" in d], output_fname=output_dir+'/model_comparisons_clean')
 		# compare_fits([d for d in all_dirs if "noisy" in d], output_fname=output_dir+'/model_comparisons_noisy')
 
+if __name__ == '__main__':
+	main()
+
