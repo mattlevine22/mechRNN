@@ -14,8 +14,8 @@ module load cuda/9.0
 module load python/2.7.15-tf
 
 # Execute jobs in parallel
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_doubleWell_SCRIPTSTYLE.py --savedir doubleWell/one_epoch_v1/ --epoch 1 --delta_t 0.01 --t_end 100 --train_frac 0.8 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_doubleWell_SCRIPTSTYLE.py --savedir doubleWell/one_epoch_v2/ --epoch 1 --delta_t 0.1 --t_end 100 --train_frac 0.8 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_doubleWell_SCRIPTSTYLE.py --savedir doubleWell/one_epoch_v3/ --epoch 1 --delta_t 0.1 --t_end 1000 --train_frac 0.8 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_doubleWell_SCRIPTSTYLE.py --savedir doubleWell/loop_epoch_v1/ --epoch 100000 --delta_t 0.1 --t_end 10 --train_frac 0.8
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_doubleWell_SCRIPTSTYLE.py --savedir doubleWell/one_epoch_v1 --epoch 1 --delta_t 0.01 --t_end 100 --train_frac 0.8 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_doubleWell_SCRIPTSTYLE.py --savedir doubleWell/one_epoch_v2 --epoch 1 --delta_t 0.1 --t_end 100 --train_frac 0.8 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_doubleWell_SCRIPTSTYLE.py --savedir doubleWell/one_epoch_v3 --epoch 1 --delta_t 0.1 --t_end 1000 --train_frac 0.8 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_doubleWell_SCRIPTSTYLE.py --savedir doubleWell/loop_epoch_v1 --epoch 100000 --delta_t 0.1 --t_end 10 --train_frac 0.8
 wait
