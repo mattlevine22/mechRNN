@@ -228,8 +228,7 @@ def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_in
 	# hidden_state[0] = torch.from_numpy( (y_out[-1] - ymean) / ysd )
 
 	stacked_input = torch.FloatTensor(np.hstack( (y_pred_normalized, y0_normalized) )[:,None])
-	pdb.set_trace()
-	hidden_state = torch.tanh( a + torch.mm(A,hidden_state) + torch.mm(B,stacked_input) )
+	hidden_state = torch.relu( a + torch.mm(A,hidden_state) + torch.mm(B,stacked_input) )
 	stacked_output = torch.cat( ( torch.FloatTensor(y_pred_normalized[:,None]), hidden_state ) )
 	out = b + torch.mm(C,stacked_output)
 	return  (out, hidden_state)
@@ -303,6 +302,7 @@ def train_chaosRNN(forward,
 	test_seq_length = output_test.size(0)
 
 	# first, SHOW that a simple mechRNN can fit the data perfectly (if we are running a mechRNN)
+	pdb.set_trace()
 	if stack_hidden or stack_output:
 		# now, TRAIN to fit the output from the previous model
 		# w2 = torch.zeros(hidden_size, input_size).type(dtype)
