@@ -228,6 +228,7 @@ def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_in
 	# hidden_state[0] = torch.from_numpy( (y_out[-1] - ymean) / ysd )
 
 	stacked_input = torch.FloatTensor(np.hstack( (y_pred_normalized, y0_normalized) )[:,None])
+	pdb.set_trace()
 	hidden_state = torch.tanh( a + torch.mm(A,hidden_state) + torch.mm(B,stacked_input) )
 	stacked_output = torch.cat( ( torch.FloatTensor(y_pred_normalized[:,None]), hidden_state ) )
 	out = b + torch.mm(C,stacked_output)
