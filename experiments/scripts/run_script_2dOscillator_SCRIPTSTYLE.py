@@ -96,7 +96,7 @@ def main():
 
 		########## NOW start running RNN fits ############
 
-		for hidden_size in [5,10,20,30]:
+		for hidden_size in [5,10,20]:
 			#### run vanilla RNN ####
 			forward = forward_chaos_pureML
 			# train on clean data
