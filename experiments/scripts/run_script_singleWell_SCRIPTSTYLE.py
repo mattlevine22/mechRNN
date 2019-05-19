@@ -105,7 +105,7 @@ def main():
 			(y_clean_train_norm, y_noisy_train_norm,
 				y_clean_test_norm, y_noisy_test_norm) = [
 					f_normalize_minmax(normz_info, y) for y in y_list]
-			run_output_dir = output_dir + '/vanillaRNN_clean' + '_hs' + str(hidden_size)
+			run_output_dir = output_dir + '/vanillaRNN_clean_hs{0}'.format(hidden_size)
 			all_dirs.append(run_output_dir)
 			torch.manual_seed(0)
 			train_chaosRNN(forward,
@@ -123,7 +123,7 @@ def main():
 			# (y_clean_train_norm, y_noisy_train_norm,
 			# 	y_clean_test_norm, y_noisy_test_norm) = [
 			# 		f_normalize_minmax(normz_info, y) for y in y_list]
-			# run_output_dir = output_dir + '/vanillaRNN_noisy' + '_hs' + str(hidden_size)
+			# run_output_dir = output_dir + '/vanillaRNN_noisy_hs{0}'.format(hidden_size)
 			# all_dirs.append(run_output_dir)
 			# torch.manual_seed(0)
 			# train_chaosRNN(forward,
@@ -144,7 +144,7 @@ def main():
 					f_normalize_minmax(normz_info, y) for y in y_list]
 
 			# train on clean data (trivial init)
-			run_output_dir = output_dir + '/mechRNN_trivialInit_clean' + '_hs' + str(hidden_size)
+			run_output_dir = output_dir + '/mechRNN_trivialInit_clean_hs{0}'.format(hidden_size)
 			all_dirs.append(run_output_dir)
 			torch.manual_seed(0)
 			train_chaosRNN(forward,
@@ -154,7 +154,7 @@ def main():
 		      run_output_dir, normz_info_clean, rnn_sim_model,
 		      trivial_init=True)
 
-			run_output_dir = output_dir + '/mechRNN_clean' + '_hs' + str(hidden_size)
+			run_output_dir = output_dir + '/mechRNN_clean_hs{0}'.format(hidden_size)
 			all_dirs.append(run_output_dir)
 			torch.manual_seed(0)
 			train_chaosRNN(forward,

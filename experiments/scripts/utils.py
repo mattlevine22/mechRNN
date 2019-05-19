@@ -302,7 +302,6 @@ def train_chaosRNN(forward,
 	test_seq_length = output_test.size(0)
 
 	# first, SHOW that a simple mechRNN can fit the data perfectly (if we are running a mechRNN)
-	pdb.set_trace()
 	if stack_hidden or stack_output:
 		# now, TRAIN to fit the output from the previous model
 		# w2 = torch.zeros(hidden_size, input_size).type(dtype)
