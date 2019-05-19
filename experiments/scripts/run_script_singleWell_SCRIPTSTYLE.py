@@ -34,7 +34,7 @@ def main():
 
 	train_frac = FLAGS.train_frac #0.9995
 	i = 0
-	for state_init in [[1,0]]:
+	for state_init in my_state_inits:
 		i += 1
 		sim_model_params = {'state_names': ['u'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b)}
 		rnn_model_params = {'state_names': ['u'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b)}
