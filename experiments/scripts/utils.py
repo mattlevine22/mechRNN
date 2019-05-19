@@ -116,8 +116,7 @@ def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_d
 
 	## Plot clean ODE simulation
 	fig, (ax_list) = plt.subplots(y_clean.shape[1],1)
-	if y_clean.shape[1]==1:
-		# deal with axis plotter edge case when there is 1 subplot
+	if not isinstance(ax_list,np.ndarray):
 		ax_list = [ax_list]
 	for kk in range(len(ax_list)):
 		ax = ax_list[kk]
