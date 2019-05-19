@@ -668,6 +668,7 @@ def train_chaosRNN(forward,
 		ax1.tick_params(axis='y', labelcolor='red')
 		# ax1.set_title('Training Fit')
 
+	ax_list[0].legend()
 	fig.suptitle('RNN TRAIN fit to ODE simulation')
 	fig.savefig(fname=output_dir+'/rnn_fit_ode_TRAIN')
 	plt.close(fig)
