@@ -269,7 +269,7 @@ def train_chaosRNN(forward,
 			f_unNormalize_Y=f_unNormalize_minmax,
 			f_normalize_X = f_normalize_ztrans,
 			f_unNormalize_X = f_unNormalize_ztrans,
-			max_plot=2000, mem_thresh_order=12):
+			max_plot=2000, mem_thresh_order=9):
 
 	if torch.cuda.is_available():
 		print('Using CUDA FloatTensor')
