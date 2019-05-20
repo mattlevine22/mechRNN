@@ -42,7 +42,7 @@ def main():
 		np.random.seed()
 
 		# master output directory name
-		output_dir = FLAGS.savedir + '_' + str(i+1)
+		output_dir = FLAGS.savedir + '_output' + str(i+1)
 
 		# simulate clean and noisy data
 		input_data, y_clean, y_noisy = make_RNN_data(
@@ -144,7 +144,7 @@ def main():
 
 			# train on clean data (trivial init)
 			run_output_dir = output_dir + '/mechRNN_trivialInit_clean_hs{0}'.format(hidden_size)
-			all_dirs.append(run_output_dir)
+			# all_dirs.append(run_output_dir)
 			torch.manual_seed(0)
 			train_chaosRNN(forward,
 		      y_clean_train_norm, y_clean_train_norm,
@@ -178,7 +178,7 @@ def main():
 	 #      run_output_dir, normz_info_noisy, rnn_sim_model)
 		# # train on noisy data (trivial initialization)
 		# run_output_dir = output_dir + '/mechRNN_trivialInit_noisy'
-		# all_dirs.append(run_output_dir)
+		## all_dirs.append(run_output_dir)
 		# torch.manual_seed(0)
 		# train_chaosRNN(forward,
 	 #      y_clean_train_norm, y_noisy_train_norm,
