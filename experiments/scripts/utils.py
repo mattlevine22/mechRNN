@@ -120,8 +120,8 @@ def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_d
 		ax_list = [ax_list]
 	for kk in range(len(ax_list)):
 		ax = ax_list[kk]
-		ax.plot(y_clean[:,kk], label='clean data')
-		ax.scatter(np.arange(len(y_noisy[:,kk])), y_noisy[:,kk], color='red', s=10, alpha=0.3, label='noisy data')
+		ax.plot(tspan, y_clean[:,kk], label='clean data')
+		ax.scatter(tspan, y_noisy[:,kk], color='red', s=10, alpha=0.3, label='noisy data')
 		ax.set_xlabel('time')
 		ax.set_ylabel(sim_model_params['state_names'][kk] +'(t)')
 		# ax.tick_params(axis='y')
@@ -1080,7 +1080,6 @@ def train_RNN(forward,
 
 
 def compare_fits(my_dirs, output_fname="./training_comparisons"):
-
 	fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2,
 		figsize = [10, 4],
 		sharey=True, sharex=True)
@@ -1092,7 +1091,6 @@ def compare_fits(my_dirs, output_fname="./training_comparisons"):
 			ax2.plot(x, label=d_label)
 			# x = np.loadtxt(d+"/loss_vec_test.txt")
 			# ax3.plot(x, label=d_label)
-
 	ax1.set_xlabel('Epochs')
 	ax1.set_ylabel('Error')
 	ax1.set_title('Train Error')
@@ -1103,9 +1101,14 @@ def compare_fits(my_dirs, output_fname="./training_comparisons"):
 	# ax3.set_xlabel('Epochs')
 	# ax3.set_ylabel('Error')
 	# ax3.set_title('Test Error (on noisy data)')
-
 	# fig.suptitle("Comparison of training efficacy (trained on noisy data)")
 	fig.savefig(fname=output_fname)
+	# plot in log scale
+	ax1.set_yscale('log')
+	ax2.set_yscale('log')
+	ax1.set_ylabel('log Error')
+	ax2.set_ylabel('log Error')
+	fig.savefig(fname=output_fname+'_log')
 	plt.close(fig)
 
 
