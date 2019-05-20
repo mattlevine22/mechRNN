@@ -3,9 +3,9 @@
 #Submit this script with: sbatch train_submission
 
 #SBATCH --time=24:00:00   # walltime
-#SBATCH --ntasks=5   # number of processor cores (i.e. tasks)
+#SBATCH --ntasks=6   # number of processor cores (i.e. tasks)
 #SBATCH --nodes=1   # number of nodes
-#SBATCH --mem-per-cpu=10G   # memory per CPU core
+#SBATCH --mem-per-cpu=12G   # memory per CPU core
 #SBATCH -c 1 # 1 core per task
 #SBATCH --exclusive
 
