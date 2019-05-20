@@ -269,7 +269,7 @@ def train_chaosRNN(forward,
 			f_unNormalize_Y=f_unNormalize_minmax,
 			f_normalize_X = f_normalize_ztrans,
 			f_unNormalize_X = f_unNormalize_ztrans,
-			max_plot=2000):
+			max_plot=2000, mem_thresh_order=12):
 
 	if torch.cuda.is_available():
 		print('Using CUDA FloatTensor')
@@ -281,10 +281,10 @@ def train_chaosRNN(forward,
 	n_plttrain = y_clean_train.shape[0] - min(max_plot,y_clean_train.shape[0])
 	n_plttest = y_clean_test.shape[0] - min(max_plot,y_clean_test.shape[0])
 
-	if hidden_size <= 50:
-		keep_param_history = True
-	else:
-		keep_param_history = False
+
+	keep_param_history = np.log10( n_epochs * y_clean_train.shape[0] * (hidden_size**2) ) < mem_thresh_order
+	if not keep_param_history:
+		print('NOT saving parameter history...would take too much memory!')
 
 	if not os.path.exists(output_dir):
 		os.makedirs(output_dir)
@@ -396,6 +396,8 @@ def train_chaosRNN(forward,
 		pred = output_train[0,:,None]
 		hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=True)
 		init.normal_(hidden_state,0.0,0.1)
+		running_epoch_loss_train = np.zeros(train_seq_length)
+		running_epoch_loss_clean_train = np.zeros(train_seq_length)
 		for j in range(train_seq_length-1):
 			cc += 1
 			target = output_train[j+1,None]
@@ -405,6 +407,8 @@ def train_chaosRNN(forward,
 			loss = (pred.squeeze() - target.squeeze()).pow(2).sum()/2
 			total_loss_train += loss
 			total_loss_clean_train += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()/2
+			running_epoch_loss_train[j] = total_loss_train/(j+1)
+			running_epoch_loss_clean_train[j] = total_loss_clean_train/(j+1)
 			loss.backward()
 
 			A.data -= lr * A.grad.data
@@ -448,6 +452,8 @@ def train_chaosRNN(forward,
 
 		total_loss_test = 0
 		total_loss_clean_test = 0
+		running_epoch_loss_test = np.zeros(test_seq_length)
+		running_epoch_loss_clean_test = np.zeros(test_seq_length)
 		# hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
 		pred = output_train[-1,:,None]
 		for j in range(test_seq_length):
@@ -456,6 +462,8 @@ def train_chaosRNN(forward,
 			(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
 			total_loss_test += (pred.squeeze() - target.squeeze()).pow(2).sum()/2
 			total_loss_clean_test += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()/2
+			running_epoch_loss_clean_test[j] = total_loss_clean_test/(j+1)
+			running_epoch_loss_test[j] = total_loss_test/(j+1)
 			pred = pred.detach()
 			hidden_state = hidden_state.detach()
 		#normalize losses
@@ -592,10 +600,17 @@ def train_chaosRNN(forward,
 
 
 	## save loss_vec
-	np.savetxt(output_dir+'/loss_vec_train.txt',loss_vec_train)
-	np.savetxt(output_dir+'/loss_vec_clean_train.txt',loss_vec_clean_train)
-	np.savetxt(output_dir+'/loss_vec_test.txt',loss_vec_test)
-	np.savetxt(output_dir+'/loss_vec_clean_test.txt',loss_vec_clean_test)
+	if n_epochs == 1:
+		np.savetxt(output_dir+'/loss_vec_train.txt',running_epoch_loss_train)
+		np.savetxt(output_dir+'/loss_vec_clean_train.txt',running_epoch_loss_clean_train)
+		np.savetxt(output_dir+'/loss_vec_test.txt',running_epoch_loss_test)
+		np.savetxt(output_dir+'/loss_vec_clean_test.txt',running_epoch_loss_clean_test)
+	else:
+		np.savetxt(output_dir+'/loss_vec_train.txt',loss_vec_train)
+		np.savetxt(output_dir+'/loss_vec_clean_train.txt',loss_vec_clean_train)
+		np.savetxt(output_dir+'/loss_vec_test.txt',loss_vec_test)
+		np.savetxt(output_dir+'/loss_vec_clean_test.txt',loss_vec_clean_test)
+
 	np.savetxt(output_dir+'/A.txt',A.detach().numpy())
 	np.savetxt(output_dir+'/B.txt',B.detach().numpy())
 	np.savetxt(output_dir+'/C.txt',C.detach().numpy())
@@ -1082,20 +1097,22 @@ def train_RNN(forward,
 def compare_fits(my_dirs, output_fname="./training_comparisons"):
 	fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2,
 		figsize = [10, 4],
-		sharey=True, sharex=True)
+		sharey=True, sharex=False)
+
 	for d in my_dirs:
-			d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
-			x = np.loadtxt(d+"/loss_vec_train.txt")
-			ax1.plot(x, label=d_label)
-			x = np.loadtxt(d+"/loss_vec_clean_test.txt")
-			ax2.plot(x, label=d_label)
-			# x = np.loadtxt(d+"/loss_vec_test.txt")
-			# ax3.plot(x, label=d_label)
+		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
+		x_train = np.loadtxt(d+"/loss_vec_train.txt")
+		x_test = np.loadtxt(d+"/loss_vec_clean_test.txt")
+		ax1.plot(x_train, label=d_label)
+		ax2.plot(x_test, label=d_label)
+		# x = np.loadtxt(d+"/loss_vec_test.txt")
+		# ax3.plot(x, label=d_label)
+	ax2.set_xlabel('Epochs')
 	ax1.set_xlabel('Epochs')
+
 	ax1.set_ylabel('Error')
 	ax1.set_title('Train Error')
 	ax1.legend(fontsize=6, handlelength=2, loc='upper right')
-	ax2.set_xlabel('Epochs')
 	ax2.set_ylabel('Error')
 	ax2.set_title('Test Error (predicting clean data)')
 	# ax3.set_xlabel('Epochs')
