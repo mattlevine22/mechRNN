@@ -281,7 +281,7 @@ def train_chaosRNN(forward,
 	n_plttrain = y_clean_train.shape[0] - min(max_plot,y_clean_train.shape[0])
 	n_plttest = y_clean_test.shape[0] - min(max_plot,y_clean_test.shape[0])
 
-	if hidden_size < 50:
+	if hidden_size <= 50:
 		keep_param_history = True
 	else:
 		keep_param_history = False

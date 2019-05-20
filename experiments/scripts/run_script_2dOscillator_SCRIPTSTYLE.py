@@ -96,7 +96,7 @@ def main():
 
 		########## NOW start running RNN fits ############
 
-		for hidden_size in [5,10,20]:
+		for hidden_size in [5]:
 			#### run vanilla RNN ####
 			forward = forward_chaos_pureML
 			# train on clean data
@@ -190,7 +190,7 @@ def main():
 		#### run mechRNN w/ BAD parameter ###
 		forward = forward_chaos_hybrid_full
 
-		for eps_badness in [0.05, 1, 10]:
+		for eps_badness in [-0.99, 0.1, 1, 10]:
 			rnn_BAD_model_params = {'state_names': ['x','y'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b*(1+eps_badness), c)}
 
 			# train on clean data
