@@ -6,6 +6,7 @@
 
 # based off of code from https://www.cpuheater.com/deep-learning/introduction-to-recurrent-neural-networks-in-pytorch/
 import os
+import math
 import numpy as np
 import numpy.matlib
 from scipy.integrate import odeint
@@ -269,7 +270,7 @@ def train_chaosRNN(forward,
 			f_unNormalize_Y=f_unNormalize_minmax,
 			f_normalize_X = f_normalize_ztrans,
 			f_unNormalize_X = f_unNormalize_ztrans,
-			max_plot=2000, mem_thresh_order=9):
+			max_plot=2000, mem_thresh_order=9, n_param_saves=10000):
 
 	if torch.cuda.is_available():
 		print('Using CUDA FloatTensor')
@@ -282,9 +283,9 @@ def train_chaosRNN(forward,
 	n_plttest = y_clean_test.shape[0] - min(max_plot,y_clean_test.shape[0])
 
 
-	keep_param_history = np.log10( n_epochs * y_clean_train.shape[0] * (hidden_size**2) ) < mem_thresh_order
-	if not keep_param_history:
-		print('NOT saving parameter history...would take too much memory!')
+	# keep_param_history = np.log10( n_epochs * y_clean_train.shape[0] * (hidden_size**2) ) < mem_thresh_order
+	# if not keep_param_history:
+	# 	print('NOT saving parameter history...would take too much memory!')
 
 	if not os.path.exists(output_dir):
 		os.makedirs(output_dir)
@@ -376,18 +377,26 @@ def train_chaosRNN(forward,
 	a =  Variable(a, requires_grad=True)
 	b =  Variable(b, requires_grad=True)
 
-	if keep_param_history:
-		A_history = np.zeros((n_epochs*(train_seq_length-1),A.shape[0],A.shape[1]))
-		B_history = np.zeros((n_epochs*(train_seq_length-1),B.shape[0],B.shape[1]))
-		C_history = np.zeros((n_epochs*(train_seq_length-1),C.shape[0],C.shape[1]))
-		a_history = np.zeros((n_epochs*(train_seq_length-1),a.shape[0],a.shape[1]))
-		b_history = np.zeros((n_epochs*(train_seq_length-1),b.shape[0],b.shape[1]))
+	if not n_param_saves:
+		n_param_saves = n_epochs*(train_seq_length-1)
+		save_interval = 1
+	else:
+		n_param_saves = min(n_param_saves, n_epochs*(train_seq_length-1))
+		save_interval = int(math.ceil((n_epochs*(train_seq_length-1)/n_param_saves) / 100.0)) * 100
+
+	# if keep_param_history:
+	A_history = np.zeros((n_param_saves, A.shape[0], A.shape[1]))
+	B_history = np.zeros((n_param_saves, B.shape[0], B.shape[1]))
+	C_history = np.zeros((n_param_saves, C.shape[0], C.shape[1]))
+	a_history = np.zeros((n_param_saves, a.shape[0], a.shape[1]))
+	b_history = np.zeros((n_param_saves, b.shape[0], b.shape[1]))
 
 	loss_vec_train = np.zeros(n_epochs)
 	loss_vec_clean_train = np.zeros(n_epochs)
 	loss_vec_test = np.zeros(n_epochs)
 	loss_vec_clean_test = np.zeros(n_epochs)
 	cc = -1 # iteration counter for saving weight updates
+	cc_inc = -1
 	for i_epoch in range(n_epochs):
 		total_loss_train = 0
 		total_loss_clean_train = 0
@@ -436,12 +445,13 @@ def train_chaosRNN(forward,
 			hidden_state = hidden_state.detach()
 
 			# save updated parameters
-			if keep_param_history:
-				A_history[cc,:] = A.detach().numpy()
-				B_history[cc,:] = B.detach().numpy()
-				C_history[cc,:] = C.detach().numpy()
-				a_history[cc,:] = a.detach().numpy()
-				b_history[cc,:] = b.detach().numpy()
+			if cc % save_interval == 0:
+				cc_inc += 1
+				A_history[cc_inc,:] = A.detach().numpy()
+				B_history[cc_inc,:] = B.detach().numpy()
+				C_history[cc_inc,:] = C.detach().numpy()
+				a_history[cc_inc,:] = a.detach().numpy()
+				b_history[cc_inc,:] = b.detach().numpy()
 
 		#normalize losses
 		total_loss_train = total_loss_train / train_seq_length
@@ -623,34 +633,34 @@ def train_chaosRNN(forward,
 	# print("v:",v)
 
 	# plot parameter convergence
-	if keep_param_history:
-		fig, my_axes = plt.subplots(2, 3, sharex=True, figsize=[8,6])
+	# if keep_param_history:
+	fig, my_axes = plt.subplots(2, 3, sharex=True, figsize=[8,6])
 
-		x_vals = np.linspace(0,n_epochs,len(A_history))
-		my_axes[0,0].plot(x_vals, np.linalg.norm(A.detach().numpy() - A_history, ord='fro', axis=(1,2)))
-		my_axes[0,0].set_title('A')
-		my_axes[0,0].set_xlabel('Epochs')
+	x_vals = np.linspace(0,n_epochs,len(A_history))
+	my_axes[0,0].plot(x_vals, np.linalg.norm(A.detach().numpy() - A_history, ord='fro', axis=(1,2)))
+	my_axes[0,0].set_title('A')
+	my_axes[0,0].set_xlabel('Epochs')
 
-		my_axes[0,1].plot(x_vals, np.linalg.norm(B.detach().numpy() - B_history, ord='fro', axis=(1,2)))
-		my_axes[0,1].set_title('B')
-		my_axes[0,1].set_xlabel('Epochs')
+	my_axes[0,1].plot(x_vals, np.linalg.norm(B.detach().numpy() - B_history, ord='fro', axis=(1,2)))
+	my_axes[0,1].set_title('B')
+	my_axes[0,1].set_xlabel('Epochs')
 
-		my_axes[1,0].plot(x_vals, np.linalg.norm(C.detach().numpy() - C_history, ord='fro', axis=(1,2)))
-		my_axes[1,0].set_title('C')
-		my_axes[1,0].set_xlabel('Epochs')
+	my_axes[1,0].plot(x_vals, np.linalg.norm(C.detach().numpy() - C_history, ord='fro', axis=(1,2)))
+	my_axes[1,0].set_title('C')
+	my_axes[1,0].set_xlabel('Epochs')
 
-		my_axes[1,1].plot(x_vals, np.linalg.norm(a.detach().numpy() - a_history, ord='fro', axis=(1,2)))
-		my_axes[1,1].set_title('a')
-		my_axes[1,1].set_xlabel('Epochs')
+	my_axes[1,1].plot(x_vals, np.linalg.norm(a.detach().numpy() - a_history, ord='fro', axis=(1,2)))
+	my_axes[1,1].set_title('a')
+	my_axes[1,1].set_xlabel('Epochs')
 
-		my_axes[1,2].plot(x_vals, np.linalg.norm(b.detach().numpy() - b_history, ord='fro', axis=(1,2)))
-		my_axes[1,2].set_title('b')
-		my_axes[1,2].set_xlabel('Epochs')
+	my_axes[1,2].plot(x_vals, np.linalg.norm(b.detach().numpy() - b_history, ord='fro', axis=(1,2)))
+	my_axes[1,2].set_title('b')
+	my_axes[1,2].set_xlabel('Epochs')
 
 
-		fig.suptitle("Parameter convergence")
-		fig.savefig(fname=output_dir+'/rnn_parameter_convergence')
-		plt.close(fig)
+	fig.suptitle("Parameter convergence")
+	fig.savefig(fname=output_dir+'/rnn_parameter_convergence')
+	plt.close(fig)
 
 	## now, inspect the quality of the learned model
 	# plot predictions vs truth
