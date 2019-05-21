@@ -19,6 +19,6 @@ srun --exclusive -N 1 -n 1 python ../scripts/run_script_2dOscillator_SCRIPTSTYLE
 srun --exclusive -N 1 -n 1 python ../scripts/run_script_2dOscillator_SCRIPTSTYLE.py --savedir 2dOsc/one_epoch_HighFreq_Short --epoch 1 --delta_t 0.01 --t_end 100 --train_frac 0.8 &
 srun --exclusive -N 1 -n 1 python ../scripts/run_script_2dOscillator_SCRIPTSTYLE.py --savedir 2dOsc/one_epoch_SlowerFreq_Short --epoch 1 --delta_t 0.1 --t_end 100 --train_frac 0.8 &
 srun --exclusive -N 1 -n 1 python ../scripts/run_script_2dOscillator_SCRIPTSTYLE.py --savedir 2dOsc/one_epoch_HighFreq_Longer --epoch 1 --delta_t 0.1 --t_end 1000 --train_frac 0.8 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_2dOscillator_SCRIPTSTYLE.py --savedir 2dOsc/loop_epoch_Equiv2_HighFreq_Longer --epoch 10000 --delta_t 0.1 --t_end 100 --train_frac 0.8
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_2dOscillator_SCRIPTSTYLE.py --savedir 2dOsc/loop_epoch_Shorter_MoreEpochs --epoch 100000 --delta_t 0.1 --t_end 10 --train_frac 0.8
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_2dOscillator_SCRIPTSTYLE.py --savedir 2dOsc/loop_epoch --epoch 1000 --delta_t 0.1 --t_end 100 --train_frac 0.8
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_2dOscillator_SCRIPTSTYLE.py --savedir 2dOsc/loop_epoch_Shorter_MoreEpochs --epoch 10000 --delta_t 0.1 --t_end 10 --train_frac 0.8
 wait
