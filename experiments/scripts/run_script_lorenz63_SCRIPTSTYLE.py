@@ -148,7 +148,7 @@ def main():
 			train_chaosRNN(forward,
 		      y_clean_train_norm, y_clean_train_norm,
 		      y_clean_test_norm, y_noisy_test_norm,
-		      rnn_model_params, hidden_size, max(1,n_epochs/10), lr,
+		      rnn_model_params, hidden_size, max(1,int(n_epochs/10)), lr,
 		      run_output_dir, normz_info_clean, rnn_sim_model,
 		      trivial_init=True)
 
@@ -182,7 +182,7 @@ def main():
 		# train_chaosRNN(forward,
 	 #      y_clean_train_norm, y_noisy_train_norm,
 	 #      y_clean_test_norm, y_noisy_test_norm,
-	 #      rnn_model_params, hidden_size, max(1,n_epochs/10), lr,
+	 #      rnn_model_params, hidden_size, max(1,int(n_epochs/10)), lr,
 	 #      run_output_dir, normz_info_noisy, rnn_sim_model,
 	 #      trivial_init=True)
 
