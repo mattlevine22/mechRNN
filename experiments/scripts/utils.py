@@ -270,7 +270,8 @@ def train_chaosRNN(forward,
 			f_unNormalize_Y=f_unNormalize_minmax,
 			f_normalize_X = f_normalize_ztrans,
 			f_unNormalize_X = f_unNormalize_ztrans,
-			max_plot=2000, mem_thresh_order=9, n_param_saves=10000):
+			max_plot=2000, n_param_saves=None,
+			err_thresh=0.4):
 
 	if torch.cuda.is_available():
 		print('Using CUDA FloatTensor')
@@ -296,6 +297,9 @@ def train_chaosRNN(forward,
 	output_clean_train = torch.FloatTensor(y_clean_train).type(dtype)
 	output_test = torch.FloatTensor(y_noisy_test).type(dtype)
 	output_clean_test = torch.FloatTensor(y_clean_test).type(dtype)
+
+	avg_output_test = torch.mean(output_test**2,dim=(0,1)).detach().numpy()**0.5
+	avg_output_clean_test = torch.mean(output_clean_test**2,dim=(0,1)).detach().numpy()**0.5
 
 	output_size = output_train.shape[1]
 	train_seq_length = output_train.size(0)
@@ -378,23 +382,35 @@ def train_chaosRNN(forward,
 	b =  Variable(b, requires_grad=True)
 
 	if not n_param_saves:
-		n_param_saves = n_epochs*(train_seq_length-1)
+		n_param_saves = int(n_epochs*(train_seq_length-1))
 		save_interval = 1
 	else:
-		n_param_saves = min(n_param_saves, n_epochs*(train_seq_length-1))
+		n_param_saves = min(n_param_saves, int(n_epochs*(train_seq_length-1)))
 		save_interval = int(math.ceil((n_epochs*(train_seq_length-1)/n_param_saves) / 100.0)) * 100
 
 	# if keep_param_history:
-	A_history = np.zeros((n_param_saves, A.shape[0], A.shape[1]))
-	B_history = np.zeros((n_param_saves, B.shape[0], B.shape[1]))
-	C_history = np.zeros((n_param_saves, C.shape[0], C.shape[1]))
-	a_history = np.zeros((n_param_saves, a.shape[0], a.shape[1]))
-	b_history = np.zeros((n_param_saves, b.shape[0], b.shape[1]))
+	# A_history = np.zeros((n_param_saves, A.shape[0], A.shape[1]))
+	# B_history = np.zeros((n_param_saves, B.shape[0], B.shape[1]))
+	# C_history = np.zeros((n_param_saves, C.shape[0], C.shape[1]))
+	# a_history = np.zeros((n_param_saves, a.shape[0], a.shape[1]))
+	# b_history = np.zeros((n_param_saves, b.shape[0], b.shape[1]))
+	A_history = np.zeros((n_param_saves,1))
+	B_history = np.zeros((n_param_saves,1))
+	C_history = np.zeros((n_param_saves,1))
+	a_history = np.zeros((n_param_saves,1))
+	b_history = np.zeros((n_param_saves,1))
+	A_history_running = np.zeros((n_param_saves,1))
+	B_history_running = np.zeros((n_param_saves,1))
+	C_history_running = np.zeros((n_param_saves,1))
+	a_history_running = np.zeros((n_param_saves,1))
+	b_history_running = np.zeros((n_param_saves,1))
 
 	loss_vec_train = np.zeros(n_epochs)
 	loss_vec_clean_train = np.zeros(n_epochs)
 	loss_vec_test = np.zeros(n_epochs)
 	loss_vec_clean_test = np.zeros(n_epochs)
+	pred_validity_vec_test = np.zeros(n_epochs)
+	pred_validity_vec_clean_test = np.zeros(n_epochs)
 	cc = -1 # iteration counter for saving weight updates
 	cc_inc = -1
 	for i_epoch in range(n_epochs):
@@ -447,12 +463,18 @@ def train_chaosRNN(forward,
 			# save updated parameters
 			if cc % save_interval == 0:
 				cc_inc += 1
-				A_history[cc_inc,:] = A.detach().numpy()
-				B_history[cc_inc,:] = B.detach().numpy()
-				C_history[cc_inc,:] = C.detach().numpy()
-				a_history[cc_inc,:] = a.detach().numpy()
-				b_history[cc_inc,:] = b.detach().numpy()
+				A_history[cc_inc,:] = np.linalg.norm(A.detach().numpy())
+				B_history[cc_inc,:] = np.linalg.norm(B.detach().numpy())
+				C_history[cc_inc,:] = np.linalg.norm(C.detach().numpy())
+				a_history[cc_inc,:] = np.linalg.norm(a.detach().numpy())
+				b_history[cc_inc,:] = np.linalg.norm(b.detach().numpy())
 
+				# cumulative means
+				A_history_running[cc_inc,:] = np.mean(A_history[cc_inc,:])
+				B_history_running[cc_inc,:] = np.mean(B_history[cc_inc,:])
+				C_history_running[cc_inc,:] = np.mean(C_history[cc_inc,:])
+				a_history_running[cc_inc,:] = np.mean(a_history[cc_inc,:])
+				b_history_running[cc_inc,:] = np.mean(b_history[cc_inc,:])
 		#normalize losses
 		total_loss_train = total_loss_train / train_seq_length
 		total_loss_clean_train = total_loss_clean_train / train_seq_length
@@ -466,6 +488,8 @@ def train_chaosRNN(forward,
 		running_epoch_loss_clean_test = np.zeros(test_seq_length)
 		# hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
 		pred = output_train[-1,:,None]
+		pw_loss_test = np.zeros(test_seq_length)
+		pw_loss_clean_test = np.zeros(test_seq_length)
 		for j in range(test_seq_length):
 			target = output_test[j,None]
 			target_clean = output_clean_test[j,None]
@@ -474,14 +498,19 @@ def train_chaosRNN(forward,
 			total_loss_clean_test += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()/2
 			running_epoch_loss_clean_test[j] = total_loss_clean_test/(j+1)
 			running_epoch_loss_test[j] = total_loss_test/(j+1)
+			pw_loss_test[j] = total_loss_test / avg_output_test
+			pw_loss_clean_test[j] = total_loss_clean_test / avg_output_clean_test
 			pred = pred.detach()
 			hidden_state = hidden_state.detach()
+
 		#normalize losses
 		total_loss_test = total_loss_test / test_seq_length
 		total_loss_clean_test = total_loss_clean_test / test_seq_length
 		#store losses
 		loss_vec_test[i_epoch] = total_loss_test
 		loss_vec_clean_test[i_epoch] = total_loss_clean_test
+		pred_validity_vec_test[i_epoch] = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
+		pred_validity_vec_clean_test[i_epoch] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
 
 		# print updates every 10 iterations or in 10% incrememnts
 		if i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0:
@@ -621,6 +650,8 @@ def train_chaosRNN(forward,
 		np.savetxt(output_dir+'/loss_vec_test.txt',loss_vec_test)
 		np.savetxt(output_dir+'/loss_vec_clean_test.txt',loss_vec_clean_test)
 
+	np.savetxt(output_dir+'/prediction_validity_time_test.txt',pred_validity_vec_test)
+	np.savetxt(output_dir+'/prediction_validity_time_clean_test.txt',pred_validity_vec_clean_test)
 	np.savetxt(output_dir+'/A.txt',A.detach().numpy())
 	np.savetxt(output_dir+'/B.txt',B.detach().numpy())
 	np.savetxt(output_dir+'/C.txt',C.detach().numpy())
@@ -637,26 +668,40 @@ def train_chaosRNN(forward,
 	fig, my_axes = plt.subplots(2, 3, sharex=True, figsize=[8,6])
 
 	x_vals = np.linspace(0,n_epochs,len(A_history))
-	my_axes[0,0].plot(x_vals, np.linalg.norm(A.detach().numpy() - A_history, ord='fro', axis=(1,2)))
+	my_axes[0,0].plot(x_vals, A_history, label='||A(t)||')
+	my_axes[0,0].plot(x_vals, A_history_running, label='||A(t)|| Running Mean')
+	# my_axes[0,0].plot(x_vals, np.linalg.norm(A.detach().numpy() - A_history, ord='fro', axis=(1,2)))
 	my_axes[0,0].set_title('A')
 	my_axes[0,0].set_xlabel('Epochs')
+	my_axes[0,0].legend()
 
-	my_axes[0,1].plot(x_vals, np.linalg.norm(B.detach().numpy() - B_history, ord='fro', axis=(1,2)))
+	# my_axes[0,1].plot(x_vals, np.linalg.norm(B.detach().numpy() - B_history, ord='fro', axis=(1,2)))
+	my_axes[0,1].plot(x_vals, B_history, label='||B(t)||')
+	my_axes[0,1].plot(x_vals, B_history_running, label='||B(t)|| Running Mean')
 	my_axes[0,1].set_title('B')
 	my_axes[0,1].set_xlabel('Epochs')
+	my_axes[0,1].legend()
 
-	my_axes[1,0].plot(x_vals, np.linalg.norm(C.detach().numpy() - C_history, ord='fro', axis=(1,2)))
+	# my_axes[1,0].plot(x_vals, np.linalg.norm(C.detach().numpy() - C_history, ord='fro', axis=(1,2)))
+	my_axes[1,0].plot(x_vals, C_history, label='||C(t)||')
+	my_axes[1,0].plot(x_vals, C_history_running, label='||C(t)|| Running Mean')
 	my_axes[1,0].set_title('C')
 	my_axes[1,0].set_xlabel('Epochs')
+	my_axes[1,0].legend()
 
-	my_axes[1,1].plot(x_vals, np.linalg.norm(a.detach().numpy() - a_history, ord='fro', axis=(1,2)))
+	# my_axes[1,1].plot(x_vals, np.linalg.norm(a.detach().numpy() - a_history, ord='fro', axis=(1,2)))
+	my_axes[1,1].plot(x_vals, a_history, label='||a(t)||')
+	my_axes[1,1].plot(x_vals, a_history_running, label='||a(t)|| Running Mean')
 	my_axes[1,1].set_title('a')
 	my_axes[1,1].set_xlabel('Epochs')
+	my_axes[1,1].legend()
 
-	my_axes[1,2].plot(x_vals, np.linalg.norm(b.detach().numpy() - b_history, ord='fro', axis=(1,2)))
+	# my_axes[1,2].plot(x_vals, np.linalg.norm(b.detach().numpy() - b_history, ord='fro', axis=(1,2)))
+	my_axes[1,2].plot(x_vals, b_history, label='||b(t)||')
+	my_axes[1,2].plot(x_vals, b_history_running, label='||b(t)|| Running Mean')
 	my_axes[1,2].set_title('b')
 	my_axes[1,2].set_xlabel('Epochs')
-
+	my_axes[1,2].legend()
 
 	fig.suptitle("Parameter convergence")
 	fig.savefig(fname=output_dir+'/rnn_parameter_convergence')
@@ -1105,18 +1150,21 @@ def train_RNN(forward,
 
 
 def compare_fits(my_dirs, output_fname="./training_comparisons"):
-	fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2,
-		figsize = [10, 4],
-		sharey=True, sharex=False)
+	fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3,
+		figsize = [15, 4],
+		sharey=False, sharex=False)
 
 	for d in my_dirs:
 		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
 		x_train = np.loadtxt(d+"/loss_vec_train.txt")
 		x_test = np.loadtxt(d+"/loss_vec_clean_test.txt")
+		x_valid_test = np.loadtxt(d+"/prediction_validity_time_clean_test.txt")
 		ax1.plot(x_train, label=d_label)
 		ax2.plot(x_test, label=d_label)
+		ax3.plot(x_valid_test, label=d_label)
 		# x = np.loadtxt(d+"/loss_vec_test.txt")
 		# ax3.plot(x, label=d_label)
+	ax3.set_xlabel('Epochs')
 	ax2.set_xlabel('Epochs')
 	ax1.set_xlabel('Epochs')
 
@@ -1125,6 +1173,9 @@ def compare_fits(my_dirs, output_fname="./training_comparisons"):
 	ax1.legend(fontsize=6, handlelength=2, loc='upper right')
 	ax2.set_ylabel('Error')
 	ax2.set_title('Test Error (predicting clean data)')
+	ax3.set_ylabel('Valid Time')
+	ax3.set_title('Test Validity Time')
+
 	# ax3.set_xlabel('Epochs')
 	# ax3.set_ylabel('Error')
 	# ax3.set_title('Test Error (on noisy data)')
@@ -1133,8 +1184,10 @@ def compare_fits(my_dirs, output_fname="./training_comparisons"):
 	# plot in log scale
 	ax1.set_yscale('log')
 	ax2.set_yscale('log')
+	ax3.set_yscale('log')
 	ax1.set_ylabel('log Error')
 	ax2.set_ylabel('log Error')
+	ax3.set_ylabel('log Error')
 	fig.savefig(fname=output_fname+'_log')
 	plt.close(fig)
 
