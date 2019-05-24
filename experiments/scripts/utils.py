@@ -298,8 +298,10 @@ def train_chaosRNN(forward,
 	output_test = torch.FloatTensor(y_noisy_test).type(dtype)
 	output_clean_test = torch.FloatTensor(y_clean_test).type(dtype)
 
-	avg_output_test = torch.mean(output_test**2,dim=(0,1)).detach().numpy()**0.5
-	avg_output_clean_test = torch.mean(output_clean_test**2,dim=(0,1)).detach().numpy()**0.5
+	avg_output_test = torch.mean(output_test**2).detach().numpy()**0.5
+	# avg_output_test = torch.mean(output_test**2,dim=(0,1)).detach().numpy()**0.5
+	avg_output_clean_test = torch.mean(output_clean_test**2).detach().numpy()**0.5
+	# avg_output_clean_test = torch.mean(output_clean_test**2,dim=(0,1)).detach().numpy()**0.5
 
 	output_size = output_train.shape[1]
 	train_seq_length = output_train.size(0)
