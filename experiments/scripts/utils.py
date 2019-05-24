@@ -263,7 +263,7 @@ def train_chaosRNN(forward,
 			y_clean_test, y_noisy_test,
 			model_params, hidden_size=6, n_epochs=100, lr=0.05,
 			output_dir='.', normz_info=None, model=None,
-			trivial_init=False,
+			trivial_init=False, perturb_trivial_init=True, sd_perturb = 0.001,
 			stack_hidden=True, stack_output=True,
 			x_train=None, x_test=None,
 			f_normalize_Y=f_normalize_minmax,
@@ -368,12 +368,21 @@ def train_chaosRNN(forward,
 		init.zeros_(b)
 		for jj in range(output_size):
 			C[jj,jj] = 1
+		if perturb_trivial_init:
+			init.normal_(A, 0.0, sd_perturb)
+			init.normal_(B, 0.0, sd_perturb)
+			init.normal_(a, 0.0, sd_perturb)
+			init.normal_(b, 0.0, sd_perturb)
+			C = C + torch.FloatTensor(sd_perturb*np.random.randn(C.shape[0], C.shape[1]))
 	else:
 		init.normal_(A, 0.0, 0.1)
 		init.normal_(B, 0.0, 0.1)
 		init.normal_(C, 0.0, 0.1)
 		init.normal_(a, 0.0, 0.1)
 		init.normal_(b, 0.0, 0.1)
+
+	# additional perturbation for trivial init case
+
 
 	A = Variable(A, requires_grad=True)
 	B =  Variable(B, requires_grad=True)
