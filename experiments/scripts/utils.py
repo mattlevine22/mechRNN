@@ -505,8 +505,8 @@ def train_chaosRNN(forward,
 			target = output_test[j,None]
 			target_clean = output_clean_test[j,None]
 			(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
-			total_loss_test += (pred.squeeze() - target.squeeze()).pow(2).sum()/2
-			total_loss_clean_test += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()/2
+			total_loss_test += (pred.detach().squeeze() - target.squeeze()).pow(2).sum()/2
+			total_loss_clean_test += (pred.detach().squeeze() - target_clean.squeeze()).pow(2).sum()/2
 			running_epoch_loss_clean_test[j] = total_loss_clean_test/(j+1)
 			running_epoch_loss_test[j] = total_loss_test/(j+1)
 			pw_loss_test[j] = total_loss_test.numpy() / avg_output_test
