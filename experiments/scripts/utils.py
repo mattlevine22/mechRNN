@@ -187,24 +187,24 @@ def make_RNN_data(model, tspan, sim_model_params, noise_frac=0, output_dir=".", 
 	return input_data, y_clean, y_noisy
 
 ### RNN fitting section
-def forward_vanilla(data_input, hidden_state, w1, w2, b, c, v, *args):
+def forward_vanilla(data_input, hidden_state, w1, w2, b, c, v, *args, model_output=None):
 	hidden_state = torch.relu(b + torch.mm(w2,data_input) + torch.mm(w1,hidden_state))
 	out = c + torch.mm(v,hidden_state)
 	return  (out, hidden_state)
 
-def forward_chaos_pureML(data_input, hidden_state, A, B, C, a, b, *args):
+def forward_chaos_pureML(data_input, hidden_state, A, B, C, a, b, *args, model_output=None):
 	hidden_state = torch.relu(a + torch.mm(A,hidden_state) + torch.mm(B,data_input))
 	# hidden_state = torch.relu(a + torch.mm(A,hidden_state))
 	out = b + torch.mm(C,hidden_state)
 	return  (out, hidden_state)
 
-def forward_chaos_pureML2(data_input, hidden_state, A, B, C, a, b, *args):
+def forward_chaos_pureML2(data_input, hidden_state, A, B, C, a, b, *args, model_output=None):
 	hidden_state = torch.tanh(a + torch.mm(A,hidden_state))
 	out = b + torch.mm(C,hidden_state)
 	return  (out, hidden_state)
 
 
-def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_info, model, model_params):
+def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_info, model, model_params, model_output=None):
 	# unnormalize
 	# ymin = normz_info['Ymin']
 	# ymax = normz_info['Ymax']
@@ -215,17 +215,20 @@ def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_in
 
 	# y0 = ymean + hidden_state[0].detach().numpy()*ysd
 	# y0 = ymin + ( hidden_state[0].detach().numpy()*(ymax - ymin) )
-	tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
-	# driver = xmean + xsd*model_input.detach().numpy()
-	# my_args = model_params + (driver,)
-	#
-	# unnormalize model_input so that it can go through the ODE solver
 	y0_normalized = torch.squeeze(model_input).detach()
-	y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
-	y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
+	if model_output is None:
+		tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+		# driver = xmean + xsd*model_input.detach().numpy()
+		# my_args = model_params + (driver,)
+		#
+		# unnormalize model_input so that it can go through the ODE solver
+		y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
+		y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
 
-	y_pred = y_out[-1,:] #last column
-	y_pred_normalized = f_normalize_minmax(normz_info, y_pred)
+		y_pred = y_out[-1,:] #last column
+		y_pred_normalized = f_normalize_minmax(normz_info, y_pred)
+	else:
+		y_pred_normalized = model_output
 
 	# renormalize
 	# hidden_state[0] = torch.from_numpy( (y_out[-1] - ymin) / (ymax - ymin) )
@@ -275,7 +278,8 @@ def train_chaosRNN(forward,
 			f_normalize_X = f_normalize_ztrans,
 			f_unNormalize_X = f_unNormalize_ztrans,
 			max_plot=2000, n_param_saves=None,
-			err_thresh=0.4, plot_state_indices=None):
+			err_thresh=0.4, plot_state_indices=None,
+			precompute_model=False):
 
 	if torch.cuda.is_available():
 		print('Using CUDA FloatTensor')
@@ -312,6 +316,19 @@ def train_chaosRNN(forward,
 	output_size = output_train.shape[1]
 	train_seq_length = output_train.size(0)
 	test_seq_length = output_test.size(0)
+
+
+	# compute one-step-ahead model-based prediction for each point in the training set
+	if precompute_model:
+		model_pred = np.zeros((train_seq_length,output_size))
+		for j in range(train_seq_length):
+			tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+			# unnormalize model_input so that it can go through the ODE solver
+			y0 = f_unNormalize_minmax(normz_info, output_train[j,:].numpy())
+			y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
+			model_pred[j,:] = f_normalize_minmax(normz_info, y_out[-1,:])
+	else:
+		model_pred = [None for j in range(train_seq_length)]
 
 	# first, SHOW that a simple mechRNN can fit the data perfectly (if we are running a mechRNN)
 	if stack_hidden or stack_output:
@@ -444,7 +461,7 @@ def train_chaosRNN(forward,
 			cc += 1
 			target = output_train[j+1,None]
 			target_clean = output_clean_train[j+1,None]
-			(pred, hidden_state) = forward(output_train[j,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params)
+			(pred, hidden_state) = forward(output_train[j,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[j])
 			# (pred, hidden_state) = forward(pred.detach(), hidden_state, A,B,C,a,b, normz_info, model, model_params)
 			loss = (pred.squeeze() - target.squeeze()).pow(2).sum()/2
 			total_loss_train += loss
@@ -549,7 +566,7 @@ def train_chaosRNN(forward,
 			saved_hidden_states = np.zeros([train_seq_length, hidden_size])
 			saved_hidden_states[0,:] = hidden_state.data.numpy().ravel()
 			for i in range(train_seq_length-1):
-				(pred, hidden_state) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params)
+				(pred, hidden_state) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[j])
 				# (pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
 				# hidden_state = hidden_state
 				saved_hidden_states[i+1,:] = hidden_state.data.numpy().ravel()
@@ -734,7 +751,7 @@ def train_chaosRNN(forward,
 	pred = output_train[0,:,None]
 	predictions[0,:] = np.squeeze(output_train[0,:,None])
 	for i in range(train_seq_length-1):
-		(pred, hidden_state) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params)
+		(pred, hidden_state) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[j])
 		# (pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
 		# hidden_state = hidden_state
 		predictions[i+1,:] = pred.data.numpy().ravel()
