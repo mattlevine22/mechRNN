@@ -19,6 +19,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+import pandas as pd
 import pdb
 
 ### ODE simulation section
@@ -94,9 +95,10 @@ def f_unNormalize_minmax(norm_dict,y_norm):
 	y = norm_dict['Ymin'] + y_norm * (norm_dict['Ymax'] - norm_dict['Ymin'])
 	return y
 
-def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_dir=".", drive_system=True):
+def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_dir=".", drive_system=True, plot_state_indices=None):
 	# time points
 	# tau = 50 # window length of persistence
+
 	if drive_system:
 		# tmp = np.arange(0,1000,tau)
 		tmp = np.arange(0,tspan[-1],tau)
@@ -109,22 +111,24 @@ def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_d
 		x = None
 
 	y0 = sim_model_params['state_init']
-
 	y_clean = odeint(model, y0, tspan, args=my_args)
 	# CHOOSE noise size based on range of the data...if you base on mean or mean(abs),
 	# can get disproportionate SDs if one state oscillates between pos/neg, and another state is always POS.
 	y_noisy = y_clean + noise_frac*(np.max(y_clean,0) - np.min(y_clean,0))*np.random.randn(len(y_clean),y_clean.shape[1])
 
+	if not plot_state_indices:
+		plot_state_indices = np.arange(y_noisy.shape[1])
+
 	## Plot clean ODE simulation
-	fig, (ax_list) = plt.subplots(y_clean.shape[1],1)
+	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
 	if not isinstance(ax_list,np.ndarray):
 		ax_list = [ax_list]
 	for kk in range(len(ax_list)):
 		ax = ax_list[kk]
-		ax.plot(tspan, y_clean[:,kk], label='clean data')
-		ax.scatter(tspan, y_noisy[:,kk], color='red', s=10, alpha=0.3, label='noisy data')
+		ax.plot(tspan, y_clean[:,plot_state_indices[kk]], label='clean data')
+		ax.scatter(tspan, y_noisy[:,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
 		ax.set_xlabel('time')
-		ax.set_ylabel(sim_model_params['state_names'][kk] +'(t)')
+		ax.set_ylabel(sim_model_params['state_names'][plot_state_indices[kk]] +'(t)')
 		# ax.tick_params(axis='y')
 		# ax.set_title('Testing Fit')
 	ax_list[0].legend()
@@ -157,12 +161,12 @@ def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_d
 	return y_clean, y_noisy, x
 
 
-def make_RNN_data(model, tspan, sim_model_params, noise_frac=0, output_dir=".", drive_system=True):
+def make_RNN_data(model, tspan, sim_model_params, noise_frac=0, output_dir=".", drive_system=True, plot_state_indices=None):
 
 	if not os.path.exists(output_dir):
 		os.makedirs(output_dir)
 
-	y_clean, y_noisy, x  = run_ode_model(model, tspan, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system)
+	y_clean, y_noisy, x  = run_ode_model(model, tspan, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
 
 	if drive_system:
 		# little section to upsample the random, piecewise constant x(t) function
@@ -271,7 +275,7 @@ def train_chaosRNN(forward,
 			f_normalize_X = f_normalize_ztrans,
 			f_unNormalize_X = f_unNormalize_ztrans,
 			max_plot=2000, n_param_saves=None,
-			err_thresh=0.4):
+			err_thresh=0.4, plot_state_indices=None):
 
 	if torch.cuda.is_available():
 		print('Using CUDA FloatTensor')
@@ -283,6 +287,8 @@ def train_chaosRNN(forward,
 	n_plttrain = y_clean_train.shape[0] - min(max_plot,y_clean_train.shape[0])
 	n_plttest = y_clean_test.shape[0] - min(max_plot,y_clean_test.shape[0])
 
+	if not plot_state_indices:
+		plot_state_indices = np.arange(y_clean_test.shape[1])
 
 	# keep_param_history = np.log10( n_epochs * y_clean_train.shape[0] * (hidden_size**2) ) < mem_thresh_order
 	# if not keep_param_history:
@@ -334,13 +340,13 @@ def train_chaosRNN(forward,
 			predictions[i+1,:] = pred.data.numpy().ravel()
 
 		# plot predictions vs truth
-		fig, (ax_list) = plt.subplots(y_clean_train.shape[1],1)
+		fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
 		if not isinstance(ax_list,np.ndarray):
 			ax_list = [ax_list]
 
 		for kk in range(len(ax_list)):
 			ax1 = ax_list[kk]
-			ax1.scatter(np.arange(len(y_noisy_test[n_plttest:,kk])), y_noisy_test[n_plttest:,kk], color='red', s=10, alpha=0.3, label='noisy data')
+			ax1.scatter(np.arange(len(y_noisy_test[n_plttest:,plot_state_indices[kk]])), y_noisy_test[n_plttest:,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
 			ax1.plot(y_clean_test[n_plttest:,kk], color='red', label='clean data')
 			ax1.plot(predictions[n_plttest:,kk], ':' ,color='red', label='NN trivial fit')
 			ax1.set_xlabel('time')
@@ -531,7 +537,7 @@ def train_chaosRNN(forward,
 						total_loss_test.data.item()))
 				 # plot predictions vs truth
 			# fig, (ax1, ax3) = plt.subplots(1, 2)
-			fig, (ax_list) = plt.subplots(y_clean_train.shape[1],1)
+			fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
 			if not isinstance(ax_list,np.ndarray):
 				ax_list = [ax_list]
 			# first run and plot training fits
@@ -559,12 +565,12 @@ def train_chaosRNN(forward,
 			# predictions_raw = predictions
 			for kk in range(len(ax_list)):
 				ax1 = ax_list[kk]
-				t_plot = np.arange(0,round(len(y_noisy_train[n_plttrain:,kk])*model_params['delta_t'],8),model_params['delta_t'])
-				ax1.scatter(t_plot, y_noisy_train_raw[n_plttrain:,kk], color='red', s=10, alpha=0.3, label='noisy data')
-				ax1.plot(t_plot, y_clean_train_raw[n_plttrain:,kk], color='red', label='clean data')
-				ax1.plot(t_plot, predictions_raw[n_plttrain:,kk], color='black', label='NN fit')
+				t_plot = np.arange(0,round(len(y_noisy_train[n_plttrain:,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+				ax1.scatter(t_plot, y_noisy_train_raw[n_plttrain:,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+				ax1.plot(t_plot, y_clean_train_raw[n_plttrain:,plot_state_indices[kk]], color='red', label='clean data')
+				ax1.plot(t_plot, predictions_raw[n_plttrain:,plot_state_indices[kk]], color='black', label='NN fit')
 				ax1.set_xlabel('time')
-				ax1.set_ylabel(model_params['state_names'][kk] + '(t)', color='red')
+				ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)', color='red')
 				ax1.tick_params(axis='y', labelcolor='red')
 
 			ax_list[0].legend()
@@ -593,7 +599,7 @@ def train_chaosRNN(forward,
 			plt.close(fig)
 
 
-			fig, (ax_list) = plt.subplots(y_clean_train.shape[1],1)
+			fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
 			if not isinstance(ax_list,np.ndarray):
 				ax_list = [ax_list]
 
@@ -611,12 +617,12 @@ def train_chaosRNN(forward,
 			predictions_raw = f_unNormalize_Y(normz_info,predictions)
 			for kk in range(len(ax_list)):
 				ax3 = ax_list[kk]
-				t_plot = np.arange(0,len(y_clean_test[n_plttest:,kk])*model_params['delta_t'],model_params['delta_t'])
+				t_plot = np.arange(0,len(y_clean_test[n_plttest:,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
 				# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-				ax3.plot(t_plot, y_clean_test_raw[n_plttest:,kk], color='red', label='clean data')
-				ax3.plot(t_plot, predictions_raw[n_plttest:,kk], color='black', label='NN fit')
+				ax3.plot(t_plot, y_clean_test_raw[n_plttest:,plot_state_indices[kk]], color='red', label='clean data')
+				ax3.plot(t_plot, predictions_raw[n_plttest:,plot_state_indices[kk]], color='black', label='NN fit')
 				ax3.set_xlabel('time')
-				ax3.set_ylabel(model_params['state_names'][kk] +'(t)', color='red')
+				ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
 				ax3.tick_params(axis='y', labelcolor='red')
 
 			ax_list[0].legend()
@@ -643,10 +649,6 @@ def train_chaosRNN(forward,
 			fig.suptitle('Hidden State Dynamics')
 			fig.savefig(fname=output_dir+'/rnn_test_hidden_states_iterEpochs'+str(i_epoch))
 			plt.close(fig)
-
-
-
-			# Plot parameter convergence
 
 
 	## save loss_vec
@@ -679,37 +681,37 @@ def train_chaosRNN(forward,
 	fig, my_axes = plt.subplots(2, 3, sharex=True, figsize=[8,6])
 
 	x_vals = np.linspace(0,n_epochs,len(A_history))
-	my_axes[0,0].plot(x_vals, A_history, label='||A(t)||')
-	my_axes[0,0].plot(x_vals, A_history_running, label='||A(t)|| Running Mean')
+	my_axes[0,0].plot(x_vals, A_history)
+	my_axes[0,0].plot(x_vals, A_history_running)
 	# my_axes[0,0].plot(x_vals, np.linalg.norm(A.detach().numpy() - A_history, ord='fro', axis=(1,2)))
 	my_axes[0,0].set_title('A')
 	my_axes[0,0].set_xlabel('Epochs')
 	my_axes[0,0].legend()
 
 	# my_axes[0,1].plot(x_vals, np.linalg.norm(B.detach().numpy() - B_history, ord='fro', axis=(1,2)))
-	my_axes[0,1].plot(x_vals, B_history, label='||B(t)||')
-	my_axes[0,1].plot(x_vals, B_history_running, label='||B(t)|| Running Mean')
+	my_axes[0,1].plot(x_vals, B_history)
+	my_axes[0,1].plot(x_vals, B_history_running)
 	my_axes[0,1].set_title('B')
 	my_axes[0,1].set_xlabel('Epochs')
 	my_axes[0,1].legend()
 
 	# my_axes[1,0].plot(x_vals, np.linalg.norm(C.detach().numpy() - C_history, ord='fro', axis=(1,2)))
-	my_axes[1,0].plot(x_vals, C_history, label='||C(t)||')
-	my_axes[1,0].plot(x_vals, C_history_running, label='||C(t)|| Running Mean')
+	my_axes[1,0].plot(x_vals, C_history)
+	my_axes[1,0].plot(x_vals, C_history_running)
 	my_axes[1,0].set_title('C')
 	my_axes[1,0].set_xlabel('Epochs')
 	my_axes[1,0].legend()
 
 	# my_axes[1,1].plot(x_vals, np.linalg.norm(a.detach().numpy() - a_history, ord='fro', axis=(1,2)))
-	my_axes[1,1].plot(x_vals, a_history, label='||a(t)||')
-	my_axes[1,1].plot(x_vals, a_history_running, label='||a(t)|| Running Mean')
+	my_axes[1,1].plot(x_vals, a_history)
+	my_axes[1,1].plot(x_vals, a_history_running)
 	my_axes[1,1].set_title('a')
 	my_axes[1,1].set_xlabel('Epochs')
 	my_axes[1,1].legend()
 
 	# my_axes[1,2].plot(x_vals, np.linalg.norm(b.detach().numpy() - b_history, ord='fro', axis=(1,2)))
-	my_axes[1,2].plot(x_vals, b_history, label='||b(t)||')
-	my_axes[1,2].plot(x_vals, b_history_running, label='||b(t)|| Running Mean')
+	my_axes[1,2].plot(x_vals, b_history)
+	my_axes[1,2].plot(x_vals, b_history_running)
 	my_axes[1,2].set_title('b')
 	my_axes[1,2].set_xlabel('Epochs')
 	my_axes[1,2].legend()
@@ -721,7 +723,7 @@ def train_chaosRNN(forward,
 	## now, inspect the quality of the learned model
 	# plot predictions vs truth
 	# fig, (ax1, ax3) = plt.subplots(1, 2)
-	fig, (ax_list) = plt.subplots(y_clean_train.shape[1],1)
+	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
 	if not isinstance(ax_list,np.ndarray):
 		ax_list = [ax_list]
 
@@ -740,12 +742,12 @@ def train_chaosRNN(forward,
 	predictions_raw = f_unNormalize_Y(normz_info,predictions)
 	for kk in range(len(ax_list)):
 		ax1 = ax_list[kk]
-		t_plot = np.arange(0,round(len(y_noisy_train_raw[n_plttrain:,kk])*model_params['delta_t'],8),model_params['delta_t'])
-		ax1.scatter(t_plot, y_noisy_train_raw[n_plttrain:,kk], color='red', s=10, alpha=0.3, label='noisy data')
-		ax1.plot(t_plot, y_clean_train_raw[n_plttrain:,kk], color='red', label='clean data')
-		ax1.plot(t_plot, predictions_raw[n_plttrain:,kk], color='black', label='NN fit')
+		t_plot = np.arange(0,round(len(y_noisy_train_raw[n_plttrain:,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+		ax1.scatter(t_plot, y_noisy_train_raw[n_plttrain:,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+		ax1.plot(t_plot, y_clean_train_raw[n_plttrain:,plot_state_indices[kk]], color='red', label='clean data')
+		ax1.plot(t_plot, predictions_raw[n_plttrain:,plot_state_indices[kk]], color='black', label='NN fit')
 		ax1.set_xlabel('time')
-		ax1.set_ylabel(model_params['state_names'][kk] +'(t)', color='red')
+		ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
 		ax1.tick_params(axis='y', labelcolor='red')
 		# ax1.set_title('Training Fit')
 
@@ -764,18 +766,18 @@ def train_chaosRNN(forward,
 		# hidden_state = hidden_state
 		predictions[i,:] = pred.data.numpy().ravel()
 
-	fig, (ax_list) = plt.subplots(y_clean_train.shape[1],1)
+	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
 	if not isinstance(ax_list,np.ndarray):
 		ax_list = [ax_list]
 	predictions_raw = f_unNormalize_Y(normz_info,predictions)
 	for kk in range(len(ax_list)):
 		ax3 = ax_list[kk]
-		t_plot = np.arange(0,len(y_clean_test_raw[n_plttest:,kk])*model_params['delta_t'],model_params['delta_t'])
+		t_plot = np.arange(0,len(y_clean_test_raw[n_plttest:,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
 		# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-		ax3.plot(t_plot, y_clean_test_raw[n_plttest:,kk], color='red', label='clean data')
-		ax3.plot(t_plot, predictions_raw[n_plttest:,kk], color='black', label='NN fit')
+		ax3.plot(t_plot, y_clean_test_raw[n_plttest:,plot_state_indices[kk]], color='red', label='clean data')
+		ax3.plot(t_plot, predictions_raw[n_plttest:,plot_state_indices[kk]], color='black', label='NN fit')
 		ax3.set_xlabel('time')
-		ax3.set_ylabel(model_params['state_names'][kk] +'(t)', color='red')
+		ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
 		ax3.tick_params(axis='y', labelcolor='red')
 		# ax3.set_title('Testing Fit')
 
@@ -783,6 +785,59 @@ def train_chaosRNN(forward,
 	fig.suptitle('RNN TEST fit to ODE simulation')
 	fig.savefig(fname=output_dir+'/rnn_fit_ode_TEST')
 	plt.close(fig)
+
+
+
+	# plot Train/Test curve
+	x_test = pd.DataFrame(np.loadtxt(output_dir+"/loss_vec_clean_test.txt"))
+	n_vals = len(x_test)
+	max_exp = int(np.floor(np.log10(n_vals)))
+	win_list = [None] + list(10**np.arange(1,max_exp))
+	for win in win_list:
+		fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3,
+			figsize = [15, 4],
+			sharey=False, sharex=False)
+
+		x_train = pd.DataFrame(np.loadtxt(output_dir+'/loss_vec_train.txt'))
+		x_test = pd.DataFrame(np.loadtxt(output_dir+"/loss_vec_clean_test.txt"))
+		x_valid_test = pd.DataFrame(np.loadtxt(output_dir+"/prediction_validity_time_clean_test.txt"))
+		if win:
+			ax1.plot(x_train.rolling(win).mean())
+			ax2.plot(x_test.rolling(win).mean())
+			ax3.plot(x_valid_test.rolling(win).mean())
+		else:
+			ax1.plot(x_train)
+			ax2.plot(x_test)
+			ax3.plot(x_valid_test)
+
+		# x = np.loadtxt(d+"/loss_vec_test.txt")
+		# ax3.plot(x, label=d_label)
+		ax3.set_xlabel('Epochs')
+		ax2.set_xlabel('Epochs')
+		ax1.set_xlabel('Epochs')
+
+		ax1.set_ylabel('Error')
+		ax1.set_title('Train Error')
+		# ax1.legend(fontsize=6, handlelength=2, loc='upper right')
+		ax2.set_ylabel('Error')
+		ax2.set_title('Test Error (predicting clean data)')
+		ax3.set_ylabel('Valid Time')
+		ax3.set_title('Test Validity Time')
+
+		# ax3.set_xlabel('Epochs')
+		# ax3.set_ylabel('Error')
+		# ax3.set_title('Test Error (on noisy data)')
+		# fig.suptitle("Comparison of training efficacy (trained on noisy data)")
+		fig.savefig(fname=output_fname+'_win'+str(win))
+		# plot in log scale
+		ax1.set_yscale('log')
+		ax2.set_yscale('log')
+		ax3.set_yscale('log')
+		ax1.set_ylabel('log Error')
+		ax2.set_ylabel('log Error')
+		ax3.set_ylabel('Valid Time')
+		fig.savefig(fname=output_fname+'_log'+'_win'+str(win))
+		plt.close(fig)
 
 
 def train_RNN(forward,
@@ -1161,46 +1216,59 @@ def train_RNN(forward,
 
 
 def compare_fits(my_dirs, output_fname="./training_comparisons"):
-	fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3,
-		figsize = [15, 4],
-		sharey=False, sharex=False)
 
-	for d in my_dirs:
-		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
-		x_train = np.loadtxt(d+"/loss_vec_train.txt")
-		x_test = np.loadtxt(d+"/loss_vec_clean_test.txt")
-		x_valid_test = np.loadtxt(d+"/prediction_validity_time_clean_test.txt")
-		ax1.plot(x_train, label=d_label)
-		ax2.plot(x_test, label=d_label)
-		ax3.plot(x_valid_test, label=d_label)
-		# x = np.loadtxt(d+"/loss_vec_test.txt")
-		# ax3.plot(x, label=d_label)
-	ax3.set_xlabel('Epochs')
-	ax2.set_xlabel('Epochs')
-	ax1.set_xlabel('Epochs')
+	# first, get sizes of things...max window size is 10% of whole test set.
+	d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
+	x_test = pd.DataFrame(np.loadtxt(my_dirs[0]+"/loss_vec_clean_test.txt"))
+	n_vals = len(x_test)
+	max_exp = int(np.floor(np.log10(n_vals)))
+	win_list = [None] + list(10**np.arange(1,max_exp))
+	for win in win_list:
+		fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3,
+			figsize = [15, 4],
+			sharey=False, sharex=False)
 
-	ax1.set_ylabel('Error')
-	ax1.set_title('Train Error')
-	ax1.legend(fontsize=6, handlelength=2, loc='upper right')
-	ax2.set_ylabel('Error')
-	ax2.set_title('Test Error (predicting clean data)')
-	ax3.set_ylabel('Valid Time')
-	ax3.set_title('Test Validity Time')
+		for d in my_dirs:
+			d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
+			x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
+			x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
+			x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt"))
+			if win:
+				ax1.plot(x_train.rolling(win).mean(), label=d_label)
+				ax2.plot(x_test.rolling(win).mean(), label=d_label)
+				ax3.plot(x_valid_test.rolling(win).mean(), label=d_label)
+			else:
+				ax1.plot(x_train, label=d_label)
+				ax2.plot(x_test, label=d_label)
+				ax3.plot(x_valid_test, label=d_label)
+			# x = np.loadtxt(d+"/loss_vec_test.txt")
+			# ax3.plot(x, label=d_label)
+		ax3.set_xlabel('Epochs')
+		ax2.set_xlabel('Epochs')
+		ax1.set_xlabel('Epochs')
 
-	# ax3.set_xlabel('Epochs')
-	# ax3.set_ylabel('Error')
-	# ax3.set_title('Test Error (on noisy data)')
-	# fig.suptitle("Comparison of training efficacy (trained on noisy data)")
-	fig.savefig(fname=output_fname)
-	# plot in log scale
-	ax1.set_yscale('log')
-	ax2.set_yscale('log')
-	ax3.set_yscale('log')
-	ax1.set_ylabel('log Error')
-	ax2.set_ylabel('log Error')
-	ax3.set_ylabel('log Error')
-	fig.savefig(fname=output_fname+'_log')
-	plt.close(fig)
+		ax1.set_ylabel('Error')
+		ax1.set_title('Train Error')
+		ax1.legend(fontsize=6, handlelength=2, loc='upper right')
+		ax2.set_ylabel('Error')
+		ax2.set_title('Test Error (predicting clean data)')
+		ax3.set_ylabel('Valid Time')
+		ax3.set_title('Test Validity Time')
+
+		# ax3.set_xlabel('Epochs')
+		# ax3.set_ylabel('Error')
+		# ax3.set_title('Test Error (on noisy data)')
+		# fig.suptitle("Comparison of training efficacy (trained on noisy data)")
+		fig.savefig(fname=output_fname+'_win'+str(win))
+		# plot in log scale
+		ax1.set_yscale('log')
+		ax2.set_yscale('log')
+		ax3.set_yscale('log')
+		ax1.set_ylabel('log Error')
+		ax2.set_ylabel('log Error')
+		ax3.set_ylabel('Valid Time')
+		fig.savefig(fname=output_fname+'_log'+'_win'+str(win))
+		plt.close(fig)
 
 
 
