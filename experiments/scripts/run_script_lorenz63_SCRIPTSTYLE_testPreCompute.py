@@ -2,6 +2,7 @@ from utils import *
 import numpy as np
 import torch
 import argparse
+from time import time
 
 parser = argparse.ArgumentParser(description='mechRNN')
 parser.add_argument('--epoch', type=int, default=100, help='number of epochs')
@@ -106,22 +107,26 @@ def main():
 			run_output_dir = output_dir + '/vanillaRNN_clean_hs{0}_PreComputeFALSE'.format(hidden_size)
 			all_dirs.append(run_output_dir)
 			torch.manual_seed(0)
+			t0 = time()
 			train_chaosRNN(forward,
 		      y_clean_train_norm, y_clean_train_norm,
 		      y_clean_test_norm, y_noisy_test_norm,
 		      rnn_model_params, hidden_size, n_epochs, lr,
 		      run_output_dir, normz_info, rnn_sim_model,
 		      stack_hidden=False, stack_output=False, precompute_model=False)
+			print(time()-t0,'Seconds Elapsed')
 
 			run_output_dir = output_dir + '/vanillaRNN_clean_hs{0}_PreComputeTRUE'.format(hidden_size)
 			all_dirs.append(run_output_dir)
 			torch.manual_seed(0)
+			t0 = time()
 			train_chaosRNN(forward,
 		      y_clean_train_norm, y_clean_train_norm,
 		      y_clean_test_norm, y_noisy_test_norm,
 		      rnn_model_params, hidden_size, n_epochs, lr,
 		      run_output_dir, normz_info, rnn_sim_model,
 		      stack_hidden=False, stack_output=False, precompute_model=True)
+			print(time()-t0,'Seconds Elapsed')
 
 			# # train on noisy data
 			# normz_info = normz_info_noisy
@@ -154,23 +159,26 @@ def main():
 			run_output_dir = output_dir + '/mechRNN_clean_hs{0}_PreComputeFALSE'.format(hidden_size)
 			all_dirs.append(run_output_dir)
 			torch.manual_seed(0)
+			t0 = time()
 			train_chaosRNN(forward,
 		      y_clean_train_norm, y_clean_train_norm,
 		      y_clean_test_norm, y_noisy_test_norm,
 		      rnn_model_params, hidden_size, n_epochs, lr,
 		      run_output_dir, normz_info_clean, rnn_sim_model,
 		      precompute_model=False)
-
+			print(time()-t0,'Seconds Elapsed')
 
 			run_output_dir = output_dir + '/mechRNN_clean_hs{0}_PreComputeTRUE'.format(hidden_size)
 			all_dirs.append(run_output_dir)
 			torch.manual_seed(0)
+			t0 = time()
 			train_chaosRNN(forward,
 		      y_clean_train_norm, y_clean_train_norm,
 		      y_clean_test_norm, y_noisy_test_norm,
 		      rnn_model_params, hidden_size, n_epochs, lr,
 		      run_output_dir, normz_info_clean, rnn_sim_model,
 		      precompute_model=True)
+			print(time()-t0,'Seconds Elapsed')
 
 		# train on noisy data (regular initialization)
 		# normz_info = normz_info_noisy

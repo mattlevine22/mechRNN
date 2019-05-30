@@ -14,5 +14,5 @@ module load cuda/9.0
 module load python/2.7.15-tf
 
 # Execute jobs in parallel
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_testPreCompute.py --savedir lorenz63/test_preCompute --epoch 1000 --delta_t 0.1 --t_end 100 --train_frac 0.9 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_testPreCompute.py --savedir lorenz63/test_preCompute --epoch 1000 --delta_t 0.1 --t_end 100 --train_frac 0.9
 wait
