@@ -39,7 +39,7 @@ def main():
 		rnn_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b, c)}
 		all_dirs = []
 
-		np.random.seed()
+		# np.random.seed()
 
 		# master output directory name
 		output_dir = FLAGS.savedir + '_output' + str(i+1)
@@ -105,7 +105,7 @@ def main():
 					f_normalize_minmax(normz_info, y) for y in y_list]
 			run_output_dir = output_dir + '/vanillaRNN_clean_hs{0}'.format(hidden_size)
 			all_dirs.append(run_output_dir)
-			torch.manual_seed(0)
+			# torch.manual_seed(0)
 			train_chaosRNN(forward,
 		      y_clean_train_norm, y_clean_train_norm,
 		      y_clean_test_norm, y_noisy_test_norm,
@@ -199,7 +199,7 @@ def main():
 					f_normalize_minmax(normz_info, y) for y in y_list]
 			run_output_dir = output_dir + '/mechRNN_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size)
 			all_dirs.append(run_output_dir)
-			torch.manual_seed(0)
+			# torch.manual_seed(0)
 			train_chaosRNN(forward,
 		      y_clean_train_norm, y_clean_train_norm,
 		      y_clean_test_norm, y_noisy_test_norm,
