@@ -187,18 +187,18 @@ def make_RNN_data(model, tspan, sim_model_params, noise_frac=0, output_dir=".", 
 	return input_data, y_clean, y_noisy
 
 ### RNN fitting section
-def forward_vanilla(data_input, hidden_state, w1, w2, b, c, v, *args, model_output=None):
+def forward_vanilla(data_input, hidden_state, w1, w2, b, c, v, *args, **kwargs):
 	hidden_state = torch.relu(b + torch.mm(w2,data_input) + torch.mm(w1,hidden_state))
 	out = c + torch.mm(v,hidden_state)
 	return  (out, hidden_state)
 
-def forward_chaos_pureML(data_input, hidden_state, A, B, C, a, b, *args, model_output=None):
+def forward_chaos_pureML(data_input, hidden_state, A, B, C, a, b, *args, **kwargs):
 	hidden_state = torch.relu(a + torch.mm(A,hidden_state) + torch.mm(B,data_input))
 	# hidden_state = torch.relu(a + torch.mm(A,hidden_state))
 	out = b + torch.mm(C,hidden_state)
 	return  (out, hidden_state)
 
-def forward_chaos_pureML2(data_input, hidden_state, A, B, C, a, b, *args, model_output=None):
+def forward_chaos_pureML2(data_input, hidden_state, A, B, C, a, b, *args, **kwargs):
 	hidden_state = torch.tanh(a + torch.mm(A,hidden_state))
 	out = b + torch.mm(C,hidden_state)
 	return  (out, hidden_state)
@@ -699,39 +699,34 @@ def train_chaosRNN(forward,
 
 	x_vals = np.linspace(0,n_epochs,len(A_history))
 	my_axes[0,0].plot(x_vals, A_history)
-	my_axes[0,0].plot(x_vals, A_history_running)
+	# my_axes[0,0].plot(x_vals, A_history_running)
 	# my_axes[0,0].plot(x_vals, np.linalg.norm(A.detach().numpy() - A_history, ord='fro', axis=(1,2)))
 	my_axes[0,0].set_title('A')
 	my_axes[0,0].set_xlabel('Epochs')
-	my_axes[0,0].legend()
 
 	# my_axes[0,1].plot(x_vals, np.linalg.norm(B.detach().numpy() - B_history, ord='fro', axis=(1,2)))
 	my_axes[0,1].plot(x_vals, B_history)
-	my_axes[0,1].plot(x_vals, B_history_running)
+	# my_axes[0,1].plot(x_vals, B_history_running)
 	my_axes[0,1].set_title('B')
 	my_axes[0,1].set_xlabel('Epochs')
-	my_axes[0,1].legend()
 
 	# my_axes[1,0].plot(x_vals, np.linalg.norm(C.detach().numpy() - C_history, ord='fro', axis=(1,2)))
 	my_axes[1,0].plot(x_vals, C_history)
-	my_axes[1,0].plot(x_vals, C_history_running)
+	# my_axes[1,0].plot(x_vals, C_history_running)
 	my_axes[1,0].set_title('C')
 	my_axes[1,0].set_xlabel('Epochs')
-	my_axes[1,0].legend()
 
 	# my_axes[1,1].plot(x_vals, np.linalg.norm(a.detach().numpy() - a_history, ord='fro', axis=(1,2)))
 	my_axes[1,1].plot(x_vals, a_history)
-	my_axes[1,1].plot(x_vals, a_history_running)
+	# my_axes[1,1].plot(x_vals, a_history_running)
 	my_axes[1,1].set_title('a')
 	my_axes[1,1].set_xlabel('Epochs')
-	my_axes[1,1].legend()
 
 	# my_axes[1,2].plot(x_vals, np.linalg.norm(b.detach().numpy() - b_history, ord='fro', axis=(1,2)))
 	my_axes[1,2].plot(x_vals, b_history)
-	my_axes[1,2].plot(x_vals, b_history_running)
+	# my_axes[1,2].plot(x_vals, b_history_running)
 	my_axes[1,2].set_title('b')
 	my_axes[1,2].set_xlabel('Epochs')
-	my_axes[1,2].legend()
 
 	fig.suptitle("Parameter convergence")
 	fig.savefig(fname=output_dir+'/rnn_parameter_convergence')
@@ -845,7 +840,7 @@ def train_chaosRNN(forward,
 		# ax3.set_ylabel('Error')
 		# ax3.set_title('Test Error (on noisy data)')
 		# fig.suptitle("Comparison of training efficacy (trained on noisy data)")
-		fig.savefig(fname=output_fname+'_win'+str(win))
+		fig.savefig(fname=output_dir+'/TrainTest_win'+str(win))
 		# plot in log scale
 		ax1.set_yscale('log')
 		ax2.set_yscale('log')
@@ -853,7 +848,7 @@ def train_chaosRNN(forward,
 		ax1.set_ylabel('log Error')
 		ax2.set_ylabel('log Error')
 		ax3.set_ylabel('Valid Time')
-		fig.savefig(fname=output_fname+'_log'+'_win'+str(win))
+		fig.savefig(fname=output_dir+'/TrainTest_log'+'_win'+str(win))
 		plt.close(fig)
 
 
