@@ -9,7 +9,9 @@ import os
 import math
 import numpy as np
 import numpy.matlib
+from scipy.stats import entropy
 from scipy.integrate import odeint
+from statsmodels.nonparametric.kde import KDEUnivariate
 import torch
 from torch.autograd import Variable
 import torch.nn.init as init
@@ -21,6 +23,27 @@ import matplotlib.pyplot as plt
 
 import pandas as pd
 import pdb
+
+
+def kde_statsmodels_u(x, x_grid, **kwargs):
+    """Univariate Kernel Density Estimation with Statsmodels.
+    For more options, see
+    https://jakevdp.github.io/blog/2013/12/01/kernel-density-estimation."""
+    kde = KDEUnivariate(x)
+    kde.fit(**kwargs)
+    return kde.evaluate(x_grid)
+
+def kl4dummies(Xtrue, Xapprox):
+	n_states = Xtrue.shape[1]
+	kl_vec = np.zeros(n_states)
+	for i in range(n_states):
+		zmin = min(min(Xtrue[:,i]), min(Xapprox[:,i]))
+		zmax = max(max(Xtrue[:,i]), max(Xapprox[:,i]))
+		x_grid = np.linspace(zmin, zmax, 10000)
+		Pk = kde_statsmodels_u(Xapprox[:,i].astype(np.float), x_grid) # P is approx dist
+		Qk = kde_statsmodels_u(Xtrue[:,i].astype(np.float), x_grid) # Q is reference dist
+		kl_vec[i] = entropy(Pk, Qk) # compute Dkl(P | Q)
+	return kl_vec
 
 ### ODE simulation section
 ## 1. Simulate ODE
@@ -317,7 +340,6 @@ def train_chaosRNN(forward,
 	train_seq_length = output_train.size(0)
 	test_seq_length = output_test.size(0)
 
-
 	# compute one-step-ahead model-based prediction for each point in the training set
 	if precompute_model:
 		model_pred = np.zeros((train_seq_length,output_size))
@@ -445,6 +467,8 @@ def train_chaosRNN(forward,
 	loss_vec_clean_test = np.zeros(n_epochs)
 	pred_validity_vec_test = np.zeros(n_epochs)
 	pred_validity_vec_clean_test = np.zeros(n_epochs)
+	kl_vec_inv_test = np.zeros((n_epochs, output_size))
+	kl_vec_inv_clean_test = np.zeros((n_epochs, output_size))
 	cc = -1 # iteration counter for saving weight updates
 	cc_inc = -1
 	for i_epoch in range(n_epochs):
@@ -524,6 +548,8 @@ def train_chaosRNN(forward,
 		pred = output_train[-1,:,None]
 		pw_loss_test = np.zeros(test_seq_length)
 		pw_loss_clean_test = np.zeros(test_seq_length)
+		long_predictions = np.zeros([test_seq_length, output_size])
+		long_predictions[0,:] = np.squeeze(output_train[-1,:,None])
 		for j in range(test_seq_length):
 			target = output_test[j,None]
 			target_clean = output_clean_test[j,None]
@@ -535,6 +561,8 @@ def train_chaosRNN(forward,
 			pw_loss_test[j] = total_loss_test.numpy() / avg_output_test
 			pw_loss_clean_test[j] = total_loss_clean_test.numpy() / avg_output_clean_test
 			pred = pred.detach()
+			if j > 0:
+				long_predictions[j,:] = pred.data.numpy().ravel()
 			hidden_state = hidden_state.detach()
 
 		#normalize losses
@@ -545,6 +573,14 @@ def train_chaosRNN(forward,
 		loss_vec_clean_test[i_epoch] = total_loss_clean_test
 		pred_validity_vec_test[i_epoch] = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
 		pred_validity_vec_clean_test[i_epoch] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
+
+		# compute KL divergence between long predictions and whole test set:
+		kl_vec_inv_test[i_epoch,:] = kl4dummies(
+						f_unNormalize_Y(normz_info, y_noisy_test),
+						f_unNormalize_Y(normz_info, long_predictions))
+		kl_vec_inv_clean_test[i_epoch,:] = kl4dummies(
+						f_unNormalize_Y(normz_info, y_clean_test),
+						f_unNormalize_Y(normz_info, long_predictions))
 
 		# print updates every 10 iterations or in 10% incrememnts
 		if i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0:
@@ -667,6 +703,26 @@ def train_chaosRNN(forward,
 			fig.savefig(fname=output_dir+'/rnn_test_hidden_states_iterEpochs'+str(i_epoch))
 			plt.close(fig)
 
+			# plot KDE of test data vs predictiosn
+			fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+			if not isinstance(ax_list,np.ndarray):
+				ax_list = [ax_list]
+
+			for kk in range(len(ax_list)):
+				ax1 = ax_list[kk]
+				pk = plot_state_indices[kk]
+				x_grid = np.linspace(min(y_clean_test_raw[:,pk]), max(y_clean_test_raw[:,pk]), 1000)
+				ax1.plot(x_grid, kde_statsmodels_u(y_clean_test_raw[:,pk], x_grid), label='clean data')
+				x_grid = np.linspace(min(predictions_raw[:,pk]), max(predictions_raw[:,pk]), 1000)
+				ax1.plot(x_grid, kde_statsmodels_u(predictions_raw[:,pk], x_grid), label='RNN fit')
+				ax1.set_xlabel(model_params['state_names'][pk])
+
+			ax_list[0].legend()
+
+			fig.suptitle('Predictions of Invariant Density')
+			fig.savefig(fname=output_dir+'/rnn_test_invDensity_iterEpochs'+str(i_epoch))
+			plt.close(fig)
+
 
 	## save loss_vec
 	if n_epochs == 1:
@@ -680,6 +736,9 @@ def train_chaosRNN(forward,
 		np.savetxt(output_dir+'/loss_vec_test.txt',loss_vec_test)
 		np.savetxt(output_dir+'/loss_vec_clean_test.txt',loss_vec_clean_test)
 
+	np.savetxt(output_dir+'/kl_vec_inv_test.txt',kl_vec_inv_test)
+	np.savetxt(output_dir+'/kl_vec_inv_clean_test.txt',kl_vec_inv_clean_test)
+	np.savetxt(output_dir+'/prediction_validity_time_clean_test.txt',pred_validity_vec_clean_test)
 	np.savetxt(output_dir+'/prediction_validity_time_test.txt',pred_validity_vec_test)
 	np.savetxt(output_dir+'/prediction_validity_time_clean_test.txt',pred_validity_vec_clean_test)
 	np.savetxt(output_dir+'/A.txt',A.detach().numpy())
@@ -798,6 +857,25 @@ def train_chaosRNN(forward,
 	fig.savefig(fname=output_dir+'/rnn_fit_ode_TEST')
 	plt.close(fig)
 
+	# plot KDE of test data vs predictiosn
+	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+	if not isinstance(ax_list,np.ndarray):
+		ax_list = [ax_list]
+
+	for kk in range(len(ax_list)):
+		ax1 = ax_list[kk]
+		pk = plot_state_indices[kk]
+		x_grid = np.linspace(min(y_clean_test_raw[:,pk]), max(y_clean_test_raw[:,pk]), 1000)
+		ax1.plot(x_grid, kde_statsmodels_u(y_clean_test_raw[:,pk], x_grid), label='clean data')
+		x_grid = np.linspace(min(predictions_raw[:,pk]), max(predictions_raw[:,pk]), 1000)
+		ax1.plot(x_grid, kde_statsmodels_u(predictions_raw[:,pk], x_grid), label='RNN fit')
+		ax1.set_xlabel(model_params['state_names'][pk])
+
+	ax_list[0].legend()
+
+	fig.suptitle('Predictions of Invariant Density')
+	fig.savefig(fname=output_dir+'/rnn_invDensity_TEST')
+	plt.close(fig)
 
 
 	# plot Train/Test curve
@@ -806,24 +884,35 @@ def train_chaosRNN(forward,
 	max_exp = int(np.floor(np.log10(n_vals)))
 	win_list = [None] + list(10**np.arange(1,max_exp))
 	for win in win_list:
-		fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3,
-			figsize = [15, 4],
+		fig, ax_vec = plt.subplots(nrows=2, ncols=2,
+			figsize = [10, 10],
 			sharey=False, sharex=False)
+
+		ax1 = ax_vec[0,0]
+		ax2 = ax_vec[0,1]
+		ax3 = ax_vec[1,0]
+		ax4 = ax_vec[1,1]
 
 		x_train = pd.DataFrame(np.loadtxt(output_dir+'/loss_vec_train.txt'))
 		x_test = pd.DataFrame(np.loadtxt(output_dir+"/loss_vec_clean_test.txt"))
 		x_valid_test = pd.DataFrame(np.loadtxt(output_dir+"/prediction_validity_time_clean_test.txt"))
+		x_kl_test = pd.DataFrame(np.loadtxt(output_dir+"/kl_vec_inv_clean_test.txt"))
 		if win:
 			ax1.plot(x_train.rolling(win).mean())
 			ax2.plot(x_test.rolling(win).mean())
 			ax3.plot(x_valid_test.rolling(win).mean())
+			for kk in plot_state_indices:
+				ax4.plot(x_kl_test.loc[:,kk].rolling(win).mean(), label=model_params['state_names'][kk])
 		else:
 			ax1.plot(x_train)
 			ax2.plot(x_test)
 			ax3.plot(x_valid_test)
+			for kk in plot_state_indices:
+				ax4.plot(x_kl_test.loc[:,kk], label=model_params['state_names'][kk])
 
 		# x = np.loadtxt(d+"/loss_vec_test.txt")
 		# ax3.plot(x, label=d_label)
+		ax4.set_xlabel('Epochs')
 		ax3.set_xlabel('Epochs')
 		ax2.set_xlabel('Epochs')
 		ax1.set_xlabel('Epochs')
@@ -835,7 +924,7 @@ def train_chaosRNN(forward,
 		ax2.set_title('Test Error (predicting clean data)')
 		ax3.set_ylabel('Valid Time')
 		ax3.set_title('Test Validity Time')
-
+		ax4.set_title('KL-divergence')
 		# ax3.set_xlabel('Epochs')
 		# ax3.set_ylabel('Error')
 		# ax3.set_title('Test Error (on noisy data)')
@@ -845,6 +934,7 @@ def train_chaosRNN(forward,
 		ax1.set_yscale('log')
 		ax2.set_yscale('log')
 		ax3.set_yscale('log')
+		ax4.set_yscale('log')
 		ax1.set_ylabel('log Error')
 		ax2.set_ylabel('log Error')
 		ax3.set_ylabel('Valid Time')
@@ -1227,34 +1317,51 @@ def train_RNN(forward,
 	plt.close(fig)
 
 
-def compare_fits(my_dirs, output_fname="./training_comparisons"):
+def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indices=None):
 
 	# first, get sizes of things...max window size is 10% of whole test set.
 	d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
 	x_test = pd.DataFrame(np.loadtxt(my_dirs[0]+"/loss_vec_clean_test.txt"))
+	x_kl_test = pd.DataFrame(np.loadtxt(my_dirs[0]+"/kl_vec_inv_clean_test.txt"))
 	n_vals = len(x_test)
 	max_exp = int(np.floor(np.log10(n_vals)))
 	win_list = [None] + list(10**np.arange(1,max_exp))
+
+	if not plot_state_indices:
+		plot_state_indices = np.arange(x_kl_test.shape[1])
+
 	for win in win_list:
-		fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3,
-			figsize = [15, 4],
+		fig, ax_vec = plt.subplots(nrows=2, ncols=2,
+			figsize = [10, 10],
 			sharey=False, sharex=False)
+
+		ax1 = ax_vec[0,0]
+		ax2 = ax_vec[0,1]
+		ax3 = ax_vec[1,0]
+		ax4 = ax_vec[1,1]
 
 		for d in my_dirs:
 			d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
 			x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
 			x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
 			x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt"))
+			x_kl_test = pd.DataFrame(np.loadtxt(d+"/kl_vec_inv_clean_test.txt"))
 			if win:
 				ax1.plot(x_train.rolling(win).mean(), label=d_label)
 				ax2.plot(x_test.rolling(win).mean(), label=d_label)
 				ax3.plot(x_valid_test.rolling(win).mean(), label=d_label)
+				for kk in plot_state_indices:
+					ax4.plot(x_kl_test.loc[:,kk].rolling(win).mean(), label=d_label)
 			else:
 				ax1.plot(x_train, label=d_label)
 				ax2.plot(x_test, label=d_label)
 				ax3.plot(x_valid_test, label=d_label)
+				for kk in plot_state_indices:
+					ax4.plot(x_kl_test.loc[:,kk], label=d_label)
+
 			# x = np.loadtxt(d+"/loss_vec_test.txt")
 			# ax3.plot(x, label=d_label)
+		ax4.set_xlabel('Epochs')
 		ax3.set_xlabel('Epochs')
 		ax2.set_xlabel('Epochs')
 		ax1.set_xlabel('Epochs')
@@ -1266,6 +1373,7 @@ def compare_fits(my_dirs, output_fname="./training_comparisons"):
 		ax2.set_title('Test Error (predicting clean data)')
 		ax3.set_ylabel('Valid Time')
 		ax3.set_title('Test Validity Time')
+		ax4.set_title('KL-divergence of Invariant Density Approx')
 
 		# ax3.set_xlabel('Epochs')
 		# ax3.set_ylabel('Error')
@@ -1276,6 +1384,7 @@ def compare_fits(my_dirs, output_fname="./training_comparisons"):
 		ax1.set_yscale('log')
 		ax2.set_yscale('log')
 		ax3.set_yscale('log')
+		ax4.set_yscale('log')
 		ax1.set_ylabel('log Error')
 		ax2.set_ylabel('log Error')
 		ax3.set_ylabel('Valid Time')
