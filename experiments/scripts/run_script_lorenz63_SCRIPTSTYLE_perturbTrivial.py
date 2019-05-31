@@ -99,21 +99,21 @@ def main():
 
 		for hidden_size in [50]:
 			#### run vanilla RNN ####
-			forward = forward_chaos_pureML
-			# train on clean data
-			normz_info = normz_info_clean
-			(y_clean_train_norm, y_noisy_train_norm,
-				y_clean_test_norm, y_noisy_test_norm) = [
-					f_normalize_minmax(normz_info, y) for y in y_list]
-			run_output_dir = output_dir + '/vanillaRNN_clean_hs{0}'.format(hidden_size)
-			all_dirs.append(run_output_dir)
-			torch.manual_seed(0)
-			train_chaosRNN(forward,
-		      y_clean_train_norm, y_clean_train_norm,
-		      y_clean_test_norm, y_noisy_test_norm,
-		      rnn_model_params, hidden_size, n_epochs, lr,
-		      run_output_dir, normz_info, rnn_sim_model,
-		      stack_hidden=False, stack_output=False)
+			# forward = forward_chaos_pureML
+			# # train on clean data
+			# normz_info = normz_info_clean
+			# (y_clean_train_norm, y_noisy_train_norm,
+			# 	y_clean_test_norm, y_noisy_test_norm) = [
+			# 		f_normalize_minmax(normz_info, y) for y in y_list]
+			# run_output_dir = output_dir + '/vanillaRNN_clean_hs{0}'.format(hidden_size)
+			# all_dirs.append(run_output_dir)
+			# torch.manual_seed(0)
+			# train_chaosRNN(forward,
+		 #      y_clean_train_norm, y_clean_train_norm,
+		 #      y_clean_test_norm, y_noisy_test_norm,
+		 #      rnn_model_params, hidden_size, n_epochs, lr,
+		 #      run_output_dir, normz_info, rnn_sim_model,
+		 #      stack_hidden=False, stack_output=False)
 
 			# # train on noisy data
 			# normz_info = normz_info_noisy
@@ -144,25 +144,29 @@ def main():
 					f_normalize_minmax(normz_info, y) for y in y_list]
 
 			# train on clean data (trivial init)
-			run_output_dir = output_dir + '/mechRNN_trivialInitEXACT_clean_hs{0}'.format(hidden_size)
+			# run_output_dir = output_dir + '/mechRNN_trivialInitEXACT_clean_hs{0}'.format(hidden_size)
 			# all_dirs.append(run_output_dir)
-			torch.manual_seed(0)
-			train_chaosRNN(forward,
-		      y_clean_train_norm, y_clean_train_norm,
-		      y_clean_test_norm, y_noisy_test_norm,
-		      rnn_model_params, hidden_size, max(1,int(n_epochs/10)), lr,
-		      run_output_dir, normz_info_clean, rnn_sim_model,
-		      trivial_init=True, perturb_trivial_init=False)
+			# torch.manual_seed(0)
+			# train_chaosRNN(forward,
+		 #      y_clean_train_norm, y_clean_train_norm,
+		 #      y_clean_test_norm, y_noisy_test_norm,
+		 #      rnn_model_params, hidden_size, max(1,int(n_epochs/10)), lr,
+		 #      run_output_dir, normz_info_clean, rnn_sim_model,
+		 #      trivial_init=True, perturb_trivial_init=False)
 
-			for sd_perturb in [0.001, 0.01, 0.1]:
+			for sd_perturb in [0., 0.0001, 0.001, 0.01, 0.1]:
 				for nn in range(n_perturbations):
 					run_output_dir = output_dir + '/mechRNN_trivialInitPERTURBED{1}_iter{2}_clean_hs{0}'.format(hidden_size, sd_perturb, nn)
-					# all_dirs.append(run_output_dir)
-					torch.manual_seed(0)
+					all_dirs.append(run_output_dir)
+					torch.manual_seed(nn)
+					if sd_perturb==0:
+						use_n_epochs = int(n_epochs/100)
+					else:
+						use_n_epochs = n_epochs
 					train_chaosRNN(forward,
 				      y_clean_train_norm, y_clean_train_norm,
 				      y_clean_test_norm, y_noisy_test_norm,
-				      rnn_model_params, hidden_size, n_epochs, lr,
+				      rnn_model_params, hidden_size, use_n_epochs, lr,
 				      run_output_dir, normz_info_clean, rnn_sim_model,
 				      trivial_init=True, perturb_trivial_init=True, sd_perturb=sd_perturb)
 
