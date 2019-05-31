@@ -13,6 +13,7 @@ parser.add_argument('--savedir', type=str, default='default_output', help='paren
 parser.add_argument('--model_solver', default=oscillator_2d, help='ode function')
 parser.add_argument('--drive_system', type=str2bool, default=False, help='whether to force the system with a time-dependent driver')
 parser.add_argument('--n_experiments', type=int, default=1, help='number of sim/fitting experiments to do')
+parser.add_argument('--n_perturbations', type=int, default=1, help='number of random initializations for the RNN to perform')
 FLAGS = parser.parse_args()
 
 
@@ -30,6 +31,7 @@ def main():
 
 	n_sims = FLAGS.n_experiments #1
 	n_epochs = FLAGS.epoch #1
+	n_perturbations = FLAGS.n_perturbations
 
 	train_frac = FLAGS.train_frac #0.9995
 	i = 0
