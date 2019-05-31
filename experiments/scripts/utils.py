@@ -6,6 +6,7 @@
 
 # based off of code from https://www.cpuheater.com/deep-learning/introduction-to-recurrent-neural-networks-in-pytorch/
 import os
+from time import time
 import math
 import numpy as np
 import numpy.matlib
@@ -199,8 +200,9 @@ def make_RNN_data(model, tspan, sim_model_params, noise_frac=0, output_dir=".", 
 	if not os.path.exists(output_dir):
 		os.makedirs(output_dir)
 
+	t0 = time()
 	y_clean, y_noisy, x  = run_ode_model(model, tspan, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
-
+	print("Took {0} seconds to integrate the ODE.".format(time()-t0))
 	if drive_system:
 		# little section to upsample the random, piecewise constant x(t) function
 		z = np.zeros([len(tspan),2])
