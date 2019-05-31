@@ -141,29 +141,6 @@ def main():
 				y_clean_test_norm, y_noisy_test_norm) = [
 					f_normalize_minmax(normz_info, y) for y in y_list]
 
-			# train on clean data (trivial init)
-			run_output_dir = output_dir + '/mechRNN_trivialInitEXACT_clean_hs{0}'.format(hidden_size)
-			# all_dirs.append(run_output_dir)
-			torch.manual_seed(0)
-			train_chaosRNN(forward,
-		      y_clean_train_norm, y_clean_train_norm,
-		      y_clean_test_norm, y_noisy_test_norm,
-		      rnn_model_params, hidden_size, max(1,int(n_epochs/10)), lr,
-		      run_output_dir, normz_info_clean, rnn_sim_model,
-		      trivial_init=True, perturb_trivial_init=False)
-
-			for sd_perturb in [0.001, 0.01, 0.1]:
-				run_output_dir = output_dir + '/mechRNN_trivialInitPERTURBED{1}_clean_hs{0}'.format(hidden_size, sd_perturb)
-				# all_dirs.append(run_output_dir)
-				torch.manual_seed(0)
-				train_chaosRNN(forward,
-			      y_clean_train_norm, y_clean_train_norm,
-			      y_clean_test_norm, y_noisy_test_norm,
-			      rnn_model_params, hidden_size, n_epochs, lr,
-			      run_output_dir, normz_info_clean, rnn_sim_model,
-			      trivial_init=True, perturb_trivial_init=True, sd_perturb=sd_perturb)
-
-
 			run_output_dir = output_dir + '/mechRNN_clean_hs{0}'.format(hidden_size)
 			all_dirs.append(run_output_dir)
 			torch.manual_seed(0)
@@ -199,24 +176,24 @@ def main():
 	 #      trivial_init=True)
 
 		#### run mechRNN w/ BAD parameter ###
-		# forward = forward_chaos_hybrid_full
+		forward = forward_chaos_hybrid_full
 
-		# for eps_badness in [0.05, 1]:
-		# 	rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b*(1+eps_badness), c)}
+		for eps_badness in [0.05, 0.3]:
+			rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b*(1+eps_badness), c)}
 
 			# train on clean data
-			# normz_info = normz_info_clean
-			# (y_clean_train_norm, y_noisy_train_norm,
-			# 	y_clean_test_norm, y_noisy_test_norm) = [
-			# 		f_normalize_minmax(normz_info, y) for y in y_list]
-			# run_output_dir = output_dir + '/mechRNN_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size)
-			# all_dirs.append(run_output_dir)
-			# torch.manual_seed(0)
-			# train_chaosRNN(forward,
-		 #      y_clean_train_norm, y_clean_train_norm,
-		 #      y_clean_test_norm, y_noisy_test_norm,
-		 #      rnn_BAD_model_params, hidden_size, n_epochs, lr,
-		 #      run_output_dir, normz_info_clean, rnn_sim_model)
+			normz_info = normz_info_clean
+			(y_clean_train_norm, y_noisy_train_norm,
+				y_clean_test_norm, y_noisy_test_norm) = [
+					f_normalize_minmax(normz_info, y) for y in y_list]
+			run_output_dir = output_dir + '/mechRNN_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size)
+			all_dirs.append(run_output_dir)
+			torch.manual_seed(0)
+			train_chaosRNN(forward,
+		      y_clean_train_norm, y_clean_train_norm,
+		      y_clean_test_norm, y_noisy_test_norm,
+		      rnn_BAD_model_params, hidden_size, n_epochs, lr,
+		      run_output_dir, normz_info_clean, rnn_sim_model)
 
 			# train on noisy data
 			# normz_info = normz_info_noisy

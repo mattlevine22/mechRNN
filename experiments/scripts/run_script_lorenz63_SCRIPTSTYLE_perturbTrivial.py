@@ -13,6 +13,7 @@ parser.add_argument('--savedir', type=str, default='default_output', help='paren
 parser.add_argument('--model_solver', default=lorenz63, help='ode function')
 parser.add_argument('--drive_system', type=str2bool, default=False, help='whether to force the system with a time-dependent driver')
 parser.add_argument('--n_experiments', type=int, default=1, help='number of sim/fitting experiments to do')
+parser.add_argument('--n_perturbations', type=int, default=1, help='number of random initializations for the RNN to perform')
 FLAGS = parser.parse_args()
 
 
@@ -33,6 +34,7 @@ def main():
 
 	train_frac = FLAGS.train_frac #0.9995
 	i = 0
+	n_perturbations = FLAGS.n_perturbations
 	for state_init in my_state_inits:
 		i += 1
 		sim_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b, c)}
@@ -153,15 +155,16 @@ def main():
 		      trivial_init=True, perturb_trivial_init=False)
 
 			for sd_perturb in [0.001, 0.01, 0.1]:
-				run_output_dir = output_dir + '/mechRNN_trivialInitPERTURBED{1}_clean_hs{0}'.format(hidden_size, sd_perturb)
-				# all_dirs.append(run_output_dir)
-				torch.manual_seed(0)
-				train_chaosRNN(forward,
-			      y_clean_train_norm, y_clean_train_norm,
-			      y_clean_test_norm, y_noisy_test_norm,
-			      rnn_model_params, hidden_size, n_epochs, lr,
-			      run_output_dir, normz_info_clean, rnn_sim_model,
-			      trivial_init=True, perturb_trivial_init=True, sd_perturb=sd_perturb)
+				for nn in range(n_perturbations):
+					run_output_dir = output_dir + '/mechRNN_trivialInitPERTURBED{1}_iter{2}_clean_hs{0}'.format(hidden_size, sd_perturb, nn)
+					# all_dirs.append(run_output_dir)
+					torch.manual_seed(0)
+					train_chaosRNN(forward,
+				      y_clean_train_norm, y_clean_train_norm,
+				      y_clean_test_norm, y_noisy_test_norm,
+				      rnn_model_params, hidden_size, n_epochs, lr,
+				      run_output_dir, normz_info_clean, rnn_sim_model,
+				      trivial_init=True, perturb_trivial_init=True, sd_perturb=sd_perturb)
 
 
 			run_output_dir = output_dir + '/mechRNN_clean_hs{0}'.format(hidden_size)
