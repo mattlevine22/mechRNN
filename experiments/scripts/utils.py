@@ -745,12 +745,11 @@ def train_chaosRNN(forward,
 		np.savetxt(output_dir+'/loss_vec_clean_train.txt',loss_vec_clean_train)
 		np.savetxt(output_dir+'/loss_vec_test.txt',loss_vec_test)
 		np.savetxt(output_dir+'/loss_vec_clean_test.txt',loss_vec_clean_test)
+		np.savetxt(output_dir+'/prediction_validity_time_test.txt',pred_validity_vec_test)
+		np.savetxt(output_dir+'/prediction_validity_time_clean_test.txt',pred_validity_vec_clean_test)
+		np.savetxt(output_dir+'/kl_vec_inv_test.txt',kl_vec_inv_test)
+		np.savetxt(output_dir+'/kl_vec_inv_clean_test.txt',kl_vec_inv_clean_test)
 
-	np.savetxt(output_dir+'/kl_vec_inv_test.txt',kl_vec_inv_test)
-	np.savetxt(output_dir+'/kl_vec_inv_clean_test.txt',kl_vec_inv_clean_test)
-	np.savetxt(output_dir+'/prediction_validity_time_clean_test.txt',pred_validity_vec_clean_test)
-	np.savetxt(output_dir+'/prediction_validity_time_test.txt',pred_validity_vec_test)
-	np.savetxt(output_dir+'/prediction_validity_time_clean_test.txt',pred_validity_vec_clean_test)
 	np.savetxt(output_dir+'/A.txt',A.detach().numpy())
 	np.savetxt(output_dir+'/B.txt',B.detach().numpy())
 	np.savetxt(output_dir+'/C.txt',C.detach().numpy())
@@ -905,20 +904,23 @@ def train_chaosRNN(forward,
 
 		x_train = pd.DataFrame(np.loadtxt(output_dir+'/loss_vec_train.txt'))
 		x_test = pd.DataFrame(np.loadtxt(output_dir+"/loss_vec_clean_test.txt"))
-		x_valid_test = pd.DataFrame(np.loadtxt(output_dir+"/prediction_validity_time_clean_test.txt"))
-		x_kl_test = pd.DataFrame(np.loadtxt(output_dir+"/kl_vec_inv_clean_test.txt"))
+		if n_epochs > 1:
+			x_valid_test = pd.DataFrame(np.loadtxt(output_dir+"/prediction_validity_time_clean_test.txt"))
+			x_kl_test = pd.DataFrame(np.loadtxt(output_dir+"/kl_vec_inv_clean_test.txt"))
 		if win:
 			ax1.plot(x_train.rolling(win).mean())
 			ax2.plot(x_test.rolling(win).mean())
-			ax3.plot(x_valid_test.rolling(win).mean())
-			for kk in plot_state_indices:
-				ax4.plot(x_kl_test.loc[:,kk].rolling(win).mean(), label=model_params['state_names'][kk])
+			if n_epochs > 1:
+				ax3.plot(x_valid_test.rolling(win).mean())
+				for kk in plot_state_indices:
+					ax4.plot(x_kl_test.loc[:,kk].rolling(win).mean(), label=model_params['state_names'][kk])
 		else:
 			ax1.plot(x_train)
 			ax2.plot(x_test)
-			ax3.plot(x_valid_test)
-			for kk in plot_state_indices:
-				ax4.plot(x_kl_test.loc[:,kk], label=model_params['state_names'][kk])
+			if n_epochs > 1:
+				ax3.plot(x_valid_test)
+				for kk in plot_state_indices:
+					ax4.plot(x_kl_test.loc[:,kk], label=model_params['state_names'][kk])
 
 		# x = np.loadtxt(d+"/loss_vec_test.txt")
 		# ax3.plot(x, label=d_label)
@@ -1332,13 +1334,18 @@ def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indi
 	# first, get sizes of things...max window size is 10% of whole test set.
 	d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
 	x_test = pd.DataFrame(np.loadtxt(my_dirs[0]+"/loss_vec_clean_test.txt"))
-	x_kl_test = pd.DataFrame(np.loadtxt(my_dirs[0]+"/kl_vec_inv_clean_test.txt"))
 	n_vals = len(x_test)
 	max_exp = int(np.floor(np.log10(n_vals)))
 	win_list = [None] + list(10**np.arange(1,max_exp))
 
-	if not plot_state_indices:
-		plot_state_indices = np.arange(x_kl_test.shape[1])
+	try:
+		many_epochs = True
+		x_kl_test = pd.DataFrame(np.loadtxt(my_dirs[0]+"/kl_vec_inv_clean_test.txt"))
+		if not plot_state_indices:
+			plot_state_indices = np.arange(x_kl_test.shape[1])
+	except:
+		many_epochs = False
+
 
 	for win in win_list:
 		fig, ax_vec = plt.subplots(nrows=2, ncols=2,
@@ -1354,20 +1361,23 @@ def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indi
 			d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
 			x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
 			x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
-			x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt"))
-			x_kl_test = pd.DataFrame(np.loadtxt(d+"/kl_vec_inv_clean_test.txt"))
+			if many_epochs:
+				x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt"))
+				x_kl_test = pd.DataFrame(np.loadtxt(d+"/kl_vec_inv_clean_test.txt"))
 			if win:
 				ax1.plot(x_train.rolling(win).mean(), label=d_label)
 				ax2.plot(x_test.rolling(win).mean(), label=d_label)
-				ax3.plot(x_valid_test.rolling(win).mean(), label=d_label)
-				for kk in plot_state_indices:
-					ax4.plot(x_kl_test.loc[:,kk].rolling(win).mean(), label=d_label)
+				if many_epochs:
+					ax3.plot(x_valid_test.rolling(win).mean(), label=d_label)
+					for kk in plot_state_indices:
+						ax4.plot(x_kl_test.loc[:,kk].rolling(win).mean(), label=d_label)
 			else:
 				ax1.plot(x_train, label=d_label)
 				ax2.plot(x_test, label=d_label)
-				ax3.plot(x_valid_test, label=d_label)
-				for kk in plot_state_indices:
-					ax4.plot(x_kl_test.loc[:,kk], label=d_label)
+				if many_epochs:
+					ax3.plot(x_valid_test, label=d_label)
+					for kk in plot_state_indices:
+						ax4.plot(x_kl_test.loc[:,kk], label=d_label)
 
 			# x = np.loadtxt(d+"/loss_vec_test.txt")
 			# ax3.plot(x, label=d_label)
