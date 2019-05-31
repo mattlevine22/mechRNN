@@ -11,10 +11,7 @@ import numpy as np
 import numpy.matlib
 from scipy.stats import entropy
 from scipy.integrate import odeint
-try:
-	from statsmodels.nonparametric.kde import KDEUnivariate
-except:
-	pass
+# from statsmodels.nonparametric.kde import KDEUnivariate
 from scipy.stats import gaussian_kde
 import torch
 from torch.autograd import Variable
@@ -37,14 +34,14 @@ def kde_scipy(x, x_grid, **kwargs):
     kde = gaussian_kde(x, **kwargs)
     return kde.evaluate(x_grid)
 
-def kde_statsmodels_u(x, x_grid, **kwargs):
-    """Univariate Kernel Density Estimation with Statsmodels.
-    For more options, see
-    https://jakevdp.github.io/blog/2013/12/01/kernel-density-estimation."""
-    #statsmodels.nonparametric.kde NOT available on HPC python/2.7.15-tf module.
-    kde = KDEUnivariate(x)
-    kde.fit(**kwargs)
-    return kde.evaluate(x_grid)
+# def d(x, x_grid, **kwargs):
+#     """Univariate Kernel Density Estimation with Statsmodels.
+#     For more options, see
+#     https://jakevdp.github.io/blog/2013/12/01/kernel-density-estimation."""
+#     #statsmodels.nonparametric.kde NOT available on HPC python/2.7.15-tf module.
+#     kde = KDEUnivariate(x)
+#     kde.fit(**kwargs)
+#     return kde.evaluate(x_grid)
 
 def kl4dummies(Xtrue, Xapprox, kde_func=kde_scipy):
 	n_states = Xtrue.shape[1]
@@ -315,7 +312,7 @@ def train_chaosRNN(forward,
 			f_unNormalize_X = f_unNormalize_ztrans,
 			max_plot=2000, n_param_saves=None,
 			err_thresh=0.4, plot_state_indices=None,
-			precompute_model=False, kde_func=kde_scipy):
+			precompute_model=True, kde_func=kde_scipy):
 
 	if torch.cuda.is_available():
 		print('Using CUDA FloatTensor')
@@ -879,9 +876,9 @@ def train_chaosRNN(forward,
 		ax1 = ax_list[kk]
 		pk = plot_state_indices[kk]
 		x_grid = np.linspace(min(y_clean_test_raw[:,pk]), max(y_clean_test_raw[:,pk]), 1000)
-		ax1.plot(x_grid, kde_statsmodels_u(y_clean_test_raw[:,pk], x_grid), label='clean data')
+		ax1.plot(x_grid, kde_func(y_clean_test_raw[:,pk], x_grid), label='clean data')
 		x_grid = np.linspace(min(predictions_raw[:,pk]), max(predictions_raw[:,pk]), 1000)
-		ax1.plot(x_grid, kde_statsmodels_u(predictions_raw[:,pk], x_grid), label='RNN fit')
+		ax1.plot(x_grid, kde_func(predictions_raw[:,pk], x_grid), label='RNN fit')
 		ax1.set_xlabel(model_params['state_names'][pk])
 
 	ax_list[0].legend()
