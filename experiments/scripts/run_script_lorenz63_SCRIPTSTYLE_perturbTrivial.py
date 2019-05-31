@@ -160,7 +160,7 @@ def main():
 					all_dirs.append(run_output_dir)
 					torch.manual_seed(nn)
 					if sd_perturb==0:
-						use_n_epochs = int(ceil(n_epochs/100))
+						use_n_epochs = int(np.ceil(n_epochs/100))
 						perturb_trivial_init = False
 					else:
 						use_n_epochs = n_epochs
