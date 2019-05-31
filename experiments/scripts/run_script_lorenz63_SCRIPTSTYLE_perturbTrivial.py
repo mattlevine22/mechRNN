@@ -161,14 +161,16 @@ def main():
 					torch.manual_seed(nn)
 					if sd_perturb==0:
 						use_n_epochs = int(n_epochs/100)
+						perturb_trivial_init = False
 					else:
 						use_n_epochs = n_epochs
+						perturb_trivial_init = True
 					train_chaosRNN(forward,
 				      y_clean_train_norm, y_clean_train_norm,
 				      y_clean_test_norm, y_noisy_test_norm,
 				      rnn_model_params, hidden_size, use_n_epochs, lr,
 				      run_output_dir, normz_info_clean, rnn_sim_model,
-				      trivial_init=True, perturb_trivial_init=True, sd_perturb=sd_perturb)
+				      trivial_init=True, perturb_trivial_init=perturb_trivial_init, sd_perturb=sd_perturb)
 
 
 			run_output_dir = output_dir + '/mechRNN_clean_hs{0}'.format(hidden_size)
