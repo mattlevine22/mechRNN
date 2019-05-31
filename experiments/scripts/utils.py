@@ -527,7 +527,11 @@ def train_chaosRNN(forward,
 			b.grad.data.zero_()
 
 			hidden_state = hidden_state.detach()
-
+			# print updates every 2 iterations or in 5% incrememnts
+			if (n_epochs==1) and (cc % int( max(2, np.ceil(train_seq_length/20)) ) == 0):
+				print("Iteration: {}\nRunning Training Loss = {}\n".format(
+							cc,
+							running_epoch_loss_train[j]))
 			# save updated parameters
 			if cc % save_interval == 0:
 				cc_inc += 1
@@ -538,11 +542,11 @@ def train_chaosRNN(forward,
 				b_history[cc_inc,:] = np.linalg.norm(b.detach().numpy())
 
 				# cumulative means
-				A_history_running[cc_inc,:] = np.mean(A_history[cc_inc,:])
-				B_history_running[cc_inc,:] = np.mean(B_history[cc_inc,:])
-				C_history_running[cc_inc,:] = np.mean(C_history[cc_inc,:])
-				a_history_running[cc_inc,:] = np.mean(a_history[cc_inc,:])
-				b_history_running[cc_inc,:] = np.mean(b_history[cc_inc,:])
+				A_history_running[cc_inc,:] = np.mean(A_history[:cc_inc,:])
+				B_history_running[cc_inc,:] = np.mean(B_history[:cc_inc,:])
+				C_history_running[cc_inc,:] = np.mean(C_history[:cc_inc,:])
+				a_history_running[cc_inc,:] = np.mean(a_history[:cc_inc,:])
+				b_history_running[cc_inc,:] = np.mean(b_history[:cc_inc,:])
 		#normalize losses
 		total_loss_train = total_loss_train / train_seq_length
 		total_loss_clean_train = total_loss_clean_train / train_seq_length
