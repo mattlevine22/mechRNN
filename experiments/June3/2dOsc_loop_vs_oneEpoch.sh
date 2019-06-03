@@ -14,7 +14,7 @@ module load cuda/9.0
 module load python/2.7.15-tf
 
 # Execute jobs in parallel
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_2dOscillator_SCRIPTSTYLE_simple.py --savedir 2dOscillator_run1/loop_0.8 --epoch 200 --delta_t 0.1 --t_end 100 --train_frac 0.8
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_2dOscillator_SCRIPTSTYLE_simple.py --savedir 2dOscillator_run1/loop_0.8 --epoch 1000 --delta_t 0.1 --t_end 100 --train_frac 0.8
 # srun --exclusive -N 1 -n 1 python ../scripts/run_script_2dOscillator_SCRIPTSTYLE_simple.py --savedir 2dOscillator_run1/oneEpoch --epoch 1 --delta_t 0.1 --t_end 2000 --train_frac 0.99 &
 # srun --exclusive -N 1 -n 1 python ../scripts/run_script_2dOscillator_SCRIPTSTYLE_perturbTrivial.py --savedir 2dOscillator_run1/loop_perturbTrivial --epoch 200 --delta_t 0.1 --t_end 100 --train_frac 0.9 --n_perturbations 2 &
 # srun --exclusive -N 1 -n 1 python ../scripts/run_script_2dOscillator_SCRIPTSTYLE_perturbTrivial.py --savedir 2dOscillator_run1/oneEpoch_perturbTrivial --epoch 1 --delta_t 0.1 --t_end 2000 --train_frac 0.99 --n_perturbations 2
