@@ -154,7 +154,7 @@ def main():
 		 #      run_output_dir, normz_info_clean, rnn_sim_model,
 		 #      trivial_init=True, perturb_trivial_init=False)
 			for nn in range(n_perturbations):
-				for sd_perturb in [0.05, 0.03, 0.07, 0.02, 0.1]:
+				for sd_perturb in [0.005, 0.003, 0.007, 0.03]:
 					run_output_dir = output_dir + '/mechRNN_trivialInitPERTURBED{1}_iter{2}_clean_hs{0}'.format(hidden_size, sd_perturb, nn)
 					all_dirs.append(run_output_dir)
 					torch.manual_seed(nn)
