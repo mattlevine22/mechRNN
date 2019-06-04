@@ -1508,8 +1508,7 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 		figsize = [10, 10],
 		sharey=False, sharex=False)
 
-	eps_vec = [*test_loss_medians]
-	eps_vec.sort()
+	eps_vec = sorted(test_loss_medians.keys())
 	median_vec = [test_loss_medians[eps] for eps in eps_vec]
 	std_vec = [test_loss_stds[eps] for eps in eps_vec]
 
@@ -1551,8 +1550,7 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 		ode_t_valid_stds = {key: np.std(model_performance['t_valid'][key]) for key in model_performance['t_valid']}
 
 
-		eps_vec = [*t_valid_medians]
-		eps_vec.sort()
+		eps_vec = sorted(t_valid_medians.keys())
 		median_vec = [t_valid_medians[eps] for eps in eps_vec]
 		std_vec = [t_valid_stds[eps] for eps in eps_vec]
 
