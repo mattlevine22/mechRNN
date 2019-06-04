@@ -5,7 +5,7 @@
 #SBATCH --time=48:00:00   # walltime
 #SBATCH --ntasks=10   # number of processor cores (i.e. tasks)
 #SBATCH --nodes=1   # number of nodes
-#SBATCH --mem-per-cpu=20G   # memory per CPU core
+#SBATCH --mem-per-cpu=15   # memory per CPU core
 #SBATCH -c 1 # 1 core per task
 
 # LOAD MODULES, INSERT CODE, AND RUN YOUR PROGRAMS HERE
