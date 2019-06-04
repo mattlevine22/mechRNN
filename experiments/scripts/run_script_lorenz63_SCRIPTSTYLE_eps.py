@@ -42,7 +42,7 @@ def main():
 		# np.random.seed()
 
 		# master output directory name
-		output_dir = FLAGS.savedir + '_output' + str(i+1)
+		output_dir = FLAGS.savedir + '_output' + str(i)
 		# simulate clean and noisy data
 		input_data, y_clean, y_noisy = make_RNN_data(
 		              sim_model, tspan, sim_model_params, noise_frac=0.05, output_dir=output_dir, drive_system=False)
@@ -189,7 +189,8 @@ def main():
 		#### run mechRNN w/ BAD parameter ###
 		forward = forward_chaos_hybrid_full
 
-		for eps_badness in [0, 0.001, 0.01, 0.05, 0.1, 0.2]:
+		# for eps_badness in [0, 0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.4]:
+		for eps_badness in [0, 0.01, 0.02]:
 			rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b*(1+eps_badness), c)}
 
 			# train on clean data
@@ -221,7 +222,9 @@ def main():
 		 #      run_output_dir, normz_info_noisy, rnn_sim_model)
 
 		# plot comparative training errors
-		compare_fits([d for d in all_dirs if "clean" in d], output_fname=output_dir+'/model_comparisons_clean')
+		my_dirs = [d for d in all_dirs if "clean" in d]
+		compare_fits(my_dirs, output_fname=output_dir+'/model_comparisons_clean')
+		# extract_epsilon_performance(my_dirs, output_fname=output_dir+'/epsilon_comparison_clean')
 		# compare_fits([d for d in all_dirs if "noisy" in d], output_fname=output_dir+'/model_comparisons_noisy')
 
 if __name__ == '__main__':
