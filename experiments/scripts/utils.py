@@ -1432,7 +1432,152 @@ def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indi
 
 
 
-def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", win=1000, many_epochs=True, eps_token='epsBadness', model_performance=None):
+def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", win=1000, many_epochs=True, eps_token='epsBadness'):
+
+	# first, get sizes of things...max window size is 10% of whole test set.
+	d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
+	x_test = pd.DataFrame(np.loadtxt(my_dirs[0]+"/loss_vec_clean_test.txt"))
+	n_vals = len(x_test)
+
+	win = min(win,n_vals//3)
+	model_performance = {'mse':{}, 't_valid':{}}
+	rnn_performance = {'mse':(), 't_valid':()}
+	hybrid_performance = {'mse':{}, 't_valid':{}}
+	for d in my_dirs:
+		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
+		if 'vanilla' in d_label:
+			my_eps = None
+		else:
+			my_eps = float([z.strip(eps_token) for z in d_label.split('_') if eps_token in z][-1])
+			model_loss = np.loadtxt(d+'/perfectModel_loss_test.txt')
+			model_t_valid = np.loadtxt(d+'/perfectModel_validity_time_test.txt')
+			model_performance['mse'][my_eps] = float(model_loss)
+			model_performance['t_valid'][my_eps] = float(model_t_valid)
+
+		x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
+		x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
+		if many_epochs:
+			x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt"))
+			# x_kl_test = pd.DataFrame(np.loadtxt(d+"/kl_vec_inv_clean_test.txt"))
+		if win:
+			x_train = x_train.rolling(win).mean()
+			x_test = x_test.rolling(win).mean()
+			if many_epochs:
+				x_valid_test = x_valid_test.rolling(win).mean()
+				# for kk in plot_state_indices:
+				# 	ax4.plot(x_kl_test.loc[:,kk].rolling(win).mean(), label=d_label)
+		if my_eps is None:
+			rnn_performance['mse'] += (float(np.min(x_test)),)
+			if many_epochs:
+				rnn_performance['t_valid'] += (float(np.max(x_valid_test)),)
+		elif my_eps in hybrid_performance['mse']:
+			hybrid_performance['mse'][my_eps] += (float(np.min(x_test)),)
+			# test_loss_epoch[my_eps] += (np.argmin(x_test),)
+			if many_epochs:
+				hybrid_performance['t_valid'][my_eps] += (float(np.max(x_valid_test)),)
+				# t_valid_epoch[my_eps] += (argmax(x_valid_test),)
+		else:
+			hybrid_performance['mse'][my_eps] = (float(np.min(x_test)),)
+			# test_loss_epoch[my_eps] = (np.argmin(x_test),)
+			if many_epochs:
+				hybrid_performance['t_valid'][my_eps] = (float(np.max(x_valid_test)),)
+				# t_valid_epoch[my_eps] = (np.argmax(x_valid_test),)
+
+	# now summarize
+	test_loss_mins = {key: np.min(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
+	test_loss_maxes = {key: np.max(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
+	test_loss_means = {key: np.mean(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
+	test_loss_medians = {key: np.median(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
+	test_loss_stds = {key: np.std(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
+
+	rnn_test_loss_mins = np.min(rnn_performance['mse'])
+	rnn_test_loss_maxes = np.max(rnn_performance['mse'])
+	rnn_test_loss_means = np.mean(rnn_performance['mse'])
+	rnn_test_loss_medians = np.median(rnn_performance['mse'])
+	rnn_test_loss_stds = np.std(rnn_performance['mse'])
+
+	ode_test_loss_mins = {key: np.min(model_performance['mse'][key]) for key in model_performance['mse']}
+	ode_test_loss_maxes = {key: np.max(model_performance['mse'][key]) for key in model_performance['mse']}
+	ode_test_loss_means = {key: np.mean(model_performance['mse'][key]) for key in model_performance['mse']}
+	ode_test_loss_medians = {key: np.median(model_performance['mse'][key]) for key in model_performance['mse']}
+	ode_test_loss_stds = {key: np.std(model_performance['mse'][key]) for key in model_performance['mse']}
+
+
+	# plot summary
+	fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1,
+		figsize = [10, 10],
+		sharey=False, sharex=False)
+
+	eps_vec = sorted(test_loss_medians.keys())
+	median_vec = [test_loss_medians[eps] for eps in eps_vec]
+	std_vec = [test_loss_stds[eps] for eps in eps_vec]
+
+	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN', color='blue')
+	ax1.set_xlabel('epsilon Model Error')
+	ax1.set_ylabel('Test Loss (MSE)')
+
+	try:
+		ax1.errorbar(x=eps_vec, y=[rnn_test_loss_medians]*len(eps_vec), yerr=[rnn_test_loss_stds]*len(eps_vec) ,label='vanilla RNN', color='black')
+	except:
+		pass
+
+	try:
+		median_vec = [ode_test_loss_medians[eps] for eps in eps_vec]
+		std_vec = [ode_test_loss_stds[eps] for eps in eps_vec]
+		ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='model-only', color='red')
+	except:
+		pass
+
+	ax1.legend()
+
+	if many_epochs:
+		t_valid_mins = {key: np.min(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
+		t_valid_maxes = {key: np.max(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
+		t_valid_medians = {key: np.median(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
+		t_valid_means = {key: np.mean(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
+		t_valid_stds = {key: np.std(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
+
+		rnn_t_valid_mins = np.min(rnn_performance['t_valid'])
+		rnn_t_valid_maxes = np.max(rnn_performance['t_valid'])
+		rnn_t_valid_means = np.mean(rnn_performance['t_valid'])
+		rnn_t_valid_medians = np.median(rnn_performance['t_valid'])
+		rnn_t_valid_stds = np.std(rnn_performance['t_valid'])
+
+		ode_t_valid_mins = {key: np.min(model_performance['t_valid'][key]) for key in model_performance['t_valid']}
+		ode_t_valid_maxes = {key: np.max(model_performance['t_valid'][key]) for key in model_performance['t_valid']}
+		ode_t_valid_means = {key: np.mean(model_performance['t_valid'][key]) for key in model_performance['t_valid']}
+		ode_t_valid_medians = {key: np.median(model_performance['t_valid'][key]) for key in model_performance['t_valid']}
+		ode_t_valid_stds = {key: np.std(model_performance['t_valid'][key]) for key in model_performance['t_valid']}
+
+
+		eps_vec = sorted(t_valid_medians.keys())
+		median_vec = [t_valid_medians[eps] for eps in eps_vec]
+		std_vec = [t_valid_stds[eps] for eps in eps_vec]
+
+		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN', color='blue')
+		ax2.set_xlabel('epsilon Model Error')
+		ax2.set_ylabel('Validity Time')
+
+		try:
+			ax2.errorbar(x=eps_vec, y=[rnn_t_valid_medians]*len(eps_vec), yerr=[rnn_t_valid_stds]*len(eps_vec) ,label='vanilla RNN', color='black')
+		except:
+			pass
+
+		try:
+			special_eps_vec = [foo for foo in eps_vec if foo!=0]
+			median_vec = [ode_t_valid_medians[eps] for eps in special_eps_vec]
+			std_vec = [ode_t_valid_stds[eps] for eps in special_eps_vec]
+			ax2.errorbar(x=special_eps_vec, y=median_vec, yerr=std_vec, label='model-only', color='red')
+		except:
+			pass
+		ax2.legend()
+
+	fig.suptitle('Performance on Test Set Under Varying Model Error')
+	fig.savefig(fname=output_fname)
+	plt.close(fig)
+
+
+def extract_hidden_size_performance(my_dirs, output_fname="./hidden_size_comparisons", win=1000, many_epochs=True, hs_token='hs', model_performance=None):
 
 	# first, get sizes of things...max window size is 10% of whole test set.
 	d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
