@@ -2,6 +2,7 @@ from utils import *
 import numpy as np
 import torch
 import argparse
+import os
 
 parser = argparse.ArgumentParser(description='mechRNN')
 parser.add_argument('--epoch', type=int, default=100, help='number of epochs')
