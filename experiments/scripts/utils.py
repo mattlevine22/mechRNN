@@ -604,12 +604,12 @@ def train_chaosRNN(forward,
 		pred_validity_vec_clean_test[i_epoch] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
 
 		# compute KL divergence between long predictions and whole test set:
-		kl_vec_inv_test[i_epoch,:] = kl4dummies(
-						f_unNormalize_Y(normz_info, y_noisy_test),
-						f_unNormalize_Y(normz_info, long_predictions))
-		kl_vec_inv_clean_test[i_epoch,:] = kl4dummies(
-						f_unNormalize_Y(normz_info, y_clean_test),
-						f_unNormalize_Y(normz_info, long_predictions))
+		# kl_vec_inv_test[i_epoch,:] = kl4dummies(
+		# 				f_unNormalize_Y(normz_info, y_noisy_test),
+		# 				f_unNormalize_Y(normz_info, long_predictions))
+		# kl_vec_inv_clean_test[i_epoch,:] = kl4dummies(
+		# 				f_unNormalize_Y(normz_info, y_clean_test),
+		# 				f_unNormalize_Y(normz_info, long_predictions))
 
 		# print updates every 10 iterations or in 10% incrememnts
 		if i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0:
