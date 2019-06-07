@@ -28,12 +28,12 @@ import pdb
 
 
 def kde_scipy(x, x_grid, **kwargs):
-    """Kernel Density Estimation with Scipy"""
-    # Note that scipy weights its bandwidth by the covariance of the
-    # input data.  To make the results comparable to the other methods,
-    # we divide the bandwidth by the sample standard deviation here.
-    kde = gaussian_kde(x, **kwargs)
-    return kde.evaluate(x_grid)
+	"""Kernel Density Estimation with Scipy"""
+	# Note that scipy weights its bandwidth by the covariance of the
+	# input data.  To make the results comparable to the other methods,
+	# we divide the bandwidth by the sample standard deviation here.
+	kde = gaussian_kde(x, **kwargs)
+	return kde.evaluate(x_grid)
 
 # def d(x, x_grid, **kwargs):
 #     """Univariate Kernel Density Estimation with Statsmodels.
@@ -59,12 +59,12 @@ def kl4dummies(Xtrue, Xapprox, kde_func=kde_scipy):
 ### ODE simulation section
 ## 1. Simulate ODE
 def str2bool(v):
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
+	if v.lower() in ('yes', 'true', 't', 'y', '1'):
+		return True
+	elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+		return False
+	else:
+		raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def oscillator_2d(Y,t,a,b,c):
 	(x,y) = Y
@@ -1432,17 +1432,17 @@ def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indi
 
 
 
-def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", win=1000, many_epochs=True, eps_token='epsBadness'):
-
+def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", win=10, many_epochs=True, eps_token='epsBadness'):
+	t_vec = [1,2,4,6,8,10]
 	# first, get sizes of things...max window size is 10% of whole test set.
 	d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
 	x_test = pd.DataFrame(np.loadtxt(my_dirs[0]+"/loss_vec_clean_test.txt"))
 	n_vals = len(x_test)
 
 	win = min(win,n_vals//3)
-	model_performance = {'mse':{}, 't_valid':{}}
-	rnn_performance = {'mse':(), 't_valid':()}
-	hybrid_performance = {'mse':{}, 't_valid':{}}
+	model_performance = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
+	rnn_performance = {'mse':(), 't_valid':(), 'mse_time':(), 't_valid_time':{}}
+	hybrid_performance = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
 	for d in my_dirs:
 		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
 		if 'vanilla' in d_label:
@@ -1451,8 +1451,12 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 			my_eps = float([z.strip(eps_token) for z in d_label.split('_') if eps_token in z][-1])
 			model_loss = np.loadtxt(d+'/perfectModel_loss_test.txt')
 			model_t_valid = np.loadtxt(d+'/perfectModel_validity_time_test.txt')
-			model_performance['mse'][my_eps] = float(model_loss)
-			model_performance['t_valid'][my_eps] = float(model_t_valid)
+			if my_eps in model_performance['mse']:
+				model_performance['mse'][my_eps] += (float(model_loss),)
+				model_performance['t_valid'][my_eps] += (float(model_t_valid),)
+			else:
+				model_performance['mse'][my_eps] = (float(model_loss),)
+				model_performance['t_valid'][my_eps] = (float(model_t_valid),)
 
 		x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
 		x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
@@ -1468,20 +1472,44 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 				# 	ax4.plot(x_kl_test.loc[:,kk].rolling(win).mean(), label=d_label)
 		if my_eps is None:
 			rnn_performance['mse'] += (float(np.min(x_test)),)
+			# rnn_performance['mse_time'] += (float(np.nanargmin(x_test)),)
 			if many_epochs:
 				rnn_performance['t_valid'] += (float(np.max(x_valid_test)),)
+				for tt in t_vec:
+					if tt in rnn_performance['t_valid_time']:
+						try:
+							rnn_performance['t_valid_time'][tt] += (x_valid_test[x_valid_test.iloc[:,0]>tt].index[0],)
+						except:
+							rnn_performance['t_valid_time'][tt] += (np.inf,)
+					else:
+						try:
+							rnn_performance['t_valid_time'][tt] = (x_valid_test[x_valid_test.iloc[:,0]>tt].index[0],)
+						except:
+							rnn_performance['t_valid_time'][tt] = (np.inf,)
 		elif my_eps in hybrid_performance['mse']:
 			hybrid_performance['mse'][my_eps] += (float(np.min(x_test)),)
-			# test_loss_epoch[my_eps] += (np.argmin(x_test),)
+			# for tt in t_vec:
+			# 	hybrid_performance['mse_time'][my_eps][tt] += (x_test[x_test.iloc[:,0]>tt].index[0],)
 			if many_epochs:
 				hybrid_performance['t_valid'][my_eps] += (float(np.max(x_valid_test)),)
-				# t_valid_epoch[my_eps] += (argmax(x_valid_test),)
+				for tt in t_vec:
+					try:
+						hybrid_performance['t_valid_time'][my_eps][tt] += (x_valid_test[x_valid_test.iloc[:,0]>tt].index[0],)
+					except:
+						hybrid_performance['t_valid_time'][my_eps][tt] += (np.inf,)
 		else:
 			hybrid_performance['mse'][my_eps] = (float(np.min(x_test)),)
-			# test_loss_epoch[my_eps] = (np.argmin(x_test),)
+			# hybrid_performance['mse_time'][my_eps] = {}
+			# for tt in t_vec:
+			# 	hybrid_performance['mse_time'][my_eps][tt] = (x_test[x_test.iloc[:,0]>tt].index[0],)
 			if many_epochs:
 				hybrid_performance['t_valid'][my_eps] = (float(np.max(x_valid_test)),)
-				# t_valid_epoch[my_eps] = (np.argmax(x_valid_test),)
+				hybrid_performance['t_valid_time'][my_eps] = {}
+				for tt in t_vec:
+					try:
+						hybrid_performance['t_valid_time'][my_eps][tt] = (x_valid_test[x_valid_test.iloc[:,0]>tt].index[0],)
+					except:
+						hybrid_performance['t_valid_time'][my_eps][tt] = (np.inf,)
 
 	# now summarize
 	test_loss_mins = {key: np.min(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
@@ -1501,7 +1529,6 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	ode_test_loss_means = {key: np.mean(model_performance['mse'][key]) for key in model_performance['mse']}
 	ode_test_loss_medians = {key: np.median(model_performance['mse'][key]) for key in model_performance['mse']}
 	ode_test_loss_stds = {key: np.std(model_performance['mse'][key]) for key in model_performance['mse']}
-
 
 	# plot summary
 	fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1,
@@ -1576,8 +1603,59 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	fig.savefig(fname=output_fname)
 	plt.close(fig)
 
+	# TRAIN TIME ANALYSIS
+	# plot summary
+	colors = ['red','orange','green','blue','purple','black']
+	fig, ax2 = plt.subplots(nrows=1, ncols=1,
+		figsize = [10, 10],
+		sharey=False, sharex=False)
+	for i_tt in range(len(t_vec)):
+		tt = t_vec[i_tt]
+		if many_epochs:
+			try:
+				t_valid_mins = {key: np.min(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
+			except:
+				pdb.set_trace()
+			t_valid_maxes = {key: np.max(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
+			t_valid_medians = {key: np.median(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
+			t_valid_means = {key: np.mean(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
+			t_valid_stds = {key: np.std(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
 
-def extract_hidden_size_performance(my_dirs, output_fname="./hidden_size_comparisons", win=1000, many_epochs=True, hs_token='hs', model_performance=None):
+			rnn_t_valid_mins = np.min(rnn_performance['t_valid_time'][tt])
+			rnn_t_valid_maxes = np.max(rnn_performance['t_valid_time'][tt])
+			rnn_t_valid_means = np.mean(rnn_performance['t_valid_time'][tt])
+			rnn_t_valid_medians = np.median(rnn_performance['t_valid_time'][tt])
+			rnn_t_valid_stds = np.std(rnn_performance['t_valid_time'][tt])
+
+			eps_vec = sorted(t_valid_medians.keys())
+			median_vec = [t_valid_medians[eps] for eps in eps_vec]
+			std_vec = [t_valid_stds[eps] for eps in eps_vec]
+
+			ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN (t>{0})'.format(tt), linestyle='-', color=colors[i_tt])
+			ax2.set_xlabel('epsilon Model Error')
+			ax2.set_ylabel('Train Time (opt Validity Time)')
+
+			try:
+				ax2.errorbar(x=eps_vec, y=[rnn_t_valid_medians]*len(eps_vec), yerr=[rnn_t_valid_stds]*len(eps_vec), linestyle=':', label='vanilla RNN (t>{0})'.format(tt), color=colors[i_tt])
+			except:
+				pass
+
+			# try:
+			# 	special_eps_vec = [foo for foo in eps_vec if foo!=0]
+			# 	median_vec = [ode_t_valid_medians[eps] for eps in special_eps_vec]
+			# 	std_vec = [ode_t_valid_stds[eps] for eps in special_eps_vec]
+			# 	ax2.errorbar(x=special_eps_vec, y=median_vec, yerr=std_vec, label='model-only', color='red')
+			# except:
+			# 	pass
+
+	ax2.legend()
+	ax2.set_yscale('log')
+	fig.suptitle('Train-time until reaching optimal test performance (w.r.t. model error)')
+	fig.savefig(fname=output_fname+'_train_time')
+	plt.close(fig)
+
+
+def extract_hidden_size_performance(my_dirs, output_fname="./hidden_size_comparisons", win=1000, many_epochs=True, hs_token='hs'):
 
 	# first, get sizes of things...max window size is 10% of whole test set.
 	d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
@@ -1585,19 +1663,20 @@ def extract_hidden_size_performance(my_dirs, output_fname="./hidden_size_compari
 	n_vals = len(x_test)
 
 	win = min(win,n_vals//3)
-	model_performance = {'mse':{}, 't_valid':{}}
-	rnn_performance = {'mse':(), 't_valid':()}
-	hybrid_performance = {'mse':{}, 't_valid':{}}
+	model_performance = {'mse':(), 't_valid':()}
+	rnn_performance = {'mse':{}, 'mse_time':{}, 't_valid':{}, 't_valid_time':{}}
+	hybrid_performance = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
+	dict_performance = {'rnn':rnn_performance, 'hybrid': hybrid_performance, 'model':model_performance}
 	for d in my_dirs:
 		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
-		if 'vanilla' in d_label:
-			my_eps = None
-		else:
-			my_eps = float([z.strip(eps_token) for z in d_label.split('_') if eps_token in z][-1])
+		my_hs = float([z.strip(hs_token) for z in d_label.split('_') if hs_token in z][-1])
+		try:
 			model_loss = np.loadtxt(d+'/perfectModel_loss_test.txt')
 			model_t_valid = np.loadtxt(d+'/perfectModel_validity_time_test.txt')
-			model_performance['mse'][my_eps] = float(model_loss)
-			model_performance['t_valid'][my_eps] = float(model_t_valid)
+			dict_performance['model']['mse'] += (float(model_loss),)
+			dict_performance['model']['t_valid'] += (float(model_t_valid),)
+		except:
+			pass
 
 		x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
 		x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
@@ -1611,41 +1690,46 @@ def extract_hidden_size_performance(my_dirs, output_fname="./hidden_size_compari
 				x_valid_test = x_valid_test.rolling(win).mean()
 				# for kk in plot_state_indices:
 				# 	ax4.plot(x_kl_test.loc[:,kk].rolling(win).mean(), label=d_label)
-		if my_eps is None:
-			rnn_performance['mse'] += (float(np.min(x_test)),)
-			if many_epochs:
-				rnn_performance['t_valid'] += (float(np.max(x_valid_test)),)
-		elif my_eps in hybrid_performance['mse']:
-			hybrid_performance['mse'][my_eps] += (float(np.min(x_test)),)
-			# test_loss_epoch[my_eps] += (np.argmin(x_test),)
-			if many_epochs:
-				hybrid_performance['t_valid'][my_eps] += (float(np.max(x_valid_test)),)
-				# t_valid_epoch[my_eps] += (argmax(x_valid_test),)
+		# if my_hs is None:
+		# 	rnn_performance['mse'] += (float(np.min(x_test)),)
+		# 	if many_epochs:
+		# 		rnn_performance['t_valid'] += (float(np.max(x_valid_test)),)
+		if 'vanilla' in d_label:
+			mtype = 'rnn'
+		elif 'mech' in d_label:
+			mtype = 'hybrid'
 		else:
-			hybrid_performance['mse'][my_eps] = (float(np.min(x_test)),)
-			# test_loss_epoch[my_eps] = (np.argmin(x_test),)
+			pass
+
+		if my_hs in dict_performance[mtype]['mse']:
+			dict_performance[mtype]['mse'][my_hs] += (float(np.min(x_test)),)
+			dict_performance[mtype]['mse_time'][my_hs] += (float(np.nanargmin(x_test)),)
 			if many_epochs:
-				hybrid_performance['t_valid'][my_eps] = (float(np.max(x_valid_test)),)
-				# t_valid_epoch[my_eps] = (np.argmax(x_valid_test),)
+				dict_performance[mtype]['t_valid'][my_hs] += (float(np.max(x_valid_test)),)
+				dict_performance[mtype]['t_valid_time'][my_hs] += (float(np.nanargmax(x_valid_test)),)
+		else:
+			dict_performance[mtype]['mse'][my_hs] = (float(np.min(x_test)),)
+			dict_performance[mtype]['mse_time'][my_hs] = (float(np.nanargmin(x_test)),)
+			if many_epochs:
+				dict_performance[mtype]['t_valid'][my_hs] = (float(np.max(x_valid_test)),)
+				dict_performance[mtype]['t_valid_time'][my_hs] = (float(np.nanargmax(x_valid_test)),)
 
 	# now summarize
-	test_loss_mins = {key: np.min(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
-	test_loss_maxes = {key: np.max(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
-	test_loss_means = {key: np.mean(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
-	test_loss_medians = {key: np.median(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
-	test_loss_stds = {key: np.std(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
-
-	rnn_test_loss_mins = np.min(rnn_performance['mse'])
-	rnn_test_loss_maxes = np.max(rnn_performance['mse'])
-	rnn_test_loss_means = np.mean(rnn_performance['mse'])
-	rnn_test_loss_medians = np.median(rnn_performance['mse'])
-	rnn_test_loss_stds = np.std(rnn_performance['mse'])
-
-	ode_test_loss_mins = {key: np.min(model_performance['mse'][key]) for key in model_performance['mse']}
-	ode_test_loss_maxes = {key: np.max(model_performance['mse'][key]) for key in model_performance['mse']}
-	ode_test_loss_means = {key: np.mean(model_performance['mse'][key]) for key in model_performance['mse']}
-	ode_test_loss_medians = {key: np.median(model_performance['mse'][key]) for key in model_performance['mse']}
-	ode_test_loss_stds = {key: np.std(model_performance['mse'][key]) for key in model_performance['mse']}
+	test_loss_mins = {key: np.min(dict_performance['hybrid']['mse'][key]) for key in dict_performance['hybrid']['mse']}
+	test_loss_maxes = {key: np.max(dict_performance['hybrid']['mse'][key]) for key in dict_performance['hybrid']['mse']}
+	test_loss_means = {key: np.mean(dict_performance['hybrid']['mse'][key]) for key in dict_performance['hybrid']['mse']}
+	test_loss_medians = {key: np.median(dict_performance['hybrid']['mse'][key]) for key in dict_performance['hybrid']['mse']}
+	test_loss_stds = {key: np.std(dict_performance['hybrid']['mse'][key]) for key in dict_performance['hybrid']['mse']}
+	rnn_test_loss_mins = {key: np.min(dict_performance['rnn']['mse'][key]) for key in dict_performance['rnn']['mse']}
+	rnn_test_loss_maxes = {key: np.max(dict_performance['rnn']['mse'][key]) for key in dict_performance['rnn']['mse']}
+	rnn_test_loss_means = {key: np.mean(dict_performance['rnn']['mse'][key]) for key in dict_performance['rnn']['mse']}
+	rnn_test_loss_medians = {key: np.median(dict_performance['rnn']['mse'][key]) for key in dict_performance['rnn']['mse']}
+	rnn_test_loss_stds = {key: np.std(dict_performance['rnn']['mse'][key]) for key in dict_performance['rnn']['mse']}
+	ode_test_loss_mins = np.min(dict_performance['model']['mse'])
+	ode_test_loss_maxes = np.max(dict_performance['model']['mse'])
+	ode_test_loss_means = np.mean(dict_performance['model']['mse'])
+	ode_test_loss_medians = np.median(dict_performance['model']['mse'])
+	ode_test_loss_stds = np.std(dict_performance['model']['mse'])
 
 
 	# plot summary
@@ -1657,68 +1741,148 @@ def extract_hidden_size_performance(my_dirs, output_fname="./hidden_size_compari
 	median_vec = [test_loss_medians[eps] for eps in eps_vec]
 	std_vec = [test_loss_stds[eps] for eps in eps_vec]
 
-	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN', color='blue')
-	ax1.set_xlabel('epsilon Model Error')
-	ax1.set_ylabel('Test Loss (MSE)')
+	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN (eps=0.05)', color='blue')
+	ax1.set_xlabel('Dimension of Hidden State')
+	ax1.set_ylabel('Test Loss (logMSE)')
+
+	eps_vec = sorted(rnn_test_loss_medians.keys())
+	median_vec = [rnn_test_loss_medians[eps] for eps in eps_vec]
+	std_vec = [rnn_test_loss_stds[eps] for eps in eps_vec]
+	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='vanilla RNN', color='black')
 
 	try:
-		ax1.errorbar(x=eps_vec, y=[rnn_test_loss_medians]*len(eps_vec), yerr=[rnn_test_loss_stds]*len(eps_vec) ,label='vanilla RNN', color='black')
+		ax1.errorbar(x=eps_vec, y=[ode_test_loss_medians]*len(eps_vec), yerr=[ode_test_loss_stds]*len(eps_vec), label='model-only (eps=0.05)', color='red')
 	except:
 		pass
 
-	try:
-		median_vec = [ode_test_loss_medians[eps] for eps in eps_vec]
-		std_vec = [ode_test_loss_stds[eps] for eps in eps_vec]
-		ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='model-only', color='red')
-	except:
-		pass
-
+	ax1.set_yscale('log')
 	ax1.legend()
 
 	if many_epochs:
-		t_valid_mins = {key: np.min(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
-		t_valid_maxes = {key: np.max(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
-		t_valid_medians = {key: np.median(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
-		t_valid_means = {key: np.mean(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
-		t_valid_stds = {key: np.std(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
+		t_valid_mins = {key: np.min(dict_performance['hybrid']['t_valid'][key]) for key in dict_performance['hybrid']['t_valid']}
+		t_valid_maxes = {key: np.max(dict_performance['hybrid']['t_valid'][key]) for key in dict_performance['hybrid']['t_valid']}
+		t_valid_means = {key: np.mean(dict_performance['hybrid']['t_valid'][key]) for key in dict_performance['hybrid']['t_valid']}
+		t_valid_medians = {key: np.median(dict_performance['hybrid']['t_valid'][key]) for key in dict_performance['hybrid']['t_valid']}
+		t_valid_stds = {key: np.std(dict_performance['hybrid']['t_valid'][key]) for key in dict_performance['hybrid']['t_valid']}
 
-		rnn_t_valid_mins = np.min(rnn_performance['t_valid'])
-		rnn_t_valid_maxes = np.max(rnn_performance['t_valid'])
-		rnn_t_valid_means = np.mean(rnn_performance['t_valid'])
-		rnn_t_valid_medians = np.median(rnn_performance['t_valid'])
-		rnn_t_valid_stds = np.std(rnn_performance['t_valid'])
+		rnn_t_valid_mins = {key: np.min(dict_performance['rnn']['t_valid'][key]) for key in dict_performance['rnn']['t_valid']}
+		rnn_t_valid_maxes = {key: np.max(dict_performance['rnn']['t_valid'][key]) for key in dict_performance['rnn']['t_valid']}
+		rnn_t_valid_means = {key: np.mean(dict_performance['rnn']['t_valid'][key]) for key in dict_performance['rnn']['t_valid']}
+		rnn_t_valid_medians = {key: np.median(dict_performance['rnn']['t_valid'][key]) for key in dict_performance['rnn']['t_valid']}
+		rnn_t_valid_stds = {key: np.std(dict_performance['rnn']['t_valid'][key]) for key in dict_performance['rnn']['t_valid']}
 
-		ode_t_valid_mins = {key: np.min(model_performance['t_valid'][key]) for key in model_performance['t_valid']}
-		ode_t_valid_maxes = {key: np.max(model_performance['t_valid'][key]) for key in model_performance['t_valid']}
-		ode_t_valid_means = {key: np.mean(model_performance['t_valid'][key]) for key in model_performance['t_valid']}
-		ode_t_valid_medians = {key: np.median(model_performance['t_valid'][key]) for key in model_performance['t_valid']}
-		ode_t_valid_stds = {key: np.std(model_performance['t_valid'][key]) for key in model_performance['t_valid']}
-
+		ode_t_valid_mins = np.min(dict_performance['model']['t_valid'])
+		ode_t_valid_maxes = np.max(dict_performance['model']['t_valid'])
+		ode_t_valid_means = np.mean(dict_performance['model']['t_valid'])
+		ode_t_valid_medians = np.median(dict_performance['model']['t_valid'])
+		ode_t_valid_stds = np.std(dict_performance['model']['t_valid'])
 
 		eps_vec = sorted(t_valid_medians.keys())
 		median_vec = [t_valid_medians[eps] for eps in eps_vec]
 		std_vec = [t_valid_stds[eps] for eps in eps_vec]
 
-		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN', color='blue')
-		ax2.set_xlabel('epsilon Model Error')
+		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN (eps=0.05)', color='blue')
+		ax2.set_xlabel('Dimension of Hidden State')
 		ax2.set_ylabel('Validity Time')
 
+		eps_vec = sorted(rnn_t_valid_medians.keys())
+		median_vec = [rnn_t_valid_medians[eps] for eps in eps_vec]
+		std_vec = [rnn_t_valid_stds[eps] for eps in eps_vec]
+		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='vanilla RNN', color='black')
+
 		try:
-			ax2.errorbar(x=eps_vec, y=[rnn_t_valid_medians]*len(eps_vec), yerr=[rnn_t_valid_stds]*len(eps_vec) ,label='vanilla RNN', color='black')
+			ax2.errorbar(x=eps_vec, y=[ode_t_valid_medians]*len(eps_vec), yerr=[ode_t_valid_stds]*len(eps_vec) ,label='model-only (eps=0.05)', color='red')
 		except:
 			pass
 
-		try:
-			special_eps_vec = [foo for foo in eps_vec if foo!=0]
-			median_vec = [ode_t_valid_medians[eps] for eps in special_eps_vec]
-			std_vec = [ode_t_valid_stds[eps] for eps in special_eps_vec]
-			ax2.errorbar(x=special_eps_vec, y=median_vec, yerr=std_vec, label='model-only', color='red')
-		except:
-			pass
 		ax2.legend()
 
-	fig.suptitle('Performance on Test Set Under Varying Model Error')
+	fig.suptitle('Performance on Test Set Under Varying Size of Hidden Dimension')
 	fig.savefig(fname=output_fname)
 	plt.close(fig)
 
+	# plot summary of Time to Train
+	test_loss_mins = {key: np.min(dict_performance['hybrid']['mse_time'][key]) for key in dict_performance['hybrid']['mse_time']}
+	test_loss_maxes = {key: np.max(dict_performance['hybrid']['mse_time'][key]) for key in dict_performance['hybrid']['mse_time']}
+	test_loss_means = {key: np.mean(dict_performance['hybrid']['mse_time'][key]) for key in dict_performance['hybrid']['mse_time']}
+	test_loss_medians = {key: np.median(dict_performance['hybrid']['mse_time'][key]) for key in dict_performance['hybrid']['mse_time']}
+	test_loss_stds = {key: np.std(dict_performance['hybrid']['mse_time'][key]) for key in dict_performance['hybrid']['mse_time']}
+	rnn_test_loss_mins = {key: np.min(dict_performance['rnn']['mse_time'][key]) for key in dict_performance['rnn']['mse_time']}
+	rnn_test_loss_maxes = {key: np.max(dict_performance['rnn']['mse_time'][key]) for key in dict_performance['rnn']['mse_time']}
+	rnn_test_loss_means = {key: np.mean(dict_performance['rnn']['mse_time'][key]) for key in dict_performance['rnn']['mse_time']}
+	rnn_test_loss_medians = {key: np.median(dict_performance['rnn']['mse_time'][key]) for key in dict_performance['rnn']['mse_time']}
+	rnn_test_loss_stds = {key: np.std(dict_performance['rnn']['mse_time'][key]) for key in dict_performance['rnn']['mse_time']}
+	# ode_test_loss_mins = np.min(dict_performance['model']['mse_time'])
+	# ode_test_loss_maxes = np.max(dict_performance['model']['mse_time'])
+	# ode_test_loss_means = np.mean(dict_performance['model']['mse_time'])
+	# ode_test_loss_medians = np.median(dict_performance['model']['mse_time'])
+	# ode_test_loss_stds = np.std(dict_performance['model']['mse_time'])
 
+
+	fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1,
+		figsize = [10, 10],
+		sharey=False, sharex=False)
+
+	eps_vec = sorted(test_loss_medians.keys())
+	median_vec = [test_loss_medians[eps] for eps in eps_vec]
+	std_vec = [test_loss_stds[eps] for eps in eps_vec]
+
+	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN (eps=0.05)', color='blue')
+	ax1.set_xlabel('Dimension of Hidden State')
+	ax1.set_ylabel('Train time (opt MSE)')
+
+	eps_vec = sorted(rnn_test_loss_medians.keys())
+	median_vec = [rnn_test_loss_medians[eps] for eps in eps_vec]
+	std_vec = [rnn_test_loss_stds[eps] for eps in eps_vec]
+	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='vanilla RNN', color='black')
+
+	# try:
+	# 	ax1.errorbar(x=eps_vec, y=[ode_test_loss_medians]*len(eps_vec), yerr=[ode_test_loss_stds]*len(eps_vec), label='model-only (eps=0.05)', color='red')
+	# except:
+	# 	pass
+
+	# ax1.set_yscale('log')
+	ax1.legend()
+
+	if many_epochs:
+		t_valid_mins = {key: np.min(dict_performance['hybrid']['t_valid_time'][key]) for key in dict_performance['hybrid']['t_valid_time']}
+		t_valid_maxes = {key: np.max(dict_performance['hybrid']['t_valid_time'][key]) for key in dict_performance['hybrid']['t_valid_time']}
+		t_valid_means = {key: np.mean(dict_performance['hybrid']['t_valid_time'][key]) for key in dict_performance['hybrid']['t_valid_time']}
+		t_valid_medians = {key: np.median(dict_performance['hybrid']['t_valid_time'][key]) for key in dict_performance['hybrid']['t_valid_time']}
+		t_valid_stds = {key: np.std(dict_performance['hybrid']['t_valid_time'][key]) for key in dict_performance['hybrid']['t_valid_time']}
+
+		rnn_t_valid_mins = {key: np.min(dict_performance['rnn']['t_valid_time'][key]) for key in dict_performance['rnn']['t_valid_time']}
+		rnn_t_valid_maxes = {key: np.max(dict_performance['rnn']['t_valid_time'][key]) for key in dict_performance['rnn']['t_valid_time']}
+		rnn_t_valid_means = {key: np.mean(dict_performance['rnn']['t_valid_time'][key]) for key in dict_performance['rnn']['t_valid_time']}
+		rnn_t_valid_medians = {key: np.median(dict_performance['rnn']['t_valid_time'][key]) for key in dict_performance['rnn']['t_valid_time']}
+		rnn_t_valid_stds = {key: np.std(dict_performance['rnn']['t_valid_time'][key]) for key in dict_performance['rnn']['t_valid_time']}
+
+		# ode_t_valid_mins = np.min(dict_performance['model']['t_valid_time'])
+		# ode_t_valid_maxes = np.max(dict_performance['model']['t_valid_time'])
+		# ode_t_valid_means = np.mean(dict_performance['model']['t_valid_time'])
+		# ode_t_valid_medians = np.median(dict_performance['model']['t_valid_time'])
+		# ode_t_valid_stds = np.std(dict_performance['model']['t_valid_time'])
+
+		eps_vec = sorted(t_valid_medians.keys())
+		median_vec = [t_valid_medians[eps] for eps in eps_vec]
+		std_vec = [t_valid_stds[eps] for eps in eps_vec]
+
+		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN (eps=0.05)', color='blue')
+		ax2.set_xlabel('Dimension of Hidden State')
+		ax2.set_ylabel('Train time (opt Validity Time)')
+
+		eps_vec = sorted(rnn_t_valid_medians.keys())
+		median_vec = [rnn_t_valid_medians[eps] for eps in eps_vec]
+		std_vec = [rnn_t_valid_stds[eps] for eps in eps_vec]
+		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='vanilla RNN', color='black')
+
+		# try:
+		# 	ax2.errorbar(x=eps_vec, y=[ode_t_valid_medians]*len(eps_vec), yerr=[ode_t_valid_stds]*len(eps_vec) ,label='model-only (eps=0.05)', color='red')
+		# except:
+		# 	pass
+
+		ax2.legend()
+
+	fig.suptitle('Train-time until reaching optimal test performance (w.r.t. hidden size)')
+	fig.savefig(fname=output_fname+'_train_time')
+	plt.close(fig)
