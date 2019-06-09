@@ -4,6 +4,7 @@ results/
 *output*/
 .DS_Store
 *output/
+**/*.out
 
 .python_history
 __pycache__/
