@@ -14,6 +14,7 @@ parser.add_argument('--savedir', type=str, default='default_output', help='paren
 parser.add_argument('--model_solver', default=lorenz63, help='ode function')
 parser.add_argument('--drive_system', type=str2bool, default=False, help='whether to force the system with a time-dependent driver')
 parser.add_argument('--n_tests', type=int, default=1, help='number of independent testing sets to use')
+parser.add_argument('--n_experiments', type=int, default=1, help='number of sim/fitting experiments to do')
 FLAGS = parser.parse_args()
 
 
@@ -81,111 +82,112 @@ def main():
 
 
 	########## NOW start running RNN fits ############
-	for hidden_size in [50]:
-		#### run vanilla RNN ####
-		forward = forward_chaos_pureML
-		# train on clean data
-		run_output_dir = output_dir + '/vanillaRNN_clean_hs{0}'.format(hidden_size)
-		all_dirs.append(run_output_dir)
-		torch.manual_seed(0)
-		train_chaosRNN(forward,
-	      y_clean_train_norm, y_clean_train_norm,
-	      y_clean_test_vec_norm, y_noisy_test_vec_norm,
-	      y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
-	      rnn_model_params, hidden_size, n_epochs, lr,
-	      run_output_dir, normz_info_clean, rnn_sim_model,
-	      stack_hidden=False, stack_output=False)
+	for n in range(FLAGS.n_experiments):
+		for hidden_size in [5, 10, 25, 50, 100, 200]:
+			#### run vanilla RNN ####
+			forward = forward_chaos_pureML
+			# train on clean data
+			run_output_dir = output_dir + '_iter{0}'.format(n) + '/vanillaRNN_clean_hs{0}'.format(hidden_size)
+			all_dirs.append(run_output_dir)
+			# torch.manual_seed(0)
+			train_chaosRNN(forward,
+		      y_clean_train_norm, y_clean_train_norm,
+		      y_clean_test_vec_norm, y_noisy_test_vec_norm,
+		      y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
+		      rnn_model_params, hidden_size, n_epochs, lr,
+		      run_output_dir, normz_info_clean, rnn_sim_model,
+		      stack_hidden=False, stack_output=False)
 
-		# # train on noisy data
+			# # train on noisy data
+			# normz_info = normz_info_noisy
+			# (y_clean_train_norm, y_noisy_train_norm,
+			# 	y_clean_test_vec_norm, y_noisy_test_vec_norm) = [
+			# 		f_normalize_minmax(normz_info, y) for y in y_list]
+			# (y_clean_train_norm, y_noisy_train_norm,
+			# 	y_clean_test_vec_norm, y_noisy_test_vec_norm) = [
+			# 		f_normalize_minmax(normz_info, y) for y in y_list]
+			# run_output_dir = output_dir + '/vanillaRNN_noisy_hs{0}'.format(hidden_size)
+			# all_dirs.append(run_output_dir)
+			# torch.manual_seed(0)
+			# train_chaosRNN(forward,
+		 #      y_clean_train_norm, y_noisy_train_norm,
+		 #      y_clean_test_vec_norm, y_noisy_test_vec_norm,
+		 #      rnn_model_params, hidden_size, n_epochs, lr,
+		 #      run_output_dir, normz_info, rnn_sim_model,
+		 #      stack_hidden=False, stack_output=False)
+
+
+			#### run mechRNN ###
+			# forward = forward_chaos_hybrid_full
+			# # train on clean data (random init)
+			# run_output_dir = output_dir + '/mechRNN_clean_hs{0}'.format(hidden_size)
+			# all_dirs.append(run_output_dir)
+			# torch.manual_seed(0)
+			# train_chaosRNN(forward,
+		 #      y_clean_train_norm, y_clean_train_norm,
+		 #      y_clean_test_vec_norm, y_noisy_test_vec_norm,
+		 #      y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
+		 #      rnn_model_params, hidden_size, n_epochs, lr,
+		 #      run_output_dir, normz_info_clean, rnn_sim_model)
+
+
+		# train on noisy data (regular initialization)
 		# normz_info = normz_info_noisy
 		# (y_clean_train_norm, y_noisy_train_norm,
 		# 	y_clean_test_vec_norm, y_noisy_test_vec_norm) = [
 		# 		f_normalize_minmax(normz_info, y) for y in y_list]
-		# (y_clean_train_norm, y_noisy_train_norm,
-		# 	y_clean_test_vec_norm, y_noisy_test_vec_norm) = [
-		# 		f_normalize_minmax(normz_info, y) for y in y_list]
-		# run_output_dir = output_dir + '/vanillaRNN_noisy_hs{0}'.format(hidden_size)
+		# run_output_dir = output_dir + '/mechRNN_noisy'
 		# all_dirs.append(run_output_dir)
 		# torch.manual_seed(0)
 		# train_chaosRNN(forward,
 	 #      y_clean_train_norm, y_noisy_train_norm,
 	 #      y_clean_test_vec_norm, y_noisy_test_vec_norm,
 	 #      rnn_model_params, hidden_size, n_epochs, lr,
-	 #      run_output_dir, normz_info, rnn_sim_model,
-	 #      stack_hidden=False, stack_output=False)
-
-
-		#### run mechRNN ###
-		forward = forward_chaos_hybrid_full
-		# train on clean data (random init)
-		run_output_dir = output_dir + '/mechRNN_clean_hs{0}'.format(hidden_size)
-		all_dirs.append(run_output_dir)
-		torch.manual_seed(0)
-		train_chaosRNN(forward,
-	      y_clean_train_norm, y_clean_train_norm,
-	      y_clean_test_vec_norm, y_noisy_test_vec_norm,
-	      y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
-	      rnn_model_params, hidden_size, n_epochs, lr,
-	      run_output_dir, normz_info_clean, rnn_sim_model)
-
-
-	# train on noisy data (regular initialization)
-	# normz_info = normz_info_noisy
-	# (y_clean_train_norm, y_noisy_train_norm,
-	# 	y_clean_test_vec_norm, y_noisy_test_vec_norm) = [
-	# 		f_normalize_minmax(normz_info, y) for y in y_list]
-	# run_output_dir = output_dir + '/mechRNN_noisy'
-	# all_dirs.append(run_output_dir)
-	# torch.manual_seed(0)
-	# train_chaosRNN(forward,
- #      y_clean_train_norm, y_noisy_train_norm,
- #      y_clean_test_vec_norm, y_noisy_test_vec_norm,
- #      rnn_model_params, hidden_size, n_epochs, lr,
- #      run_output_dir, normz_info_noisy, rnn_sim_model)
-	# # train on noisy data (trivial initialization)
-	# run_output_dir = output_dir + '/mechRNN_trivialInit_noisy'
-	## all_dirs.append(run_output_dir)
-	# torch.manual_seed(0)
-	# train_chaosRNN(forward,
- #      y_clean_train_norm, y_noisy_train_norm,
- #      y_clean_test_vec_norm, y_noisy_test_vec_norm,
- #      rnn_model_params, hidden_size, max(1,int(n_epochs/10)), lr,
- #      run_output_dir, normz_info_noisy, rnn_sim_model,
- #      trivial_init=True)
-
-	#### run mechRNN w/ BAD parameter ###
-	forward = forward_chaos_hybrid_full
-
-	for eps_badness in [0.05, 0.3]:
-		rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b*(1+eps_badness), c)}
-
-		run_output_dir = output_dir + '/mechRNN_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size)
-		all_dirs.append(run_output_dir)
-		torch.manual_seed(0)
-		train_chaosRNN(forward,
-	      y_clean_train_norm, y_clean_train_norm,
-	      y_clean_test_vec_norm, y_noisy_test_vec_norm,
-  	      y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
-	      rnn_BAD_model_params, hidden_size, n_epochs, lr,
-	      run_output_dir, normz_info_clean, rnn_sim_model)
-
-		# train on noisy data
-		# normz_info = normz_info_noisy
-		# (y_clean_train_norm, y_noisy_train_norm,
-		# 	y_clean_test_vec_norm, y_noisy_test_vec_norm) = [
-		# 		f_normalize_minmax(normz_info, y) for y in y_list]
-		# run_output_dir = output_dir + '/mechRNN_epsBadness{0}_noisy_hs{1}'.format(eps_badness, hidden_size)
-		# all_dirs.append(run_output_dir)
+	 #      run_output_dir, normz_info_noisy, rnn_sim_model)
+		# # train on noisy data (trivial initialization)
+		# run_output_dir = output_dir + '/mechRNN_trivialInit_noisy'
+		## all_dirs.append(run_output_dir)
 		# torch.manual_seed(0)
 		# train_chaosRNN(forward,
 	 #      y_clean_train_norm, y_noisy_train_norm,
 	 #      y_clean_test_vec_norm, y_noisy_test_vec_norm,
-	 #      rnn_BAD_model_params, hidden_size, n_epochs, lr,
-	 #      run_output_dir, normz_info_noisy, rnn_sim_model)
+	 #      rnn_model_params, hidden_size, max(1,int(n_epochs/10)), lr,
+	 #      run_output_dir, normz_info_noisy, rnn_sim_model,
+	 #      trivial_init=True)
 
-	# plot comparative training errors
-	compare_fits([d for d in all_dirs if "clean" in d], output_fname=output_dir+'/model_comparisons_clean')
-	# compare_fits([d for d in all_dirs if "noisy" in d], output_fname=output_dir+'/model_comparisons_noisy')
+		#### run mechRNN w/ BAD parameter ###
+			forward = forward_chaos_hybrid_full
+
+			for eps_badness in [0.05]:
+				rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b*(1+eps_badness), c)}
+
+				run_output_dir = output_dir + '_iter{0}'.format(n) + '/mechRNN_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size)
+				all_dirs.append(run_output_dir)
+				# torch.manual_seed(0)
+				train_chaosRNN(forward,
+			      y_clean_train_norm, y_clean_train_norm,
+			      y_clean_test_vec_norm, y_noisy_test_vec_norm,
+		  	      y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
+			      rnn_BAD_model_params, hidden_size, n_epochs, lr,
+			      run_output_dir, normz_info_clean, rnn_sim_model)
+
+			# train on noisy data
+			# normz_info = normz_info_noisy
+			# (y_clean_train_norm, y_noisy_train_norm,
+			# 	y_clean_test_vec_norm, y_noisy_test_vec_norm) = [
+			# 		f_normalize_minmax(normz_info, y) for y in y_list]
+			# run_output_dir = output_dir + '/mechRNN_epsBadness{0}_noisy_hs{1}'.format(eps_badness, hidden_size)
+			# all_dirs.append(run_output_dir)
+			# torch.manual_seed(0)
+			# train_chaosRNN(forward,
+		 #      y_clean_train_norm, y_noisy_train_norm,
+		 #      y_clean_test_vec_norm, y_noisy_test_vec_norm,
+		 #      rnn_BAD_model_params, hidden_size, n_epochs, lr,
+		 #      run_output_dir, normz_info_noisy, rnn_sim_model)
+
+		# plot comparative training errors
+		compare_fits([d for d in all_dirs if "clean" in d], output_fname=output_dir+'/model_comparisons_clean')
+		# compare_fits([d for d in all_dirs if "noisy" in d], output_fname=output_dir+'/model_comparisons_noisy')
 
 if __name__ == '__main__':
 	main()
