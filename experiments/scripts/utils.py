@@ -842,7 +842,7 @@ def train_chaosRNN(forward,
 				ax_list[0].legend()
 
 				fig.suptitle('Predictions of Invariant Density')
-				fig.savefig(fname=output_dir+'/rnn_test_invDensity_iterEpochs'+str(i_epoch))
+				fig.savefig(fname=output_dir+'/rnn_test_invDensity_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
 				plt.close(fig)
 
 
