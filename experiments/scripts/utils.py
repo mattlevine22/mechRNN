@@ -314,7 +314,8 @@ def train_chaosRNN(forward,
 			f_unNormalize_X = f_unNormalize_ztrans,
 			max_plot=2000, n_param_saves=None,
 			err_thresh=0.4, plot_state_indices=None,
-			precompute_model=True, kde_func=kde_scipy):
+			precompute_model=True, kde_func=kde_scipy,
+			compute_kl=False):
 
 	if torch.cuda.is_available():
 		print('Using CUDA FloatTensor')
@@ -604,12 +605,13 @@ def train_chaosRNN(forward,
 		pred_validity_vec_clean_test[i_epoch] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
 
 		# compute KL divergence between long predictions and whole test set:
-		# kl_vec_inv_test[i_epoch,:] = kl4dummies(
-		# 				f_unNormalize_Y(normz_info, y_noisy_test),
-		# 				f_unNormalize_Y(normz_info, long_predictions))
-		# kl_vec_inv_clean_test[i_epoch,:] = kl4dummies(
-		# 				f_unNormalize_Y(normz_info, y_clean_test),
-		# 				f_unNormalize_Y(normz_info, long_predictions))
+		if compute_kl:
+			kl_vec_inv_test[i_epoch,:] = kl4dummies(
+							f_unNormalize_Y(normz_info, y_noisy_test),
+							f_unNormalize_Y(normz_info, long_predictions))
+			kl_vec_inv_clean_test[i_epoch,:] = kl4dummies(
+							f_unNormalize_Y(normz_info, y_clean_test),
+							f_unNormalize_Y(normz_info, long_predictions))
 
 		# print updates every 10 iterations or in 10% incrememnts
 		if i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0:

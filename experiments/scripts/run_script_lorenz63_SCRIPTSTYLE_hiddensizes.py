@@ -15,6 +15,7 @@ parser.add_argument('--model_solver', default=lorenz63, help='ode function')
 parser.add_argument('--drive_system', type=str2bool, default=False, help='whether to force the system with a time-dependent driver')
 parser.add_argument('--n_experiments', type=int, default=1, help='number of sim/fitting experiments to do')
 parser.add_argument('--random_state_inits', type=str2bool, default=False, help='whether to randomly initialize initial conditions for simulated trajectory')
+parser.add_argument('--compute_kl', type=str2bool, default=False, help='whether to compute KL divergence between test set density and predicted density')
 FLAGS = parser.parse_args()
 
 
@@ -124,7 +125,8 @@ def main():
 				      y_clean_test_norm, y_noisy_test_norm,
 				      rnn_model_params, hidden_size, n_epochs, lr,
 				      run_output_dir, normz_info, rnn_sim_model,
-				      stack_hidden=False, stack_output=False)
+				      stack_hidden=False, stack_output=False,
+				      compute_kl=FLAGS.compute_kl)
 
 				# # train on noisy data
 				# normz_info = normz_info_noisy
@@ -219,7 +221,8 @@ def main():
 					      y_clean_train_norm, y_clean_train_norm,
 					      y_clean_test_norm, y_noisy_test_norm,
 					      rnn_BAD_model_params, hidden_size, n_epochs, lr,
-					      run_output_dir, normz_info_clean, rnn_sim_model)
+					      run_output_dir, normz_info_clean, rnn_sim_model,
+					      compute_kl=FLAGS.compute_kl)
 
 					# train on noisy data
 					# normz_info = normz_info_noisy
