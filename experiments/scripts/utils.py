@@ -633,7 +633,7 @@ def train_chaosRNN(forward,
 			saved_hidden_states = np.zeros([train_seq_length, hidden_size])
 			saved_hidden_states[0,:] = hidden_state.data.numpy().ravel()
 			for i in range(train_seq_length-1):
-				(pred, hidden_state) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[j])
+				(pred, hidden_state) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i])
 				# (pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
 				# hidden_state = hidden_state
 				saved_hidden_states[i+1,:] = hidden_state.data.numpy().ravel()
@@ -835,7 +835,7 @@ def train_chaosRNN(forward,
 	pred = output_train[0,:,None]
 	predictions[0,:] = np.squeeze(output_train[0,:,None])
 	for i in range(train_seq_length-1):
-		(pred, hidden_state) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[j])
+		(pred, hidden_state) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i])
 		# (pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
 		# hidden_state = hidden_state
 		predictions[i+1,:] = pred.data.numpy().ravel()
