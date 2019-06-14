@@ -14,10 +14,10 @@ module load cuda/9.0
 module load python/2.7.15-tf
 
 # Execute jobs in parallel
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_eps2.py --savedir lorenz63_newTraining/synch_5 --epoch 10000 --delta_t 0.1 --t_train 100 --t_test 100 --t_test_synch 5 --n_tests 10 --n_experiments 2 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_eps2.py --savedir lorenz63_newTraining/synch_10 --epoch 10000 --delta_t 0.1 --t_train 100 --t_test 100 --t_test_synch 10 --n_tests 10 --n_experiments 2 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_eps2.py --savedir lorenz63_newTraining/synch_50 --epoch 10000 --delta_t 0.1 --t_train 100 --t_test 100 --t_test_synch 50 --n_tests 10 --n_experiments 2 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_eps2.py --savedir lorenz63_newTraining/synch_100 --epoch 10000 --delta_t 0.1 --t_train 100 --t_test 100 --t_test_synch 100 --n_tests 10 --n_experiments 2 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_eps2.py --savedir lorenz63_newTraining/synch_500 --epoch 10000 --delta_t 0.1 --t_train 100 --t_test 100 --t_test_synch 500 --n_tests 10 --n_experiments 2 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_eps2.py --savedir lorenz63_newTraining/synch_1000 --epoch 10000 --delta_t 0.1 --t_train 100 --t_test 100 --t_test_synch 1000 --n_tests 10 --n_experiments 2
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_eps2.py --savedir lorenz63_synchTest/t_5 --epoch 10000 --delta_t 0.1 --t_train 100 --t_test 100 --t_test_synch 5 --n_tests 10 --n_experiments 2 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_eps2.py --savedir lorenz63_synchTest/t_10 --epoch 10000 --delta_t 0.1 --t_train 100 --t_test 100 --t_test_synch 10 --n_tests 10 --n_experiments 2 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_eps2.py --savedir lorenz63_synchTest/t_50 --epoch 10000 --delta_t 0.1 --t_train 100 --t_test 100 --t_test_synch 50 --n_tests 10 --n_experiments 2 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_eps2.py --savedir lorenz63_synchTest/t_100 --epoch 10000 --delta_t 0.1 --t_train 100 --t_test 100 --t_test_synch 100 --n_tests 10 --n_experiments 2 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_eps2.py --savedir lorenz63_synchTest/t_500 --epoch 10000 --delta_t 0.1 --t_train 100 --t_test 100 --t_test_synch 500 --n_tests 10 --n_experiments 2 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_eps2.py --savedir lorenz63_synchTest/t_1000 --epoch 10000 --delta_t 0.1 --t_train 100 --t_test 100 --t_test_synch 1000 --n_tests 10 --n_experiments 2
 wait
