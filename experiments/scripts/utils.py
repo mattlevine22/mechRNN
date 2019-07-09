@@ -347,7 +347,11 @@ def run_GP(y_clean_train, y_noisy_train,
 		y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
 		my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
 
-		pred = my_model_pred + gpr.predict(pred.reshape(1, -1) , return_std=False).squeeze()
+		if input_style==1:
+			x = pred
+		elif input_style==2:
+			x = np.concatenate((pred, my_model_pred))
+		pred = my_model_pred + gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
 
 		# compute losses
 		total_loss_test += sum((pred - target)**2)/2
@@ -356,6 +360,8 @@ def run_GP(y_clean_train, y_noisy_train,
 		pw_loss_clean_test[j] = total_loss_clean_test / avg_output_clean_test
 		gpr_test_predictions[j,:] = pred
 
+	total_loss_test = total_loss_test / test_seq_length
+	total_loss_clean_test = total_loss_clean_test / test_seq_length
 
 	gpr_train_predictions_rerun = np.zeros([train_seq_length-1, output_size])
 	pred = y_noisy_train[0,:,None].squeeze()
@@ -369,7 +375,13 @@ def run_GP(y_clean_train, y_noisy_train,
 		y0 = f_unNormalize_minmax(normz_info, pred)
 		y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
 		my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
-		pred = my_model_pred + gpr.predict(pred.reshape(1, -1), return_std=False).squeeze()
+
+		if input_style==1:
+			x = pred
+		elif input_style==2:
+			x = np.concatenate((pred, my_model_pred))
+
+		pred = my_model_pred + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
 
 		# compute losses
 		# total_loss_test += (pred - target.squeeze()).pow(2).sum()/2
@@ -385,6 +397,10 @@ def run_GP(y_clean_train, y_noisy_train,
 		f.write(str(gpr_pred_validity_vec_test))
 	with open(output_dir+'/GPR_{0}_prediction_validity_time_clean_test.txt'.format(input_style), "w") as f:
 		f.write(str(gpr_pred_validity_vec_clean_test))
+	with open(output_dir+'/GPR_{0}_loss_test.txt'.format(input_style), "w") as f:
+		f.write(str(total_loss_test))
+	with open(output_dir+'/GPR_{0}_clean_loss_test.txt'.format(input_style), "w") as f:
+		f.write(str(total_loss_clean_test))
 
 	# plot forecast over test set
 	y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test)
@@ -504,7 +520,7 @@ def train_chaosRNN(forward,
 	else:
 		model_pred = [None for j in range(train_seq_length-1)]
 
-	for input_style in [1,2]:
+	for input_style in [2,1]:
 		run_GP(y_clean_train, y_noisy_train,
 				y_clean_test, y_noisy_test,
 				model,f_unNormalize_Y,
@@ -1082,23 +1098,36 @@ def train_chaosRNN(forward,
 
 		x_train = pd.DataFrame(np.loadtxt(output_dir+'/loss_vec_train.txt'))
 		x_test = pd.DataFrame(np.loadtxt(output_dir+"/loss_vec_clean_test.txt"))
+		gpr1_valid_test = np.loadtxt(output_dir+'/GPR_1_prediction_validity_time_test.txt')
+		gpr2_valid_test = np.loadtxt(output_dir+'/GPR_2_prediction_validity_time_test.txt')
+		gpr1_test = np.loadtxt(output_dir+'/GPR_1_clean_loss_test.txt')
+		gpr2_test = np.loadtxt(output_dir+'/GPR_2_clean_loss_test.txt')
+
 		if n_epochs > 1:
 			x_valid_test = pd.DataFrame(np.loadtxt(output_dir+"/prediction_validity_time_clean_test.txt"))
 			x_kl_test = pd.DataFrame(np.loadtxt(output_dir+"/kl_vec_inv_clean_test.txt"))
 		if win:
 			ax1.plot(x_train.rolling(win).mean())
-			ax2.plot(x_test.rolling(win).mean())
+			ax2.plot(x_test.rolling(win).mean(),label='RNN')
 			if n_epochs > 1:
-				ax3.plot(x_valid_test.rolling(win).mean())
+				ax3.plot(x_valid_test.rolling(win).mean(),label='RNN')
 				for kk in plot_state_indices:
 					ax4.plot(x_kl_test.loc[:,kk].rolling(win).mean(), label=model_params['state_names'][kk])
 		else:
 			ax1.plot(x_train)
-			ax2.plot(x_test)
+			ax2.plot(x_test,label='RNN')
 			if n_epochs > 1:
 				ax3.plot(x_valid_test)
 				for kk in plot_state_indices:
 					ax4.plot(x_kl_test.loc[:,kk], label=model_params['state_names'][kk])
+
+		ax2.hlines(gpr1_test,xmin=0,xmax=n_vals-1,label='GPR 1',color='red')
+		ax2.hlines(gpr2_test,xmin=0,xmax=n_vals-1,label='GPR 2',color='purple')
+		ax3.hlines(gpr1_valid_test,xmin=0,xmax=n_vals-1,label='GPR 1',color='red')
+		ax3.hlines(gpr2_valid_test,xmin=0,xmax=n_vals-1,label='GPR 2',color='purple')
+
+		ax2.legend()
+		ax3.legend()
 
 		# x = np.loadtxt(d+"/loss_vec_test.txt")
 		# ax3.plot(x, label=d_label)
@@ -1539,6 +1568,13 @@ def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indi
 			d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
 			x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
 			x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
+
+			# get GPR fits
+			gpr1_valid_test = np.loadtxt(d+'/GPR_1_prediction_validity_time_test.txt')
+			gpr2_valid_test = np.loadtxt(d+'/GPR_2_prediction_validity_time_test.txt')
+			gpr1_test = np.loadtxt(d+'/GPR_1_clean_loss_test.txt')
+			gpr2_test = np.loadtxt(d+'/GPR_2_clean_loss_test.txt')
+
 			if many_epochs:
 				x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt"))
 				x_kl_test = pd.DataFrame(np.loadtxt(d+"/kl_vec_inv_clean_test.txt"))
@@ -1557,6 +1593,16 @@ def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indi
 					for kk in plot_state_indices:
 						ax4.plot(x_kl_test.loc[:,kk], label=d_label)
 
+			try:
+				gp_label = [x for x in d_label.split('_') if 'epsBad' in x][0]
+				ax2.plot([0,n_vals-1],[gpr1_test,gpr1_test],label='GPR 1 ' + gp_label)
+				ax2.plot([0,n_vals-1],[gpr2_test,gpr2_test],label='GPR 2 '+gp_label)
+				ax3.plot([0,n_vals-1],[gpr1_valid_test,gpr1_valid_test],label='GPR 1 ' + gp_label)
+				ax3.plot([0,n_vals-1],[gpr2_valid_test,gpr2_valid_test],label='GPR 2 ' + gp_label)
+			except:
+				pass
+
+		ax2.legend(fontsize=6, handlelength=2, loc='upper right')
 			# x = np.loadtxt(d+"/loss_vec_test.txt")
 			# ax3.plot(x, label=d_label)
 		ax4.set_xlabel('Epochs')
