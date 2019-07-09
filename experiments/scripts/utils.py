@@ -14,6 +14,9 @@ from scipy.stats import entropy
 from scipy.integrate import odeint
 # from statsmodels.nonparametric.kde import KDEUnivariate
 from scipy.stats import gaussian_kde
+
+from sklearn.gaussian_process import GaussianProcessRegressor
+
 import torch
 from torch.autograd import Variable
 import torch.nn.init as init
@@ -300,6 +303,133 @@ def forward_mech(input, hidden_state, w1, w2, b, c, v, normz_info, model, model_
 	out = c + torch.mm(v,hidden_state)
 	return  (out, hidden_state)
 
+
+def run_GP(input_style=1,
+			y_clean_train, y_noisy_train,
+			y_clean_test, y_noisy_test,
+			model_pred,
+			train_seq_length,
+			test_seq_length,
+			normz_info, model_params,
+			plot_state_indices,
+			output_dir):
+
+	if input_style==1:
+		X = y_noisy_train[:-1]
+	elif input_style==2:
+		X = np.stack(y_noisy_train[:-1],model_pred)
+
+	# NEW. learn residuals with GP
+	gpr = GaussianProcessRegressor().fit(X=X,y=y_noisy_train[1:]-model_pred)
+	# gpr = GaussianProcessRegressor().fit(X=output_train[:-1],y=output_train[1:]-model_pred)
+	gpr_train_predictions_orig = model_pred + gpr.predict(y_noisy_train[:-1])
+	# gpr.score(model_pred, y_noisy_train[1:])
+	total_loss_test = 0
+	total_loss_clean_test = 0
+	pred = y_noisy_train[-1,:,None]
+	pw_loss_test = np.zeros(test_seq_length)
+	pw_loss_clean_test = np.zeros(test_seq_length)
+	gpr_test_predictions = np.zeros([test_seq_length, output_size])
+	for j in range(test_seq_length):
+		target = y_noisy_test[j,None]
+		target_clean = y_clean_test[j,None]
+
+		# generate next-step ODE model prediction
+		tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+		# unnormalize model_input so that it can go through the ODE solver
+		y0 = f_unNormalize_minmax(normz_info, pred.numpy())
+		y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
+		my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+		pred = my_model_pred + gpr.predict(pred, return_std=False)
+
+		# compute losses
+		total_loss_test += (pred - target.squeeze()).pow(2).sum()/2
+		total_loss_clean_test += (pred - target_clean.squeeze()).pow(2).sum()/2
+		pw_loss_test[j] = total_loss_test.numpy() / avg_output_test
+		pw_loss_clean_test[j] = total_loss_clean_test.numpy() / avg_output_clean_test
+		gpr_test_predictions[j,:] = pred.data.numpy().ravel()
+
+
+	gpr_train_predictions_rerun = np.zeros([train_seq_length-1, output_size])
+	pred = y_noisy_train[0,:,None]
+	for j in range(train_seq_length):
+		# target = output_test[j,None]
+		# target_clean = output_clean_train[j,None]
+
+		# generate next-step ODE model prediction
+		tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+		# unnormalize model_input so that it can go through the ODE solver
+		y0 = f_unNormalize_minmax(normz_info, pred.numpy())
+		y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
+		my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+		pred = my_model_pred + gpr.predict(pred, return_std=False)
+
+		# compute losses
+		# total_loss_test += (pred - target.squeeze()).pow(2).sum()/2
+		# total_loss_clean_test += (pred - target_clean.squeeze()).pow(2).sum()/2
+		# pw_loss_test[j] = total_loss_test.numpy() / avg_output_test
+		# pw_loss_clean_test[j] = total_loss_clean_test.numpy() / avg_output_clean_test
+		gpr_train_predictions_rerun[j,:] = pred.data.numpy().ravel()
+
+	# write pw losses to file
+	gpr_pred_validity_vec_test = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
+	gpr_pred_validity_vec_clean_test = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
+	np.savetxt(output_dir+'/GPR_{0}_prediction_validity_time_test.txt'.format(input_style),gpr_pred_validity_vec_test)
+	np.savetxt(output_dir+'/GPR_{0}_prediction_validity_time_clean_test.txt'.format(input_style),gpr_pred_validity_vec_clean_test)
+
+	# plot forecast over test set
+	y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test)
+	y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
+	y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
+	gpr_train_predictions_orig_raw = f_unNormalize_Y(normz_info,gpr_train_predictions_orig)
+	gpr_train_predictions_rerun_raw = f_unNormalize_Y(normz_info,gpr_train_predictions_rerun)
+	gpr_test_predictions_raw = f_unNormalize_Y(normz_info,gpr_test_predictions)
+
+	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+	if not isinstance(ax_list,np.ndarray):
+		ax_list = [ax_list]
+
+	for kk in range(len(ax_list)):
+		ax1 = ax_list[kk]
+		t_plot = np.arange(0,round(len(y_noisy_train[n_plttrain:,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+		ax1.scatter(t_plot, y_noisy_train_raw[n_plttrain:,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+		ax1.plot(t_plot, y_clean_train_raw[n_plttrain:,plot_state_indices[kk]], color='red', label='clean data')
+		ax1.plot(t_plot, gpr_train_predictions_orig_raw[n_plttrain:,plot_state_indices[kk]], color='black', label='GP orig')
+		ax1.plot(t_plot, gpr_train_predictions_rerun_raw[n_plttrain:,plot_state_indices[kk]], color='blue', label='GP re-run')
+		ax1.set_xlabel('time')
+		ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)', color='red')
+		ax1.tick_params(axis='y', labelcolor='red')
+
+	ax_list[0].legend()
+
+	fig.suptitle('GPR {0} Training Fit'.format(input_style))
+	fig.savefig(fname=output_dir+'/GPR_{0}_train_fit_ode'.format(input_style))
+	plt.close(fig)
+
+
+	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+	if not isinstance(ax_list,np.ndarray):
+		ax_list = [ax_list]
+
+	# NOW, show testing fit
+	for kk in range(len(ax_list)):
+		ax3 = ax_list[kk]
+		t_plot = np.arange(0,len(y_clean_test[n_plttest:,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+		# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
+		ax3.plot(t_plot, y_clean_test_raw[n_plttest:,plot_state_indices[kk]], color='red', label='clean data')
+		ax3.plot(t_plot, gpr_test_predictions_raw[n_plttest:,plot_state_indices[kk]], color='black', label='NN fit')
+		ax3.set_xlabel('time')
+		ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
+		ax3.tick_params(axis='y', labelcolor='red')
+
+	ax_list[0].legend()
+
+	fig.suptitle('GPR {0} Testing fit'.format(input_style))
+	fig.savefig(fname=output_dir+'/GPR_{0}_test_fit_ode'.format(input_style))
+	plt.close(fig)
+
+
+
 def train_chaosRNN(forward,
 			y_clean_train, y_noisy_train,
 			y_clean_test, y_noisy_test,
@@ -355,15 +485,26 @@ def train_chaosRNN(forward,
 
 	# compute one-step-ahead model-based prediction for each point in the training set
 	if precompute_model:
-		model_pred = np.zeros((train_seq_length,output_size))
-		for j in range(train_seq_length):
+		model_pred = np.zeros((train_seq_length-1,output_size))
+		for j in range(train_seq_length-1):
 			tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 			# unnormalize model_input so that it can go through the ODE solver
 			y0 = f_unNormalize_minmax(normz_info, output_train[j,:].numpy())
 			y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
 			model_pred[j,:] = f_normalize_minmax(normz_info, y_out[-1,:])
 	else:
-		model_pred = [None for j in range(train_seq_length)]
+		model_pred = [None for j in range(train_seq_length-1)]
+
+	for input_style in [1,2]:
+		run_GP(input_style,
+				y_clean_train, y_noisy_train,
+				y_clean_test, y_noisy_test,
+				model_pred,
+				train_seq_length,
+				test_seq_length,
+				normz_info, model_params,
+				plot_state_indices,
+				output_dir)
 
 	# first, SHOW that a simple mechRNN can fit the data perfectly (if we are running a mechRNN)
 	if stack_hidden or stack_output:
