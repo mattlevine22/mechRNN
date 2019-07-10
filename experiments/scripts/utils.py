@@ -1593,6 +1593,9 @@ def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indi
 
 		for d in my_dirs:
 			d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
+			if 'GPR' in d_label:
+				continue
+
 			x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
 			x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
 
