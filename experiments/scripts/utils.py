@@ -570,7 +570,7 @@ def train_chaosRNN(forward,
 			i_loss = (pred.detach().squeeze() - output_test[i,None].squeeze()).pow(2).sum()
 			perf_total_loss_test += i_loss
 			# running_epoch_loss_test[j] = total_loss_test/(j+1)
-			perf_pw_loss_test[i] = i_loss**0.5 / avg_output_test
+			perf_pw_loss_test[i] = i_loss.pow(0.5).numpy() / avg_output_test
 
 		# get error metrics
 		perfect_test_loss = perf_total_loss_test.numpy() / test_seq_length
