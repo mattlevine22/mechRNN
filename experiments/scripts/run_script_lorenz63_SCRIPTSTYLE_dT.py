@@ -50,9 +50,10 @@ def main():
 
 		# master output directory name
 		init_output_dir = FLAGS.savedir + '_output' + str(i)
-		all_dirs = []
 
-		for delta_t in [0.01, 0.1, 0.2, 0.5, 1]:
+		for delta_t in [0.1,0.01,0.2]:
+			max_plot = int(np.floor(30./delta_t))
+			all_dirs = []
 			tspan = np.arange(0,FLAGS.n_sim_points) * delta_t
 
 			sim_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b, c)}
@@ -130,6 +131,7 @@ def main():
 				      rnn_model_params, hidden_size, n_epochs, lr,
 				      run_output_dir, normz_info, rnn_sim_model,
 				      stack_hidden=False, stack_output=False,
+				      max_plot=max_plot,
 				      compute_kl=FLAGS.compute_kl)
 
 					# # train on noisy data
@@ -225,6 +227,7 @@ def main():
 				      y_clean_test_norm, y_noisy_test_norm,
 				      rnn_BAD_model_params, hidden_size, n_epochs, lr,
 				      run_output_dir, normz_info_clean, rnn_sim_model,
+  				      max_plot=max_plot,
 				      compute_kl=FLAGS.compute_kl)
 
 				# train on noisy data
