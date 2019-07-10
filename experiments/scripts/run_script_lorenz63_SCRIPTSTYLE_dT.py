@@ -7,7 +7,7 @@ parser = argparse.ArgumentParser(description='mechRNN')
 parser.add_argument('--epoch', type=int, default=100, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.05, help='learning rate')
 parser.add_argument('--delta_t', type=float, default=0.01, help='time step of simulation')
-parser.add_argument('--t_end', type=float, default=1000, help='length of simulation')
+parser.add_argument('--n_sim_points', type=float, default=1000, help='total number of train+testing data points')
 parser.add_argument('--train_frac', type=float, default=0.6, help='fraction of simulated data for training')
 parser.add_argument('--savedir', type=str, default='default_output', help='parent dir of output')
 parser.add_argument('--model_solver', default=lorenz63, help='ode function')
@@ -52,9 +52,8 @@ def main():
 		init_output_dir = FLAGS.savedir + '_output' + str(i)
 		all_dirs = []
 
-		for delta_t in [0.01,0.1,0.5,1]:
-			delta_t = FLAGS.delta_t #0.01
-			tspan = np.arange(0,FLAGS.t_end,delta_t)  #np.arange(0,10000,delta_t)
+		for delta_t in [0.01, 0.1, 0.2, 0.5, 1]:
+			tspan = np.arange(0,FLAGS.n_sim_points) * delta_t
 
 			sim_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b, c)}
 			rnn_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b, c)}
