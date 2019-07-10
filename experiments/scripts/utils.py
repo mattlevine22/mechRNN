@@ -564,25 +564,36 @@ def train_chaosRNN(forward,
 		# hidden_state[0] = float(y_clean_test[0])
 		pred = output_train[-1,:,None]
 		perf_total_loss_test = 0
+		perf_total_loss_clean_test = 0
 		# running_epoch_loss_test = np.zeros(test_seq_length)
 		perf_pw_loss_test = np.zeros(test_seq_length)
+		perf_pw_loss_clean_test = np.zeros(test_seq_length)
 		for i in range(test_seq_length):
 			(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params)
 			# hidden_state = hidden_state
 			predictions[i,:] = pred.data.numpy().ravel()
 			i_loss = (pred.detach().squeeze() - output_test[i,None].squeeze()).pow(2).sum()
+			i_loss_clean = (pred.detach().squeeze() - output_clean_test[i,None].squeeze()).pow(2).sum()
 			perf_total_loss_test += i_loss
+			perf_total_loss_clean_test += i_loss_clean
 			# running_epoch_loss_test[j] = total_loss_test/(j+1)
 			perf_pw_loss_test[i] = i_loss.pow(0.5).numpy() / avg_output_test
+			perf_pw_loss_clean_test[i] = i_loss_clean.pow(0.5).numpy() / avg_output_clean_test
 
 		# get error metrics
 		perfect_test_loss = perf_total_loss_test.numpy() / test_seq_length
+		perfect_test_clean_loss = perf_total_loss_clean_test.numpy() / test_seq_length
 		perfect_t_valid = np.argmax(perf_pw_loss_test > err_thresh)*model_params['delta_t']
+		perfect_t_valid_clean = np.argmax(perf_pw_loss_clean_test > err_thresh)*model_params['delta_t']
 
 		with open(output_dir+'/perfectModel_loss_test.txt', "w") as f:
 			f.write(str(perfect_test_loss))
+		with open(output_dir+'/perfectModel_loss_clean_test.txt', "w") as f:
+			f.write(str(perfect_test_clean_loss))
 		with open(output_dir+'/perfectModel_validity_time_test.txt', "w") as f:
 			f.write(str(perfect_t_valid))
+		with open(output_dir+'/perfectModel_validity_time_clean_test.txt', "w") as f:
+			f.write(str(perfect_t_valid_clean))
 
 		# plot predictions vs truth
 		fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
