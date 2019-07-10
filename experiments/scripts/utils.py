@@ -1103,8 +1103,8 @@ def train_chaosRNN(forward,
 
 		x_train = pd.DataFrame(np.loadtxt(output_dir+'/loss_vec_train.txt'))
 		x_test = pd.DataFrame(np.loadtxt(output_dir+"/loss_vec_clean_test.txt"))
-		gpr1_valid_test = np.loadtxt(output_dir+'/GPR_1_prediction_validity_time_test.txt')
-		gpr2_valid_test = np.loadtxt(output_dir+'/GPR_2_prediction_validity_time_test.txt')
+		gpr1_valid_test = np.loadtxt(output_dir+'/GPR_1_prediction_validity_time_clean_test.txt')
+		gpr2_valid_test = np.loadtxt(output_dir+'/GPR_2_prediction_validity_time_clean_test.txt')
 		gpr1_test = np.loadtxt(output_dir+'/GPR_1_clean_loss_test.txt')
 		gpr2_test = np.loadtxt(output_dir+'/GPR_2_clean_loss_test.txt')
 
@@ -1575,8 +1575,8 @@ def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indi
 			x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
 
 			# get GPR fits
-			gpr1_valid_test = np.loadtxt(d+'/GPR_1_prediction_validity_time_test.txt')
-			gpr2_valid_test = np.loadtxt(d+'/GPR_2_prediction_validity_time_test.txt')
+			gpr1_valid_test = np.loadtxt(d+'/GPR_1_prediction_validity_time_clean_test.txt')
+			gpr2_valid_test = np.loadtxt(d+'/GPR_2_prediction_validity_time_clean_test.txt')
 			gpr1_test = np.loadtxt(d+'/GPR_1_clean_loss_test.txt')
 			gpr2_test = np.loadtxt(d+'/GPR_2_clean_loss_test.txt')
 
