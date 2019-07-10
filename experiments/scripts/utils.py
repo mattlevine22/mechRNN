@@ -1970,8 +1970,8 @@ def extract_hidden_size_performance(my_dirs, output_fname="./hidden_size_compari
 		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
 		my_hs = float([z.strip(hs_token) for z in d_label.split('_') if hs_token in z][-1])
 		try:
-			model_loss = np.loadtxt(d+'/perfectModel_loss_test.txt')
-			model_t_valid = np.loadtxt(d+'/perfectModel_validity_time_test.txt')
+			model_loss = np.loadtxt(d+'/perfectModel_loss_clean_test.txt')
+			model_t_valid = np.loadtxt(d+'/perfectModel_validity_time_clean_test.txt')
 			dict_performance['model']['mse'] += (float(model_loss),)
 			dict_performance['model']['t_valid'] += (float(model_t_valid),)
 		except:
