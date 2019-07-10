@@ -469,7 +469,7 @@ def train_chaosRNN(forward,
 			f_unNormalize_Y=f_unNormalize_minmax,
 			f_normalize_X = f_normalize_ztrans,
 			f_unNormalize_X = f_unNormalize_ztrans,
-			max_plot=2000, n_param_saves=None,
+			max_plot=None, n_param_saves=None,
 			err_thresh=0.4, plot_state_indices=None,
 			precompute_model=True, kde_func=kde_scipy,
 			compute_kl=False):
@@ -480,6 +480,9 @@ def train_chaosRNN(forward,
 	else:
 		print('Using regular torch.FloatTensor')
 		dtype = torch.FloatTensor
+
+	if max_plot is None:
+		max_plot = int(np.floor(30./model_params['delta_t']))
 
 	n_plttrain = min(max_plot,y_clean_train.shape[0])
 	n_plttest = min(max_plot,y_clean_test.shape[0])
