@@ -354,10 +354,12 @@ def run_GP(y_clean_train, y_noisy_train,
 		pred = my_model_pred + gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
 
 		# compute losses
-		total_loss_test += sum((pred - target)**2)/2
-		total_loss_clean_test += sum((pred - target_clean)**2)/2
-		pw_loss_test[j] = total_loss_test / avg_output_test
-		pw_loss_clean_test[j] = total_loss_clean_test / avg_output_clean_test
+		j_loss = sum((pred - target)**2)
+		j_loss_clean = sum((pred - target_clean)**2)
+		total_loss_test += j_loss
+		total_loss_clean_test += j_loss_clean
+		pw_loss_test[j] = j_loss**0.5 / avg_output_test
+		pw_loss_clean_test[j] = j_loss_clean**0.5 / avg_output_clean_test
 		gpr_test_predictions[j,:] = pred
 
 	total_loss_test = total_loss_test / test_seq_length
@@ -390,18 +392,6 @@ def run_GP(y_clean_train, y_noisy_train,
 		# pw_loss_clean_test[j] = total_loss_clean_test / avg_output_clean_test
 		gpr_train_predictions_rerun[j,:] = pred
 
-	# write pw losses to file
-	gpr_pred_validity_vec_test = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
-	gpr_pred_validity_vec_clean_test = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
-	with open(output_dir+'/GPR_{0}_prediction_validity_time_test.txt'.format(input_style), "w") as f:
-		f.write(str(gpr_pred_validity_vec_test))
-	with open(output_dir+'/GPR_{0}_prediction_validity_time_clean_test.txt'.format(input_style), "w") as f:
-		f.write(str(gpr_pred_validity_vec_clean_test))
-	with open(output_dir+'/GPR_{0}_loss_test.txt'.format(input_style), "w") as f:
-		f.write(str(total_loss_test))
-	with open(output_dir+'/GPR_{0}_clean_loss_test.txt'.format(input_style), "w") as f:
-		f.write(str(total_loss_clean_test))
-
 	# plot forecast over test set
 	y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test)
 	y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
@@ -416,11 +406,11 @@ def run_GP(y_clean_train, y_noisy_train,
 
 	for kk in range(len(ax_list)):
 		ax1 = ax_list[kk]
-		t_plot = np.arange(0,round(len(y_noisy_train[n_plttrain:,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
-		ax1.scatter(t_plot, y_noisy_train_raw[n_plttrain:,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
-		ax1.plot(t_plot, y_clean_train_raw[n_plttrain:,plot_state_indices[kk]], color='red', label='clean data')
-		ax1.plot(t_plot[1:], gpr_train_predictions_orig_raw[n_plttrain:,plot_state_indices[kk]], color='black', label='GP orig')
-		ax1.plot(t_plot[1:], gpr_train_predictions_rerun_raw[n_plttrain:,plot_state_indices[kk]], color='blue', label='GP re-run')
+		t_plot = np.arange(0,round(len(y_noisy_train[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+		ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+		ax1.plot(t_plot, y_clean_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', label='clean data')
+		ax1.plot(t_plot[1:], gpr_train_predictions_orig_raw[:n_plttrain-1,plot_state_indices[kk]], color='black', label='GP orig')
+		ax1.plot(t_plot[1:], gpr_train_predictions_rerun_raw[:n_plttrain-1,plot_state_indices[kk]], color='blue', label='GP re-run')
 		ax1.set_xlabel('time')
 		ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)', color='red')
 		ax1.tick_params(axis='y', labelcolor='red')
@@ -439,10 +429,10 @@ def run_GP(y_clean_train, y_noisy_train,
 	# NOW, show testing fit
 	for kk in range(len(ax_list)):
 		ax3 = ax_list[kk]
-		t_plot = np.arange(0,len(y_clean_test[n_plttest:,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+		t_plot = np.arange(0,len(y_clean_test[:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
 		# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-		ax3.plot(t_plot, y_clean_test_raw[n_plttest:,plot_state_indices[kk]], color='red', label='clean data')
-		ax3.plot(t_plot, gpr_test_predictions_raw[n_plttest:,plot_state_indices[kk]], color='black', label='NN fit')
+		ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
+		ax3.plot(t_plot, gpr_test_predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
 		ax3.set_xlabel('time')
 		ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
 		ax3.tick_params(axis='y', labelcolor='red')
@@ -452,6 +442,18 @@ def run_GP(y_clean_train, y_noisy_train,
 	fig.suptitle('GPR {0} Testing fit'.format(input_style))
 	fig.savefig(fname=output_dir+'/GPR_{0}_test_fit_ode'.format(input_style))
 	plt.close(fig)
+
+	# write pw losses to file
+	gpr_pred_validity_vec_test = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
+	gpr_pred_validity_vec_clean_test = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
+	with open(output_dir+'/GPR_{0}_prediction_validity_time_test.txt'.format(input_style), "w") as f:
+		f.write(str(gpr_pred_validity_vec_test))
+	with open(output_dir+'/GPR_{0}_prediction_validity_time_clean_test.txt'.format(input_style), "w") as f:
+		f.write(str(gpr_pred_validity_vec_clean_test))
+	with open(output_dir+'/GPR_{0}_loss_test.txt'.format(input_style), "w") as f:
+		f.write(str(total_loss_test))
+	with open(output_dir+'/GPR_{0}_clean_loss_test.txt'.format(input_style), "w") as f:
+		f.write(str(total_loss_clean_test))
 
 
 
@@ -479,8 +481,8 @@ def train_chaosRNN(forward,
 		print('Using regular torch.FloatTensor')
 		dtype = torch.FloatTensor
 
-	n_plttrain = y_clean_train.shape[0] - min(max_plot,y_clean_train.shape[0])
-	n_plttest = y_clean_test.shape[0] - min(max_plot,y_clean_test.shape[0])
+	n_plttrain = min(max_plot,y_clean_train.shape[0])
+	n_plttest = min(max_plot,y_clean_test.shape[0])
 
 	if not plot_state_indices:
 		plot_state_indices = np.arange(y_clean_test.shape[1])
@@ -565,9 +567,10 @@ def train_chaosRNN(forward,
 			(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params)
 			# hidden_state = hidden_state
 			predictions[i,:] = pred.data.numpy().ravel()
-			perf_total_loss_test += (pred.detach().squeeze() - output_test[i,None].squeeze()).pow(2).sum()/2
+			i_loss = (pred.detach().squeeze() - output_test[i,None].squeeze()).pow(2).sum()
+			perf_total_loss_test += i_loss
 			# running_epoch_loss_test[j] = total_loss_test/(j+1)
-			perf_pw_loss_test[i] = perf_total_loss_test.numpy() / avg_output_test
+			perf_pw_loss_test[i] = i_loss**0.5 / avg_output_test
 
 		# get error metrics
 		perfect_test_loss = perf_total_loss_test.numpy() / test_seq_length
@@ -585,9 +588,9 @@ def train_chaosRNN(forward,
 
 		for kk in range(len(ax_list)):
 			ax1 = ax_list[kk]
-			ax1.scatter(np.arange(len(y_noisy_test[n_plttest:,plot_state_indices[kk]])), y_noisy_test[n_plttest:,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
-			ax1.plot(y_clean_test[n_plttest:,kk], color='red', label='clean data')
-			ax1.plot(predictions[n_plttest:,kk], ':' ,color='red', label='NN trivial fit')
+			ax1.scatter(np.arange(len(y_noisy_test[:n_plttest,plot_state_indices[kk]])), y_noisy_test[:n_plttest,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+			ax1.plot(y_clean_test[:n_plttest,kk], color='red', label='clean data')
+			ax1.plot(predictions[:n_plttest,kk], ':' ,color='red', label='NN trivial fit')
 			ax1.set_xlabel('time')
 			ax1.set_ylabel(model_params['state_names'][kk] + '(t)', color='red')
 			ax1.tick_params(axis='y', labelcolor='red')
@@ -758,12 +761,14 @@ def train_chaosRNN(forward,
 			target = output_test[j,None]
 			target_clean = output_clean_test[j,None]
 			(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
-			total_loss_test += (pred.detach().squeeze() - target.squeeze()).pow(2).sum()/2
-			total_loss_clean_test += (pred.detach().squeeze() - target_clean.squeeze()).pow(2).sum()/2
+			j_loss = (pred.detach().squeeze() - target.squeeze()).pow(2).sum()
+			j_loss_clean = (pred.detach().squeeze() - target_clean.squeeze()).pow(2).sum()
+			total_loss_test += j_loss
+			total_loss_clean_test += j_loss_clean
 			running_epoch_loss_clean_test[j] = total_loss_clean_test/(j+1)
 			running_epoch_loss_test[j] = total_loss_test/(j+1)
-			pw_loss_test[j] = total_loss_test.numpy() / avg_output_test
-			pw_loss_clean_test[j] = total_loss_clean_test.numpy() / avg_output_clean_test
+			pw_loss_test[j] = j_loss.pow(0.5).numpy() / avg_output_test
+			pw_loss_clean_test[j] = j_loss_clean.pow(0.5).numpy() / avg_output_clean_test
 			pred = pred.detach()
 			long_predictions[j,:] = pred.data.numpy().ravel()
 			hidden_state = hidden_state.detach()
@@ -822,10 +827,10 @@ def train_chaosRNN(forward,
 			# predictions_raw = predictions
 			for kk in range(len(ax_list)):
 				ax1 = ax_list[kk]
-				t_plot = np.arange(0,round(len(y_noisy_train[n_plttrain:,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
-				ax1.scatter(t_plot, y_noisy_train_raw[n_plttrain:,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
-				ax1.plot(t_plot, y_clean_train_raw[n_plttrain:,plot_state_indices[kk]], color='red', label='clean data')
-				ax1.plot(t_plot, predictions_raw[n_plttrain:,plot_state_indices[kk]], color='black', label='NN fit')
+				t_plot = np.arange(0,round(len(y_noisy_train[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+				ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+				ax1.plot(t_plot, y_clean_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', label='clean data')
+				ax1.plot(t_plot, predictions_raw[:n_plttrain,plot_state_indices[kk]], color='black', label='NN fit')
 				ax1.set_xlabel('time')
 				ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)', color='red')
 				ax1.tick_params(axis='y', labelcolor='red')
@@ -843,8 +848,8 @@ def train_chaosRNN(forward,
 				ax_list = [ax_list]
 			for kk in range(len(ax_list)):
 				ax1 = ax_list[kk]
-				t_plot = np.arange(0,round(len(saved_hidden_states[n_plttrain:,kk])*model_params['delta_t'],8),model_params['delta_t'])
-				ax1.plot(t_plot, saved_hidden_states[n_plttrain:,kk], color='red', label='clean data')
+				t_plot = np.arange(0,round(len(saved_hidden_states[:n_plttrain,kk])*model_params['delta_t'],8),model_params['delta_t'])
+				ax1.plot(t_plot, saved_hidden_states[:n_plttrain,kk], color='red', label='clean data')
 				ax1.set_xlabel('time')
 				ax1.set_ylabel('h_{}'.format(kk), color='red')
 				ax1.tick_params(axis='y', labelcolor='red')
@@ -874,10 +879,10 @@ def train_chaosRNN(forward,
 			predictions_raw = f_unNormalize_Y(normz_info,predictions)
 			for kk in range(len(ax_list)):
 				ax3 = ax_list[kk]
-				t_plot = np.arange(0,len(y_clean_test[n_plttest:,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+				t_plot = np.arange(0,len(y_clean_test[:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
 				# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-				ax3.plot(t_plot, y_clean_test_raw[n_plttest:,plot_state_indices[kk]], color='red', label='clean data')
-				ax3.plot(t_plot, predictions_raw[n_plttest:,plot_state_indices[kk]], color='black', label='NN fit')
+				ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
+				ax3.plot(t_plot, predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
 				ax3.set_xlabel('time')
 				ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
 				ax3.tick_params(axis='y', labelcolor='red')
@@ -895,8 +900,8 @@ def train_chaosRNN(forward,
 				ax_list = [ax_list]
 			for kk in range(len(ax_list)):
 				ax1 = ax_list[kk]
-				t_plot = np.arange(0,round(len(saved_hidden_states[n_plttest:,kk])*model_params['delta_t'],8),model_params['delta_t'])
-				ax1.plot(t_plot, saved_hidden_states[n_plttest:,kk], color='red', label='clean data')
+				t_plot = np.arange(0,round(len(saved_hidden_states[:n_plttest,kk])*model_params['delta_t'],8),model_params['delta_t'])
+				ax1.plot(t_plot, saved_hidden_states[:n_plttest,kk], color='red', label='clean data')
 				ax1.set_xlabel('time')
 				ax1.set_ylabel('h_{}'.format(kk), color='red')
 				ax1.tick_params(axis='y', labelcolor='red')
@@ -1016,10 +1021,10 @@ def train_chaosRNN(forward,
 	predictions_raw = f_unNormalize_Y(normz_info,predictions)
 	for kk in range(len(ax_list)):
 		ax1 = ax_list[kk]
-		t_plot = np.arange(0,round(len(y_noisy_train_raw[n_plttrain:,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
-		ax1.scatter(t_plot, y_noisy_train_raw[n_plttrain:,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
-		ax1.plot(t_plot, y_clean_train_raw[n_plttrain:,plot_state_indices[kk]], color='red', label='clean data')
-		ax1.plot(t_plot, predictions_raw[n_plttrain:,plot_state_indices[kk]], color='black', label='NN fit')
+		t_plot = np.arange(0,round(len(y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+		ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+		ax1.plot(t_plot, y_clean_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', label='clean data')
+		ax1.plot(t_plot, predictions_raw[:n_plttrain,plot_state_indices[kk]], color='black', label='NN fit')
 		ax1.set_xlabel('time')
 		ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
 		ax1.tick_params(axis='y', labelcolor='red')
@@ -1046,10 +1051,10 @@ def train_chaosRNN(forward,
 	predictions_raw = f_unNormalize_Y(normz_info,predictions)
 	for kk in range(len(ax_list)):
 		ax3 = ax_list[kk]
-		t_plot = np.arange(0,len(y_clean_test_raw[n_plttest:,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+		t_plot = np.arange(0,len(y_clean_test_raw[:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
 		# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-		ax3.plot(t_plot, y_clean_test_raw[n_plttest:,plot_state_indices[kk]], color='red', label='clean data')
-		ax3.plot(t_plot, predictions_raw[n_plttest:,plot_state_indices[kk]], color='black', label='NN fit')
+		ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
+		ax3.plot(t_plot, predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
 		ax3.set_xlabel('time')
 		ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
 		ax3.tick_params(axis='y', labelcolor='red')
