@@ -318,11 +318,11 @@ def run_GP(y_clean_train, y_noisy_train,
 			output_dir,
 			n_plttrain,
 			n_plttest,
-			err_thresh, input_style=1):
+			err_thresh, gp_style=1):
 
-	if input_style==1:
+	if gp_style==1:
 		X = y_noisy_train[:-1]
-	elif input_style==2:
+	elif gp_style==2:
 		X = np.concatenate((y_noisy_train[:-1],model_pred),axis=1)
 
 	# NEW. learn residuals with GP
@@ -347,9 +347,9 @@ def run_GP(y_clean_train, y_noisy_train,
 		y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
 		my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
 
-		if input_style==1:
+		if gp_style==1:
 			x = pred
-		elif input_style==2:
+		elif gp_style==2:
 			x = np.concatenate((pred, my_model_pred))
 		pred = my_model_pred + gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
 
@@ -378,9 +378,9 @@ def run_GP(y_clean_train, y_noisy_train,
 		y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
 		my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
 
-		if input_style==1:
+		if gp_style==1:
 			x = pred
-		elif input_style==2:
+		elif gp_style==2:
 			x = np.concatenate((pred, my_model_pred))
 
 		pred = my_model_pred + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
@@ -417,8 +417,8 @@ def run_GP(y_clean_train, y_noisy_train,
 
 	ax_list[0].legend()
 
-	fig.suptitle('GPR {0} Training Fit'.format(input_style))
-	fig.savefig(fname=output_dir+'/GPR_{0}_train_fit_ode'.format(input_style))
+	fig.suptitle('GPR {0} Training Fit'.format(gp_style))
+	fig.savefig(fname=output_dir+'/GPR_{0}_train_fit_ode'.format(gp_style))
 	plt.close(fig)
 
 
@@ -439,20 +439,20 @@ def run_GP(y_clean_train, y_noisy_train,
 
 	ax_list[0].legend()
 
-	fig.suptitle('GPR {0} Testing fit'.format(input_style))
-	fig.savefig(fname=output_dir+'/GPR_{0}_test_fit_ode'.format(input_style))
+	fig.suptitle('GPR {0} Testing fit'.format(gp_style))
+	fig.savefig(fname=output_dir+'/GPR_{0}_test_fit_ode'.format(gp_style))
 	plt.close(fig)
 
 	# write pw losses to file
 	gpr_pred_validity_vec_test = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
 	gpr_pred_validity_vec_clean_test = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
-	with open(output_dir+'/GPR_{0}_prediction_validity_time_test.txt'.format(input_style), "w") as f:
+	with open(output_dir+'/GPR_{0}_prediction_validity_time_test.txt'.format(gp_style), "w") as f:
 		f.write(str(gpr_pred_validity_vec_test))
-	with open(output_dir+'/GPR_{0}_prediction_validity_time_clean_test.txt'.format(input_style), "w") as f:
+	with open(output_dir+'/GPR_{0}_prediction_validity_time_clean_test.txt'.format(gp_style), "w") as f:
 		f.write(str(gpr_pred_validity_vec_clean_test))
-	with open(output_dir+'/GPR_{0}_loss_test.txt'.format(input_style), "w") as f:
+	with open(output_dir+'/GPR_{0}_loss_test.txt'.format(gp_style), "w") as f:
 		f.write(str(total_loss_test))
-	with open(output_dir+'/GPR_{0}_clean_loss_test.txt'.format(input_style), "w") as f:
+	with open(output_dir+'/GPR_{0}_clean_loss_test.txt'.format(gp_style), "w") as f:
 		f.write(str(total_loss_clean_test))
 
 
@@ -472,7 +472,7 @@ def train_chaosRNN(forward,
 			max_plot=None, n_param_saves=None,
 			err_thresh=0.4, plot_state_indices=None,
 			precompute_model=True, kde_func=kde_scipy,
-			compute_kl=False):
+			compute_kl=False, gp_only=False, gp_style=None):
 
 	if torch.cuda.is_available():
 		print('Using CUDA FloatTensor')
@@ -525,7 +525,12 @@ def train_chaosRNN(forward,
 	else:
 		model_pred = [None for j in range(train_seq_length-1)]
 
-	for input_style in [2,1]:
+	if gp_style is None:
+		style_list = [2,1]
+	else:
+		style_list = [gp_style]
+
+	for gp_style in style_list:
 		run_GP(y_clean_train, y_noisy_train,
 				y_clean_test, y_noisy_test,
 				model,f_unNormalize_Y,
@@ -541,7 +546,10 @@ def train_chaosRNN(forward,
 				n_plttrain,
 				n_plttest,
 				err_thresh,
-				input_style)
+				gp_style)
+
+	if gp_only:
+		return
 
 	# first, SHOW that a simple mechRNN can fit the data perfectly (if we are running a mechRNN)
 	if stack_hidden or stack_output:

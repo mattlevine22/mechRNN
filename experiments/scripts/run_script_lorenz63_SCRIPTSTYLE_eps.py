@@ -221,6 +221,18 @@ def main():
 			      run_output_dir, normz_info_clean, rnn_sim_model,
 			      compute_kl=FLAGS.compute_kl)
 
+				# GP ONLY
+				for gp_style in [1,2]:
+					run_output_dir = output_dir + '/iter{0}'.format(n) + '/hybridGPR{2}_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size, gp_style)
+					all_dirs.append(run_output_dir)
+					# torch.manual_seed(0)
+					train_chaosRNN(forward,
+				      y_clean_train_norm, y_clean_train_norm,
+				      y_clean_test_norm, y_noisy_test_norm,
+				      rnn_BAD_model_params, hidden_size, n_epochs, lr,
+				      run_output_dir, normz_info_clean, rnn_sim_model,
+  				      max_plot=max_plot,
+				      compute_kl=FLAGS.compute_kl, gp_only=True, gp_style=gp_style)
 				# train on noisy data
 				# normz_info = normz_info_noisy
 				# (y_clean_train_norm, y_noisy_train_norm,
