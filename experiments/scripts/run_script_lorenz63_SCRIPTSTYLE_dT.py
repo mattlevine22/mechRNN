@@ -51,7 +51,7 @@ def main():
 		# master output directory name
 		init_output_dir = FLAGS.savedir + '_output' + str(i)
 
-		for delta_t in [0.1,0.01,0.2]:
+		for delta_t in [0.1, 0.01, 0.2, 0.5, 1]:
 			all_dirs = []
 			tspan = np.arange(0,FLAGS.n_sim_points) * delta_t
 
