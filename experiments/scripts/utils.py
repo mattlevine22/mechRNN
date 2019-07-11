@@ -321,9 +321,9 @@ def run_GP(y_clean_train, y_noisy_train,
 			err_thresh, gp_style=1, gp_only=False):
 
 	if gp_only:
-		gp_nm = 'GPR{0}_'.format(gp_style)
-	else:
 		gp_nm = ''
+	else:
+		gp_nm = 'GPR{0}_'.format(gp_style)
 
 	if gp_style==1:
 		X = y_noisy_train[:-1]
