@@ -2207,15 +2207,20 @@ def extract_hidden_size_performance(my_dirs, output_fname="./hidden_size_compari
 def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", win=1000, many_epochs=True, dt_token='dt_'):
 
 	# first, get sizes of things...max window size is 10% of whole test set.
-	d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
-	x_test = pd.DataFrame(np.loadtxt(my_dirs[0]+"/loss_vec_clean_test.txt"))
+	init_dirs = [x for x in my_dirs if 'RNN' in x.split('/')[-1]]
+	# d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
+	x_test = pd.DataFrame(np.loadtxt(init_dirs[0]+"/loss_vec_clean_test.txt"))
 	n_vals = len(x_test)
 
 	win = min(win,n_vals//3)
 	model_performance = {'mse':(), 't_valid':()}
 	rnn_performance = {'mse':{}, 'mse_time':{}, 't_valid':{}, 't_valid_time':{}}
 	hybrid_performance = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
-	dict_performance = {'rnn':rnn_performance, 'hybrid': hybrid_performance, 'model':model_performance}
+	dict_performance = {'rnn':rnn_performance,
+						'mechRNN': {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}},
+						'hybrid GPR1': {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}},
+						'hybrid GPR2': {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}},
+						 'model': model_performance}
 	for d in my_dirs:
 		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
 		my_dt = float(d.split("/")[-3].lstrip(dt_token))
@@ -2228,11 +2233,18 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 			pass
 
 		# x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
-		x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
+		try:
+			x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
+		except:
+			x_test = np.loadtxt(d+"/clean_loss_test.txt") # for GPR runs, which don't have epochs
+
 		if many_epochs:
-			x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt"))
+			try:
+				x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt"))
+			except:
+				x_valid_test = np.loadtxt(d+"/prediction_validity_time_clean_test.txt")
 			# x_kl_test = pd.DataFrame(np.loadtxt(d+"/kl_vec_inv_clean_test.txt"))
-		if win:
+		if win and 'GPR' not in d_label:
 			# x_train = x_train.rolling(win).mean()
 			x_test = x_test.rolling(win).mean()
 			if many_epochs:
@@ -2246,9 +2258,13 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 		if 'vanilla' in d_label:
 			mtype = 'rnn'
 		elif 'mech' in d_label:
-			mtype = 'hybrid'
+			mtype = 'mechRNN'
+		elif 'GPR1' in d_label:
+			mtype = 'hybrid GPR1'
+		elif 'GPR2' in d_label:
+			mtype = 'hybrid GPR2'
 		else:
-			pass
+			pdb.set_trace()
 
 		if my_dt in dict_performance[mtype]['mse']:
 			dict_performance[mtype]['mse'][my_dt] += (float(np.min(x_test)),)
@@ -2264,11 +2280,24 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 				dict_performance[mtype]['t_valid_time'][my_dt] = (float(np.nanargmax(x_valid_test)),)
 
 	# now summarize
-	test_loss_mins = {key: np.min(dict_performance['hybrid']['mse'][key]) for key in dict_performance['hybrid']['mse']}
-	test_loss_maxes = {key: np.max(dict_performance['hybrid']['mse'][key]) for key in dict_performance['hybrid']['mse']}
-	test_loss_means = {key: np.mean(dict_performance['hybrid']['mse'][key]) for key in dict_performance['hybrid']['mse']}
-	test_loss_medians = {key: np.median(dict_performance['hybrid']['mse'][key]) for key in dict_performance['hybrid']['mse']}
-	test_loss_stds = {key: np.std(dict_performance['hybrid']['mse'][key]) for key in dict_performance['hybrid']['mse']}
+	test_loss_mins = {key: np.min(dict_performance['mechRNN']['mse'][key]) for key in dict_performance['mechRNN']['mse']}
+	test_loss_maxes = {key: np.max(dict_performance['mechRNN']['mse'][key]) for key in dict_performance['mechRNN']['mse']}
+	test_loss_means = {key: np.mean(dict_performance['mechRNN']['mse'][key]) for key in dict_performance['mechRNN']['mse']}
+	test_loss_medians = {key: np.median(dict_performance['mechRNN']['mse'][key]) for key in dict_performance['mechRNN']['mse']}
+	test_loss_stds = {key: np.std(dict_performance['mechRNN']['mse'][key]) for key in dict_performance['mechRNN']['mse']}
+
+	gpr1_test_loss_mins = {key: np.min(dict_performance['hybrid GPR1']['mse'][key]) for key in dict_performance['hybrid GPR1']['mse']}
+	gpr1_test_loss_maxes = {key: np.max(dict_performance['hybrid GPR1']['mse'][key]) for key in dict_performance['hybrid GPR1']['mse']}
+	gpr1_test_loss_means = {key: np.mean(dict_performance['hybrid GPR1']['mse'][key]) for key in dict_performance['hybrid GPR1']['mse']}
+	gpr1_test_loss_medians = {key: np.median(dict_performance['hybrid GPR1']['mse'][key]) for key in dict_performance['hybrid GPR1']['mse']}
+	gpr1_test_loss_stds = {key: np.std(dict_performance['hybrid GPR1']['mse'][key]) for key in dict_performance['hybrid GPR1']['mse']}
+
+	gpr2_test_loss_mins = {key: np.min(dict_performance['hybrid GPR2']['mse'][key]) for key in dict_performance['hybrid GPR2']['mse']}
+	gpr2_test_loss_maxes = {key: np.max(dict_performance['hybrid GPR2']['mse'][key]) for key in dict_performance['hybrid GPR2']['mse']}
+	gpr2_test_loss_means = {key: np.mean(dict_performance['hybrid GPR2']['mse'][key]) for key in dict_performance['hybrid GPR2']['mse']}
+	gpr2_test_loss_medians = {key: np.median(dict_performance['hybrid GPR2']['mse'][key]) for key in dict_performance['hybrid GPR2']['mse']}
+	gpr2_test_loss_stds = {key: np.std(dict_performance['hybrid GPR2']['mse'][key]) for key in dict_performance['hybrid GPR2']['mse']}
+
 	rnn_test_loss_mins = {key: np.min(dict_performance['rnn']['mse'][key]) for key in dict_performance['rnn']['mse']}
 	rnn_test_loss_maxes = {key: np.max(dict_performance['rnn']['mse'][key]) for key in dict_performance['rnn']['mse']}
 	rnn_test_loss_means = {key: np.mean(dict_performance['rnn']['mse'][key]) for key in dict_performance['rnn']['mse']}
@@ -2280,17 +2309,30 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 	ode_test_loss_medians = np.median(dict_performance['model']['mse'])
 	ode_test_loss_stds = np.std(dict_performance['model']['mse'])
 
-
 	# plot summary
 	fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1,
 		figsize = [10, 10],
 		sharey=False, sharex=False)
 
+	# mechRNN
 	eps_vec = sorted(test_loss_medians.keys())
 	median_vec = [test_loss_medians[eps] for eps in eps_vec]
 	std_vec = [test_loss_stds[eps] for eps in eps_vec]
+	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='mechRNN (eps=0.05)', color='blue')
 
-	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN (eps=0.05)', color='blue')
+	# Hybrid GPR 1
+	eps_vec = sorted(gpr1_test_loss_medians.keys())
+	median_vec = [gpr1_test_loss_medians[eps] for eps in eps_vec]
+	std_vec = [gpr1_test_loss_stds[eps] for eps in eps_vec]
+	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 1 (eps=0.05)', color='green', linestyle=':')
+
+	# Hybrid GPR 1
+	eps_vec = sorted(gpr2_test_loss_medians.keys())
+	median_vec = [gpr2_test_loss_medians[eps] for eps in eps_vec]
+	std_vec = [gpr2_test_loss_stds[eps] for eps in eps_vec]
+	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 2 (eps=0.05)', color='green', linestyle='--')
+
+
 	ax1.set_xlabel(r'$\Delta t$')
 	ax1.set_ylabel('Test Loss (logMSE)')
 
@@ -2308,11 +2350,23 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 	ax1.legend()
 
 	if many_epochs:
-		t_valid_mins = {key: np.min(dict_performance['hybrid']['t_valid'][key]) for key in dict_performance['hybrid']['t_valid']}
-		t_valid_maxes = {key: np.max(dict_performance['hybrid']['t_valid'][key]) for key in dict_performance['hybrid']['t_valid']}
-		t_valid_means = {key: np.mean(dict_performance['hybrid']['t_valid'][key]) for key in dict_performance['hybrid']['t_valid']}
-		t_valid_medians = {key: np.median(dict_performance['hybrid']['t_valid'][key]) for key in dict_performance['hybrid']['t_valid']}
-		t_valid_stds = {key: np.std(dict_performance['hybrid']['t_valid'][key]) for key in dict_performance['hybrid']['t_valid']}
+		t_valid_mins = {key: np.min(dict_performance['mechRNN']['t_valid'][key]) for key in dict_performance['mechRNN']['t_valid']}
+		t_valid_maxes = {key: np.max(dict_performance['mechRNN']['t_valid'][key]) for key in dict_performance['mechRNN']['t_valid']}
+		t_valid_means = {key: np.mean(dict_performance['mechRNN']['t_valid'][key]) for key in dict_performance['mechRNN']['t_valid']}
+		t_valid_medians = {key: np.median(dict_performance['mechRNN']['t_valid'][key]) for key in dict_performance['mechRNN']['t_valid']}
+		t_valid_stds = {key: np.std(dict_performance['mechRNN']['t_valid'][key]) for key in dict_performance['mechRNN']['t_valid']}
+
+		gpr1_t_valid_mins = {key: np.min(dict_performance['hybrid GPR1']['t_valid'][key]) for key in dict_performance['hybrid GPR1']['t_valid']}
+		gpr1_t_valid_maxes = {key: np.max(dict_performance['hybrid GPR1']['t_valid'][key]) for key in dict_performance['hybrid GPR1']['t_valid']}
+		gpr1_t_valid_means = {key: np.mean(dict_performance['hybrid GPR1']['t_valid'][key]) for key in dict_performance['hybrid GPR1']['t_valid']}
+		gpr1_t_valid_medians = {key: np.median(dict_performance['hybrid GPR1']['t_valid'][key]) for key in dict_performance['hybrid GPR1']['t_valid']}
+		gpr1_t_valid_stds = {key: np.std(dict_performance['hybrid GPR1']['t_valid'][key]) for key in dict_performance['hybrid GPR1']['t_valid']}
+
+		gpr2_t_valid_mins = {key: np.min(dict_performance['hybrid GPR2']['t_valid'][key]) for key in dict_performance['hybrid GPR2']['t_valid']}
+		gpr2_t_valid_maxes = {key: np.max(dict_performance['hybrid GPR2']['t_valid'][key]) for key in dict_performance['hybrid GPR2']['t_valid']}
+		gpr2_t_valid_means = {key: np.mean(dict_performance['hybrid GPR2']['t_valid'][key]) for key in dict_performance['hybrid GPR2']['t_valid']}
+		gpr2_t_valid_medians = {key: np.median(dict_performance['hybrid GPR2']['t_valid'][key]) for key in dict_performance['hybrid GPR2']['t_valid']}
+		gpr2_t_valid_stds = {key: np.std(dict_performance['hybrid GPR2']['t_valid'][key]) for key in dict_performance['hybrid GPR2']['t_valid']}
 
 		rnn_t_valid_mins = {key: np.min(dict_performance['rnn']['t_valid'][key]) for key in dict_performance['rnn']['t_valid']}
 		rnn_t_valid_maxes = {key: np.max(dict_performance['rnn']['t_valid'][key]) for key in dict_performance['rnn']['t_valid']}
@@ -2326,11 +2380,24 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 		ode_t_valid_medians = np.median(dict_performance['model']['t_valid'])
 		ode_t_valid_stds = np.std(dict_performance['model']['t_valid'])
 
+		# mechRNN
 		eps_vec = sorted(t_valid_medians.keys())
 		median_vec = [t_valid_medians[eps] for eps in eps_vec]
 		std_vec = [t_valid_stds[eps] for eps in eps_vec]
+		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='mechRNN (eps=0.05)', color='blue')
 
-		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN (eps=0.05)', color='blue')
+		# Hybrid GPR 1
+		eps_vec = sorted(gpr1_t_valid_medians.keys())
+		median_vec = [gpr1_t_valid_medians[eps] for eps in eps_vec]
+		std_vec = [gpr1_t_valid_stds[eps] for eps in eps_vec]
+		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 1 (eps=0.05)', color='green', linestyle=':')
+
+		# Hybrid GPR 2
+		eps_vec = sorted(gpr2_t_valid_medians.keys())
+		median_vec = [gpr2_t_valid_medians[eps] for eps in eps_vec]
+		std_vec = [gpr2_t_valid_stds[eps] for eps in eps_vec]
+		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 2 (eps=0.05)', color='green', linestyle='--')
+
 		ax2.set_xlabel(r'$\Delta t$')
 		ax2.set_ylabel('Validity Time')
 
@@ -2351,11 +2418,11 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 	plt.close(fig)
 
 	# plot summary of Time to Train
-	test_loss_mins = {key: np.min(dict_performance['hybrid']['mse_time'][key]) for key in dict_performance['hybrid']['mse_time']}
-	test_loss_maxes = {key: np.max(dict_performance['hybrid']['mse_time'][key]) for key in dict_performance['hybrid']['mse_time']}
-	test_loss_means = {key: np.mean(dict_performance['hybrid']['mse_time'][key]) for key in dict_performance['hybrid']['mse_time']}
-	test_loss_medians = {key: np.median(dict_performance['hybrid']['mse_time'][key]) for key in dict_performance['hybrid']['mse_time']}
-	test_loss_stds = {key: np.std(dict_performance['hybrid']['mse_time'][key]) for key in dict_performance['hybrid']['mse_time']}
+	test_loss_mins = {key: np.min(dict_performance['mechRNN']['mse_time'][key]) for key in dict_performance['mechRNN']['mse_time']}
+	test_loss_maxes = {key: np.max(dict_performance['mechRNN']['mse_time'][key]) for key in dict_performance['mechRNN']['mse_time']}
+	test_loss_means = {key: np.mean(dict_performance['mechRNN']['mse_time'][key]) for key in dict_performance['mechRNN']['mse_time']}
+	test_loss_medians = {key: np.median(dict_performance['mechRNN']['mse_time'][key]) for key in dict_performance['mechRNN']['mse_time']}
+	test_loss_stds = {key: np.std(dict_performance['mechRNN']['mse_time'][key]) for key in dict_performance['mechRNN']['mse_time']}
 	rnn_test_loss_mins = {key: np.min(dict_performance['rnn']['mse_time'][key]) for key in dict_performance['rnn']['mse_time']}
 	rnn_test_loss_maxes = {key: np.max(dict_performance['rnn']['mse_time'][key]) for key in dict_performance['rnn']['mse_time']}
 	rnn_test_loss_means = {key: np.mean(dict_performance['rnn']['mse_time'][key]) for key in dict_performance['rnn']['mse_time']}
@@ -2376,7 +2443,7 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 	median_vec = [test_loss_medians[eps] for eps in eps_vec]
 	std_vec = [test_loss_stds[eps] for eps in eps_vec]
 
-	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN (eps=0.05)', color='blue')
+	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='mechRNN (eps=0.05)', color='blue')
 	ax1.set_xlabel(r'$\Delta t$')
 	ax1.set_ylabel('Train time (opt MSE)')
 
@@ -2394,11 +2461,11 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 	ax1.legend()
 
 	if many_epochs:
-		t_valid_mins = {key: np.min(dict_performance['hybrid']['t_valid_time'][key]) for key in dict_performance['hybrid']['t_valid_time']}
-		t_valid_maxes = {key: np.max(dict_performance['hybrid']['t_valid_time'][key]) for key in dict_performance['hybrid']['t_valid_time']}
-		t_valid_means = {key: np.mean(dict_performance['hybrid']['t_valid_time'][key]) for key in dict_performance['hybrid']['t_valid_time']}
-		t_valid_medians = {key: np.median(dict_performance['hybrid']['t_valid_time'][key]) for key in dict_performance['hybrid']['t_valid_time']}
-		t_valid_stds = {key: np.std(dict_performance['hybrid']['t_valid_time'][key]) for key in dict_performance['hybrid']['t_valid_time']}
+		t_valid_mins = {key: np.min(dict_performance['mechRNN']['t_valid_time'][key]) for key in dict_performance['mechRNN']['t_valid_time']}
+		t_valid_maxes = {key: np.max(dict_performance['mechRNN']['t_valid_time'][key]) for key in dict_performance['mechRNN']['t_valid_time']}
+		t_valid_means = {key: np.mean(dict_performance['mechRNN']['t_valid_time'][key]) for key in dict_performance['mechRNN']['t_valid_time']}
+		t_valid_medians = {key: np.median(dict_performance['mechRNN']['t_valid_time'][key]) for key in dict_performance['mechRNN']['t_valid_time']}
+		t_valid_stds = {key: np.std(dict_performance['mechRNN']['t_valid_time'][key]) for key in dict_performance['mechRNN']['t_valid_time']}
 
 		rnn_t_valid_mins = {key: np.min(dict_performance['rnn']['t_valid_time'][key]) for key in dict_performance['rnn']['t_valid_time']}
 		rnn_t_valid_maxes = {key: np.max(dict_performance['rnn']['t_valid_time'][key]) for key in dict_performance['rnn']['t_valid_time']}
@@ -2416,7 +2483,7 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 		median_vec = [t_valid_medians[eps] for eps in eps_vec]
 		std_vec = [t_valid_stds[eps] for eps in eps_vec]
 
-		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN (eps=0.05)', color='blue')
+		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='mechRNN (eps=0.05)', color='blue')
 		ax2.set_xlabel(r'$\Delta t$')
 		ax2.set_ylabel('Train time (opt Validity Time)')
 
