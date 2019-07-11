@@ -7,7 +7,7 @@ parser = argparse.ArgumentParser(description='mechRNN')
 parser.add_argument('--epoch', type=int, default=100, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.05, help='learning rate')
 parser.add_argument('--delta_t', type=float, default=0.01, help='time step of simulation')
-parser.add_argument('--n_sim_points', type=float, default=1000, help='total number of train+testing data points')
+parser.add_argument('--t_end', type=float, default=1000, help='length of simulation')
 parser.add_argument('--train_frac', type=float, default=0.6, help='fraction of simulated data for training')
 parser.add_argument('--savedir', type=str, default='default_output', help='parent dir of output')
 parser.add_argument('--model_solver', default=lorenz63, help='ode function')
@@ -35,7 +35,7 @@ def main():
 
 	lr = FLAGS.lr # learning rate
 	delta_t = FLAGS.delta_t #0.01
-	# tspan = np.arange(0,FLAGS.t_end,delta_t)  #np.arange(0,10000,delta_t)
+	tspan = np.arange(0,FLAGS.t_end,delta_t)  #np.arange(0,10000,delta_t)
 	sim_model = FLAGS.model_solver
 	rnn_sim_model = FLAGS.model_solver
 
@@ -43,7 +43,7 @@ def main():
 
 	n_epochs = FLAGS.epoch #1
 
-	train_frac = FLAGS.train_frac #0.9995
+	# train_frac = FLAGS.train_frac #0.9995
 	i = 0
 	for state_init in my_state_inits:
 		i += 1
@@ -51,22 +51,21 @@ def main():
 		# master output directory name
 		init_output_dir = FLAGS.savedir + '_output' + str(i)
 
-		for n_sim_points in [300,3000,6000]:
+		for train_frac in [0.01, 0.03, 0.1, 0.333, 0.666]:
+			n_train = int(np.floor(train_frac*len(y_clean)))
 			all_dirs = []
-			tspan = np.arange(0,n_sim_points) * delta_t
 
 			sim_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b, c)}
 			rnn_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b, c)}
 
 			# np.random.seed()
-			output_dir = init_output_dir + '/Ndata_{0}'.format(n_sim_points)
+			output_dir = init_output_dir + '/Ndata_{0}'.format(n_train)
 
 			# simulate clean and noisy data
 			input_data, y_clean, y_noisy = make_RNN_data(
 			              sim_model, tspan, sim_model_params, noise_frac=0.05, output_dir=output_dir, drive_system=False)
 
 			###### do train/test split #######
-			n_train = int(np.floor(train_frac*len(y_clean)))
 			y_clean_train = y_clean[:n_train]
 			y_clean_test = y_clean[n_train:]
 			y_noisy_train = y_noisy[:n_train]
