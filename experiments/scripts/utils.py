@@ -2285,7 +2285,7 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 	std_vec = [test_loss_stds[eps] for eps in eps_vec]
 
 	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN (eps=0.05)', color='blue')
-	ax1.set_xlabel(r'$\Delta t')
+	ax1.set_xlabel(r'$\Delta t$')
 	ax1.set_ylabel('Test Loss (logMSE)')
 
 	eps_vec = sorted(rnn_test_loss_medians.keys())
@@ -2325,7 +2325,7 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 		std_vec = [t_valid_stds[eps] for eps in eps_vec]
 
 		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN (eps=0.05)', color='blue')
-		ax2.set_xlabel(r'$\Delta t')
+		ax2.set_xlabel(r'$\Delta t$')
 		ax2.set_ylabel('Validity Time')
 
 		eps_vec = sorted(rnn_t_valid_medians.keys())
@@ -2371,7 +2371,7 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 	std_vec = [test_loss_stds[eps] for eps in eps_vec]
 
 	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN (eps=0.05)', color='blue')
-	ax1.set_xlabel(r'$\Delta t')
+	ax1.set_xlabel(r'$\Delta t$')
 	ax1.set_ylabel('Train time (opt MSE)')
 
 	eps_vec = sorted(rnn_test_loss_medians.keys())
@@ -2411,7 +2411,7 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 		std_vec = [t_valid_stds[eps] for eps in eps_vec]
 
 		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN (eps=0.05)', color='blue')
-		ax2.set_xlabel(r'$\Delta t')
+		ax2.set_xlabel(r'$\Delta t$')
 		ax2.set_ylabel('Train time (opt Validity Time)')
 
 		eps_vec = sorted(rnn_t_valid_medians.keys())

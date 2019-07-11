@@ -231,7 +231,6 @@ def main():
 				      y_clean_test_norm, y_noisy_test_norm,
 				      rnn_BAD_model_params, hidden_size, n_epochs, lr,
 				      run_output_dir, normz_info_clean, rnn_sim_model,
-  				      max_plot=max_plot,
 				      compute_kl=FLAGS.compute_kl, gp_only=True, gp_style=gp_style)
 				# train on noisy data
 				# normz_info = normz_info_noisy
