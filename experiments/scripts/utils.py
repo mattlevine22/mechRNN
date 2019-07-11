@@ -321,7 +321,7 @@ def run_GP(y_clean_train, y_noisy_train,
 			err_thresh, gp_style=1, gp_only=False):
 
 	if gp_only:
-		gp_nm = 'GPR{0}'.format(gp_style)
+		gp_nm = 'GPR{0}_'.format(gp_style)
 	else:
 		gp_nm = ''
 
@@ -422,7 +422,7 @@ def run_GP(y_clean_train, y_noisy_train,
 
 	ax_list[0].legend()
 
-	fig.suptitle('{0} Training Fit'.format(gp_nm))
+	fig.suptitle('{0} Training Fit'.format(gp_nm.rstrip('_')))
 	fig.savefig(fname=output_dir+'/{0}train_fit_ode'.format(gp_nm))
 	plt.close(fig)
 
@@ -444,7 +444,7 @@ def run_GP(y_clean_train, y_noisy_train,
 
 	ax_list[0].legend()
 
-	fig.suptitle('{0} Testing fit'.format(gp_nm))
+	fig.suptitle('{0} Testing fit'.format(gp_nm.rstrip('_')))
 	fig.savefig(fname=output_dir+'/{0}test_fit_ode'.format(gp_nm))
 	plt.close(fig)
 
