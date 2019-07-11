@@ -52,7 +52,7 @@ def main():
 		init_output_dir = FLAGS.savedir + '_output' + str(i)
 
 		for train_frac in [0.01, 0.03, 0.1, 0.333, 0.666]:
-			n_train = int(np.floor(train_frac*len(y_clean)))
+			n_train = int(np.floor(train_frac*len(tspan)))
 			all_dirs = []
 
 			sim_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b, c)}
