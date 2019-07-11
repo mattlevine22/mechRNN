@@ -719,9 +719,9 @@ def train_chaosRNN(forward,
 			target_clean = output_clean_train[j+1,None]
 			(pred, hidden_state) = forward(output_train[j,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[j])
 			# (pred, hidden_state) = forward(pred.detach(), hidden_state, A,B,C,a,b, normz_info, model, model_params)
-			loss = (pred.squeeze() - target.squeeze()).pow(2).sum()/2
+			loss = (pred.squeeze() - target.squeeze()).pow(2).sum()
 			total_loss_train += loss
-			total_loss_clean_train += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()/2
+			total_loss_clean_train += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()
 			running_epoch_loss_train[j] = total_loss_train/(j+1)
 			running_epoch_loss_clean_train[j] = total_loss_clean_train/(j+1)
 			loss.backward()
@@ -1324,9 +1324,9 @@ def train_RNN(forward,
 				(pred, hidden_state) = forward(x_train[:,j:j+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
 			else:
 				(pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
-			loss = (pred.squeeze() - target.squeeze()).pow(2).sum()/2
+			loss = (pred.squeeze() - target.squeeze()).pow(2).sum()
 			total_loss_train += loss
-			total_loss_clean_train += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()/2
+			total_loss_clean_train += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()
 			loss.backward()
 
 			if drive_system:
@@ -1370,8 +1370,8 @@ def train_RNN(forward,
 				(pred, hidden_state) = forward(x_test[:,j:j+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
 			else:
 				(pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
-			total_loss_test += (pred.squeeze() - target.squeeze()).pow(2).sum()/2
-			total_loss_clean_test += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()/2
+			total_loss_test += (pred.squeeze() - target.squeeze()).pow(2).sum()
+			total_loss_clean_test += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()
 
 			hidden_state = hidden_state.detach()
 		#normalize losses
