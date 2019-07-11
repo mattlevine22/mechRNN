@@ -948,10 +948,16 @@ def train_chaosRNN(forward,
 			for kk in range(len(ax_list)):
 				ax1 = ax_list[kk]
 				pk = plot_state_indices[kk]
-				x_grid = np.linspace(min(y_clean_test_raw[:,pk]), max(y_clean_test_raw[:,pk]), 1000)
-				ax1.plot(x_grid, kde_func(y_clean_test_raw[:,pk], x_grid), label='clean data')
-				x_grid = np.linspace(min(predictions_raw[:,pk]), max(predictions_raw[:,pk]), 1000)
-				ax1.plot(x_grid, kde_func(predictions_raw[:,pk], x_grid), label='RNN fit')
+				try:
+					x_grid = np.linspace(min(y_clean_test_raw[:,pk]), max(y_clean_test_raw[:,pk]), 1000)
+					ax1.plot(x_grid, kde_func(y_clean_test_raw[:,pk], x_grid), label='clean data')
+				except:
+					pass
+				try:
+					x_grid = np.linspace(min(predictions_raw[:,pk]), max(predictions_raw[:,pk]), 1000)
+					ax1.plot(x_grid, kde_func(predictions_raw[:,pk], x_grid), label='RNN fit')
+				except:
+					pass
 				ax1.set_xlabel(model_params['state_names'][pk])
 
 			ax_list[0].legend()
@@ -1101,10 +1107,16 @@ def train_chaosRNN(forward,
 	for kk in range(len(ax_list)):
 		ax1 = ax_list[kk]
 		pk = plot_state_indices[kk]
-		x_grid = np.linspace(min(y_clean_test_raw[:,pk]), max(y_clean_test_raw[:,pk]), 1000)
-		ax1.plot(x_grid, kde_func(y_clean_test_raw[:,pk], x_grid), label='clean data')
-		x_grid = np.linspace(min(predictions_raw[:,pk]), max(predictions_raw[:,pk]), 1000)
-		ax1.plot(x_grid, kde_func(predictions_raw[:,pk], x_grid), label='RNN fit')
+		try:
+			x_grid = np.linspace(min(y_clean_test_raw[:,pk]), max(y_clean_test_raw[:,pk]), 1000)
+			ax1.plot(x_grid, kde_func(y_clean_test_raw[:,pk], x_grid), label='clean data')
+		except:
+			pass
+		try:
+			x_grid = np.linspace(min(predictions_raw[:,pk]), max(predictions_raw[:,pk]), 1000)
+			ax1.plot(x_grid, kde_func(predictions_raw[:,pk], x_grid), label='RNN fit')
+		except:
+			pass
 		ax1.set_xlabel(model_params['state_names'][pk])
 
 	ax_list[0].legend()
