@@ -445,7 +445,7 @@ def run_GP(y_clean_train, y_noisy_train,
 	ax_list[0].legend()
 
 	fig.suptitle('{0} Testing fit'.format(gp_nm.rstrip('_')))
-	fig.savefig(fname=output_dir+'/{0}test_fit_ode'.format(gp_nm))
+	fig.savefig(fname=output_dir+'/{0}fit_ode_TEST'.format(gp_nm))
 	plt.close(fig)
 
 	# write pw losses to file
