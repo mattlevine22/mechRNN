@@ -108,7 +108,7 @@ def main():
 
 		########## NOW start running RNN fits ############
 		for n in range(FLAGS.n_experiments):
-			for hidden_size in [10, 25, 50, 100, 200]:
+			for hidden_size in np.random.permutation([10, 25, 50, 100, 200]):
 				#### run vanilla RNN ####
 				forward = forward_chaos_pureML
 				# train on clean data

@@ -51,7 +51,7 @@ def main():
 		# master output directory name
 		init_output_dir = FLAGS.savedir + '_output' + str(i)
 
-		for train_frac in [0.01, 0.03, 0.1, 0.333, 0.666]:
+		for train_frac in np.random.permutation([0.01, 0.03, 0.1, 0.333, 0.666]):
 			n_train = int(np.floor(train_frac*len(tspan)))
 			all_dirs = []
 
@@ -123,13 +123,14 @@ def main():
 					run_output_dir = output_dir + '/iter{0}'.format(n) + '/vanillaRNN_clean_hs{0}'.format(hidden_size)
 					all_dirs.append(run_output_dir)
 					# torch.manual_seed(0)
-					train_chaosRNN(forward,
-				      y_clean_train_norm, y_clean_train_norm,
-				      y_clean_test_norm, y_noisy_test_norm,
-				      rnn_model_params, hidden_size, n_epochs, lr,
-				      run_output_dir, normz_info, rnn_sim_model,
-				      stack_hidden=False, stack_output=False,
-				      compute_kl=FLAGS.compute_kl)
+					if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST.png'):
+						train_chaosRNN(forward,
+					      y_clean_train_norm, y_clean_train_norm,
+					      y_clean_test_norm, y_noisy_test_norm,
+					      rnn_model_params, hidden_size, n_epochs, lr,
+					      run_output_dir, normz_info, rnn_sim_model,
+					      stack_hidden=False, stack_output=False,
+					      compute_kl=FLAGS.compute_kl)
 
 					# # train on noisy data
 					# normz_info = normz_info_noisy
@@ -219,24 +220,26 @@ def main():
 					run_output_dir = output_dir + '/iter{0}'.format(n) + '/mechRNN_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size)
 					all_dirs.append(run_output_dir)
 					# torch.manual_seed(0)
-					train_chaosRNN(forward,
-				      y_clean_train_norm, y_clean_train_norm,
-				      y_clean_test_norm, y_noisy_test_norm,
-				      rnn_BAD_model_params, hidden_size, n_epochs, lr,
-				      run_output_dir, normz_info_clean, rnn_sim_model,
-  				      compute_kl=FLAGS.compute_kl)
+					if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST.png'):
+						train_chaosRNN(forward,
+					      y_clean_train_norm, y_clean_train_norm,
+					      y_clean_test_norm, y_noisy_test_norm,
+					      rnn_BAD_model_params, hidden_size, n_epochs, lr,
+					      run_output_dir, normz_info_clean, rnn_sim_model,
+	  				      compute_kl=FLAGS.compute_kl)
 
 					# GP ONLY
 					for gp_style in [1,2]:
 						run_output_dir = output_dir + '/iter{0}'.format(n) + '/hybridGPR{2}_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size, gp_style)
 						all_dirs.append(run_output_dir)
 						# torch.manual_seed(0)
-						train_chaosRNN(forward,
-					      y_clean_train_norm, y_clean_train_norm,
-					      y_clean_test_norm, y_noisy_test_norm,
-					      rnn_BAD_model_params, hidden_size, n_epochs, lr,
-					      run_output_dir, normz_info_clean, rnn_sim_model,
-					      compute_kl=FLAGS.compute_kl, gp_only=True, gp_style=gp_style)
+						if not os.path.exists(run_output_dir+'/fit_ode_TEST.png'):
+							train_chaosRNN(forward,
+						      y_clean_train_norm, y_clean_train_norm,
+						      y_clean_test_norm, y_noisy_test_norm,
+						      rnn_BAD_model_params, hidden_size, n_epochs, lr,
+						      run_output_dir, normz_info_clean, rnn_sim_model,
+						      compute_kl=FLAGS.compute_kl, gp_only=True, gp_style=gp_style)
 
 
 				# train on noisy data
