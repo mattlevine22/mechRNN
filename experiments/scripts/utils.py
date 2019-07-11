@@ -318,7 +318,12 @@ def run_GP(y_clean_train, y_noisy_train,
 			output_dir,
 			n_plttrain,
 			n_plttest,
-			err_thresh, gp_style=1):
+			err_thresh, gp_style=1, gp_only=False):
+
+	if gp_only:
+		gp_nm = 'GPR{0}'.format(gp_style)
+	else:
+		gp_nm = ''
 
 	if gp_style==1:
 		X = y_noisy_train[:-1]
@@ -417,8 +422,8 @@ def run_GP(y_clean_train, y_noisy_train,
 
 	ax_list[0].legend()
 
-	fig.suptitle('GPR {0} Training Fit'.format(gp_style))
-	fig.savefig(fname=output_dir+'/GPR_{0}_train_fit_ode'.format(gp_style))
+	fig.suptitle('{0} Training Fit'.format(gp_nm))
+	fig.savefig(fname=output_dir+'/{0}train_fit_ode'.format(gp_nm))
 	plt.close(fig)
 
 
@@ -439,20 +444,20 @@ def run_GP(y_clean_train, y_noisy_train,
 
 	ax_list[0].legend()
 
-	fig.suptitle('GPR {0} Testing fit'.format(gp_style))
-	fig.savefig(fname=output_dir+'/GPR_{0}_test_fit_ode'.format(gp_style))
+	fig.suptitle('{0} Testing fit'.format(gp_nm))
+	fig.savefig(fname=output_dir+'/{0}test_fit_ode'.format(gp_nm))
 	plt.close(fig)
 
 	# write pw losses to file
 	gpr_pred_validity_vec_test = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
 	gpr_pred_validity_vec_clean_test = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
-	with open(output_dir+'/GPR_{0}_prediction_validity_time_test.txt'.format(gp_style), "w") as f:
+	with open(output_dir+'/{0}prediction_validity_time_test.txt'.format(gp_nm), "w") as f:
 		f.write(str(gpr_pred_validity_vec_test))
-	with open(output_dir+'/GPR_{0}_prediction_validity_time_clean_test.txt'.format(gp_style), "w") as f:
+	with open(output_dir+'/{0}prediction_validity_time_clean_test.txt'.format(gp_nm), "w") as f:
 		f.write(str(gpr_pred_validity_vec_clean_test))
-	with open(output_dir+'/GPR_{0}_loss_test.txt'.format(gp_style), "w") as f:
+	with open(output_dir+'/{0}loss_test.txt'.format(gp_nm), "w") as f:
 		f.write(str(total_loss_test))
-	with open(output_dir+'/GPR_{0}_clean_loss_test.txt'.format(gp_style), "w") as f:
+	with open(output_dir+'/{0}clean_loss_test.txt'.format(gp_nm), "w") as f:
 		f.write(str(total_loss_clean_test))
 
 
@@ -546,7 +551,8 @@ def train_chaosRNN(forward,
 				n_plttrain,
 				n_plttest,
 				err_thresh,
-				gp_style)
+				gp_style,
+				gp_only)
 
 	if gp_only:
 		return
@@ -1125,10 +1131,10 @@ def train_chaosRNN(forward,
 
 		x_train = pd.DataFrame(np.loadtxt(output_dir+'/loss_vec_train.txt'))
 		x_test = pd.DataFrame(np.loadtxt(output_dir+"/loss_vec_clean_test.txt"))
-		gpr1_valid_test = np.loadtxt(output_dir+'/GPR_1_prediction_validity_time_clean_test.txt')
-		gpr2_valid_test = np.loadtxt(output_dir+'/GPR_2_prediction_validity_time_clean_test.txt')
-		gpr1_test = np.loadtxt(output_dir+'/GPR_1_clean_loss_test.txt')
-		gpr2_test = np.loadtxt(output_dir+'/GPR_2_clean_loss_test.txt')
+		gpr1_valid_test = np.loadtxt(output_dir+'/GPR1_prediction_validity_time_clean_test.txt')
+		gpr2_valid_test = np.loadtxt(output_dir+'/GPR2_prediction_validity_time_clean_test.txt')
+		gpr1_test = np.loadtxt(output_dir+'/GPR1_clean_loss_test.txt')
+		gpr2_test = np.loadtxt(output_dir+'/GPR2_clean_loss_test.txt')
 
 		if n_epochs > 1:
 			x_valid_test = pd.DataFrame(np.loadtxt(output_dir+"/prediction_validity_time_clean_test.txt"))
@@ -1600,10 +1606,10 @@ def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indi
 			x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
 
 			# get GPR fits
-			gpr1_valid_test = np.loadtxt(d+'/GPR_1_prediction_validity_time_clean_test.txt')
-			gpr2_valid_test = np.loadtxt(d+'/GPR_2_prediction_validity_time_clean_test.txt')
-			gpr1_test = np.loadtxt(d+'/GPR_1_clean_loss_test.txt')
-			gpr2_test = np.loadtxt(d+'/GPR_2_clean_loss_test.txt')
+			gpr1_valid_test = np.loadtxt(d+'/GPR1_prediction_validity_time_clean_test.txt')
+			gpr2_valid_test = np.loadtxt(d+'/GPR2_prediction_validity_time_clean_test.txt')
+			gpr1_test = np.loadtxt(d+'/GPR1_clean_loss_test.txt')
+			gpr2_test = np.loadtxt(d+'/GPR2_clean_loss_test.txt')
 
 			if many_epochs:
 				x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt"))
@@ -1697,10 +1703,10 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 
 		x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
 		x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
-		gpr1_valid_test = np.loadtxt(d+'/GPR_1_prediction_validity_time_clean_test.txt')
-		gpr2_valid_test = np.loadtxt(d+'/GPR_2_prediction_validity_time_clean_test.txt')
-		gpr1_test = np.loadtxt(d+'/GPR_1_clean_loss_test.txt')
-		gpr2_test = np.loadtxt(d+'/GPR_2_clean_loss_test.txt')
+		gpr1_valid_test = np.loadtxt(d+'/GPR1_prediction_validity_time_clean_test.txt')
+		gpr2_valid_test = np.loadtxt(d+'/GPR2_prediction_validity_time_clean_test.txt')
+		gpr1_test = np.loadtxt(d+'/GPR1_clean_loss_test.txt')
+		gpr2_test = np.loadtxt(d+'/GPR2_clean_loss_test.txt')
 
 		if many_epochs:
 			x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt"))
@@ -2221,13 +2227,13 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 		except:
 			pass
 
-		x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
+		# x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
 		x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
 		if many_epochs:
 			x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt"))
 			# x_kl_test = pd.DataFrame(np.loadtxt(d+"/kl_vec_inv_clean_test.txt"))
 		if win:
-			x_train = x_train.rolling(win).mean()
+			# x_train = x_train.rolling(win).mean()
 			x_test = x_test.rolling(win).mean()
 			if many_epochs:
 				x_valid_test = x_valid_test.rolling(win).mean()
