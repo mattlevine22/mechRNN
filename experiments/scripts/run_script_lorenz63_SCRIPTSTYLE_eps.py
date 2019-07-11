@@ -117,14 +117,15 @@ def main():
 						f_normalize_minmax(normz_info, y) for y in y_list]
 				run_output_dir = output_dir + '/iter{0}'.format(n) + '/vanillaRNN_clean_hs{0}'.format(hidden_size)
 				all_dirs.append(run_output_dir)
-				# torch.manual_seed(0)
-				train_chaosRNN(forward,
-			      y_clean_train_norm, y_clean_train_norm,
-			      y_clean_test_norm, y_noisy_test_norm,
-			      rnn_model_params, hidden_size, n_epochs, lr,
-			      run_output_dir, normz_info, rnn_sim_model,
-			      stack_hidden=False, stack_output=False,
-			      compute_kl=FLAGS.compute_kl)
+				if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST.png'):
+					# torch.manual_seed(0)
+					train_chaosRNN(forward,
+				      y_clean_train_norm, y_clean_train_norm,
+				      y_clean_test_norm, y_noisy_test_norm,
+				      rnn_model_params, hidden_size, n_epochs, lr,
+				      run_output_dir, normz_info, rnn_sim_model,
+				      stack_hidden=False, stack_output=False,
+				      compute_kl=FLAGS.compute_kl)
 
 				# # train on noisy data
 				# normz_info = normz_info_noisy
