@@ -2280,13 +2280,20 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 
 		if my_dt in dict_performance[mtype]['mse']:
 			dict_performance[mtype]['mse'][my_dt] += (float(np.min(x_test)),)
-			dict_performance[mtype]['mse_time'][my_dt] += (float(np.nanargmin(x_test)),)
+			try:
+				dict_performance[mtype]['mse_time'][my_dt] += (float(np.nanargmin(x_test)),)
+			except:
+				print('Has no min:',d)
 			if many_epochs:
 				dict_performance[mtype]['t_valid'][my_dt] += (float(np.max(x_valid_test)),)
 				dict_performance[mtype]['t_valid_time'][my_dt] += (float(np.nanargmax(x_valid_test)),)
 		else:
 			dict_performance[mtype]['mse'][my_dt] = (float(np.min(x_test)),)
-			dict_performance[mtype]['mse_time'][my_dt] = (float(np.nanargmin(x_test)),)
+			try:
+				dict_performance[mtype]['mse_time'][my_dt] = (float(np.nanargmin(x_test)),)
+			except:
+				print('Has no min:',d)
+				# pdb.set_trace()
 			if many_epochs:
 				dict_performance[mtype]['t_valid'][my_dt] = (float(np.max(x_valid_test)),)
 				dict_performance[mtype]['t_valid_time'][my_dt] = (float(np.nanargmax(x_valid_test)),)

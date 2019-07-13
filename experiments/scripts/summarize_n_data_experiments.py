@@ -12,7 +12,7 @@ def main(pathname):
 			my_dirs.append(x)
 	for x in Path(pathname).glob('**/*hybrid*'):
 		x = str(x)
-		if os.path.exists(x+'/rnn_fit_ode_TEST.png') or os.path.exists(x+'/test_fit_ode.png'):
+		if os.path.exists(x+'/rnn_fit_ode_TEST.png') or os.path.exists(x+'/test_fit_ode.png') or os.path.exists(x+'/fit_ode_TEST.png'):
 			my_dirs.append(x)
 
 	if len(my_dirs):
