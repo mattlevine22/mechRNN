@@ -432,6 +432,34 @@ def train_chaosRNN(forward,
 	else:
 		model_pred = [None for j in range(train_seq_length)]
 
+
+	if gp_style is None:
+		style_list = [2,1]
+	else:
+		style_list = [gp_style]
+
+	for gp_style in style_list:
+		run_GP(y_clean_train, y_noisy_train,
+				y_clean_test, y_noisy_test,
+				model,f_unNormalize_Y,
+				model_pred,
+				train_seq_length,
+				test_seq_length,
+				output_size,
+				avg_output_test,
+				avg_output_clean_test,
+				normz_info, model_params,
+				plot_state_indices,
+				output_dir,
+				n_plttrain,
+				n_plttest,
+				err_thresh,
+				gp_style,
+				gp_only)
+
+	if gp_only:
+		return
+
 	# first, SHOW that a simple mechRNN can fit the data perfectly (if we are running a mechRNN)
 	if stack_hidden or stack_output:
 		# now, TRAIN to fit the output from the previous model
