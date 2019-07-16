@@ -30,6 +30,20 @@ import pandas as pd
 import pdb
 
 
+def get_lorenz_inits(model=None, params=None, n=2):
+	init_vec = np.zeros((n, 3))
+	for k in range(n):
+		(xmin, xmax) = (-10,10)
+		(ymin, ymax) = (-20,30)
+		(zmin, zmax) = (10,40)
+
+		xrand = xmin+(xmax-xmin)*np.random.random()
+		yrand = ymin+(ymax-ymin)*np.random.random()
+		zrand = zmin+(zmax-zmin)*np.random.random()
+		init_vec[k,:] = [xrand, yrand, zrand]
+	return init_vec
+
+
 def kde_scipy(x, x_grid, **kwargs):
 	"""Kernel Density Estimation with Scipy"""
 	# Note that scipy weights its bandwidth by the covariance of the
@@ -224,6 +238,65 @@ def make_RNN_data(model, tspan, sim_model_params, noise_frac=0, output_dir=".", 
 
 	return input_data, y_clean, y_noisy
 
+
+def make_RNN_data2(model, tspan_train, tspan_test, sim_model_params, noise_frac=0, output_dir=".", drive_system=True, plot_state_indices=None, n_test_sets=1, f_get_state_inits=None, continue_trajectory=False):
+
+	if not os.path.exists(output_dir):
+		os.makedirs(output_dir)
+
+	t0 = time()
+	init_vec = f_get_state_inits(model=model, params=sim_model_params, n=(n_test_sets+1))
+
+	# first get training set
+	sim_model_params['state_init'] = init_vec[0,:]
+	y_clean_train, y_noisy_train, x_train  = run_ode_model(model, tspan_train, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
+
+	# now, get N test sets
+	for n in range(n_test_sets):
+		if continue_trajectory:
+			# increment 1 time step from end of training data
+			y0 = y_clean_train[-1,:]
+			tspan = [0, 0.5*sim_model_params['delta_t'], sim_model_params['delta_t']]
+			y_out = odeint(model, y0, tspan, args=sim_model_params['ode_params'])
+			init_continued = y_out[-1,:]
+			sim_model_params['state_init'] = init_continued #y_clean_train[-1,:]
+		else:
+			sim_model_params['state_init'] = init_vec[n+1,:]
+		y_clean_test, y_noisy_test, x_test  = run_ode_model(model, tspan_test, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
+		if n==0:
+			y_clean_test_vec = np.zeros((n_test_sets,y_clean_test.shape[0],y_clean_test.shape[1]))
+			y_noisy_test_vec = np.zeros((n_test_sets,y_noisy_test.shape[0],y_noisy_test.shape[1]))
+			if drive_system:
+				x_test_vec = np.zeros((n_test_sets,x_test.shape[0],x_test.shape[1]))
+			else:
+				x_test_vec = None
+		y_clean_test_vec[n,:,:] = y_clean_test
+		y_noisy_test_vec[n,:,:] = y_noisy_test
+		if drive_system:
+			x_test_vec[n,:,:] = x_test
+
+	# now create multiple training sets
+	print("Took {0} seconds to integrate the ODE.".format(time()-t0))
+	if drive_system:
+		# little section to upsample the random, piecewise constant x(t) function
+		z = np.zeros([len(tspan),2])
+		z[:,0] = tspan
+		c = 0
+		prev = 0
+		for i in range(len(tspan)):
+			if c < len(x) and z[i,0]==x[c,0]:
+				prev = x[c,1]
+				c += 1
+			z[i,1] = prev
+		x0 = z[:,None,1] # add an extra dimension to the ode inputs so that it is a tensor for PyTorch
+		input_data_train = x0.T
+	else:
+		input_data_train = None
+
+	return input_data_train, y_clean_train, y_noisy_train, y_clean_test_vec, y_noisy_test_vec, x_test_vec
+
+
+
 ### RNN fitting section
 def forward_vanilla(data_input, hidden_state, w1, w2, b, c, v, *args, **kwargs):
 	hidden_state = torch.relu(b + torch.mm(w2,data_input) + torch.mm(w1,hidden_state))
@@ -306,6 +379,7 @@ def forward_mech(input, hidden_state, w1, w2, b, c, v, normz_info, model, model_
 
 def run_GP(y_clean_train, y_noisy_train,
 			y_clean_test, y_noisy_test,
+			y_clean_testSynch, y_noisy_testSynch,
 			model,f_unNormalize_Y,
 			model_pred,
 			train_seq_length,
@@ -318,6 +392,7 @@ def run_GP(y_clean_train, y_noisy_train,
 			output_dir,
 			n_plttrain,
 			n_plttest,
+			n_test_sets,
 			err_thresh, gp_style=1, gp_only=False):
 
 	if gp_only:
@@ -335,40 +410,6 @@ def run_GP(y_clean_train, y_noisy_train,
 	# gpr = GaussianProcessRegressor().fit(X=output_train[:-1],y=output_train[1:]-model_pred)
 	gpr_train_predictions_orig = model_pred + gpr.predict(X).squeeze()
 	# gpr.score(model_pred, y_noisy_train[1:])
-	total_loss_test = 0
-	total_loss_clean_test = 0
-	pred = np.squeeze(y_noisy_train[-1,:,None].T)
-	pw_loss_test = np.zeros(test_seq_length)
-	pw_loss_clean_test = np.zeros(test_seq_length)
-	gpr_test_predictions = np.zeros([test_seq_length, output_size])
-	for j in range(test_seq_length):
-		target = y_noisy_test[j,None].squeeze()
-		target_clean = y_clean_test[j,None].squeeze()
-
-		# generate next-step ODE model prediction
-		tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
-		# unnormalize model_input so that it can go through the ODE solver
-		y0 = f_unNormalize_minmax(normz_info, pred)
-		y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
-		my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
-
-		if gp_style==1:
-			x = pred
-		elif gp_style==2:
-			x = np.concatenate((pred, my_model_pred))
-		pred = my_model_pred + gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
-
-		# compute losses
-		j_loss = sum((pred - target)**2)
-		j_loss_clean = sum((pred - target_clean)**2)
-		total_loss_test += j_loss
-		total_loss_clean_test += j_loss_clean
-		pw_loss_test[j] = j_loss**0.5 / avg_output_test
-		pw_loss_clean_test[j] = j_loss_clean**0.5 / avg_output_clean_test
-		gpr_test_predictions[j,:] = pred
-
-	total_loss_test = total_loss_test / test_seq_length
-	total_loss_clean_test = total_loss_clean_test / test_seq_length
 
 	gpr_train_predictions_rerun = np.zeros([train_seq_length-1, output_size])
 	pred = y_noisy_train[0,:,None].squeeze()
@@ -397,13 +438,11 @@ def run_GP(y_clean_train, y_noisy_train,
 		# pw_loss_clean_test[j] = total_loss_clean_test / avg_output_clean_test
 		gpr_train_predictions_rerun[j,:] = pred
 
-	# plot forecast over test set
-	y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test)
+	# plot training fits
 	y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
 	y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
 	gpr_train_predictions_orig_raw = f_unNormalize_Y(normz_info,gpr_train_predictions_orig)
 	gpr_train_predictions_rerun_raw = f_unNormalize_Y(normz_info,gpr_train_predictions_rerun)
-	gpr_test_predictions_raw = f_unNormalize_Y(normz_info,gpr_test_predictions)
 
 	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
 	if not isinstance(ax_list,np.ndarray):
@@ -427,44 +466,107 @@ def run_GP(y_clean_train, y_noisy_train,
 	plt.close(fig)
 
 
-	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-	if not isinstance(ax_list,np.ndarray):
-		ax_list = [ax_list]
 
-	# NOW, show testing fit
-	for kk in range(len(ax_list)):
-		ax3 = ax_list[kk]
-		t_plot = np.arange(0,len(y_clean_test[:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
-		# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-		ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
-		ax3.plot(t_plot, gpr_test_predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
-		ax3.set_xlabel('time')
-		ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
-		ax3.tick_params(axis='y', labelcolor='red')
+	# initialize Test outputs
+	loss_vec_test = np.zeros((1,n_test_sets))
+	loss_vec_clean_test = np.zeros((1,n_test_sets))
+	pred_validity_vec_test = np.zeros((1,n_test_sets))
+	pred_validity_vec_clean_test = np.zeros((1,n_test_sets))
 
-	ax_list[0].legend()
+	# loop over test sets
+	tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+	for kkt in range(n_test_sets):
+		# now compute test loss
+		total_loss_test = 0
+		total_loss_clean_test = 0
+		pred = y_noisy_testSynch[kkt,-1,None].squeeze()
+		# pred = np.squeeze(y_noisy_testSynch[-1,:,None].T)
+		pw_loss_test = np.zeros(test_seq_length)
+		pw_loss_clean_test = np.zeros(test_seq_length)
+		gpr_test_predictions = np.zeros([test_seq_length, output_size])
+		for j in range(test_seq_length):
+			target = y_noisy_test[kkt,j,:]
+			target_clean = y_clean_test[kkt,j,:]
 
-	fig.suptitle('{0} Testing fit'.format(gp_nm.rstrip('_')))
-	fig.savefig(fname=output_dir+'/{0}fit_ode_TEST'.format(gp_nm))
-	plt.close(fig)
+			# generate next-step ODE model prediction
+			# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+			# unnormalize model_input so that it can go through the ODE solver
+			y0 = f_unNormalize_minmax(normz_info, pred)
+			y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
+			my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+
+			if gp_style==1:
+				x = pred
+			elif gp_style==2:
+				x = np.concatenate((pred, my_model_pred))
+			pred = my_model_pred + gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
+
+			# compute losses
+			j_loss = sum((pred - target)**2)
+			j_loss_clean = sum((pred - target_clean)**2)
+			total_loss_test += j_loss
+			total_loss_clean_test += j_loss_clean
+			pw_loss_test[j] = j_loss**0.5 / avg_output_test
+			pw_loss_clean_test[j] = j_loss_clean**0.5 / avg_output_clean_test
+			gpr_test_predictions[j,:] = pred
+
+		total_loss_test = total_loss_test / test_seq_length
+		total_loss_clean_test = total_loss_clean_test / test_seq_length
+
+		#store losses
+		loss_vec_test[0,kkt] = total_loss_test
+		loss_vec_clean_test[0,kkt] = total_loss_clean_test
+		pred_validity_vec_test[0,kkt] = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
+		pred_validity_vec_clean_test[0,kkt] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
+
+
+		# plot forecast over test set
+		y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
+		gpr_test_predictions_raw = f_unNormalize_Y(normz_info,gpr_test_predictions)
+
+		fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+		if not isinstance(ax_list,np.ndarray):
+			ax_list = [ax_list]
+
+		# NOW, show testing fit
+		for kk in range(len(ax_list)):
+			ax3 = ax_list[kk]
+			t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+			# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
+			ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
+			ax3.plot(t_plot, gpr_test_predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
+			ax3.set_xlabel('time')
+			ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
+			ax3.tick_params(axis='y', labelcolor='red')
+
+		ax_list[0].legend()
+
+		fig.suptitle('{0} Testing fit'.format(gp_nm.rstrip('_')))
+		fig.savefig(fname=output_dir+'/{0}fit_ode_TEST_{1}'.format(gp_nm,kkt))
+		plt.close(fig)
 
 	# write pw losses to file
-	gpr_pred_validity_vec_test = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
-	gpr_pred_validity_vec_clean_test = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
-	with open(output_dir+'/{0}prediction_validity_time_test.txt'.format(gp_nm), "w") as f:
-		f.write(str(gpr_pred_validity_vec_test))
-	with open(output_dir+'/{0}prediction_validity_time_clean_test.txt'.format(gp_nm), "w") as f:
-		f.write(str(gpr_pred_validity_vec_clean_test))
-	with open(output_dir+'/{0}loss_test.txt'.format(gp_nm), "w") as f:
-		f.write(str(total_loss_test))
-	with open(output_dir+'/{0}clean_loss_test.txt'.format(gp_nm), "w") as f:
-		f.write(str(total_loss_clean_test))
+	# gpr_pred_validity_vec_test = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
+	# gpr_pred_validity_vec_clean_test = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
+	# with open(output_dir+'/{0}prediction_validity_time_test.txt'.format(gp_nm), "w") as f:
+	# 	f.write(str(gpr_pred_validity_vec_test))
+	# with open(output_dir+'/{0}prediction_validity_time_clean_test.txt'.format(gp_nm), "w") as f:
+	# 	f.write(str(gpr_pred_validity_vec_clean_test))
+	# with open(output_dir+'/{0}loss_test.txt'.format(gp_nm), "w") as f:
+	# 	f.write(str(total_loss_test))
+	# with open(output_dir+'/{0}clean_loss_test.txt'.format(gp_nm), "w") as f:
+	# 	f.write(str(total_loss_clean_test))
+	np.savetxt(output_dir+'/{0}loss_vec_test.txt'.format(gp_nm),loss_vec_test)
+	np.savetxt(output_dir+'/{0}loss_vec_clean_test.txt'.format(gp_nm),loss_vec_clean_test)
+	np.savetxt(output_dir+'/{0}prediction_validity_time_test.txt'.format(gp_nm),pred_validity_vec_test)
+	np.savetxt(output_dir+'/{0}prediction_validity_time_clean_test.txt'.format(gp_nm),pred_validity_vec_clean_test)
 
 
 
 def train_chaosRNN(forward,
 			y_clean_train, y_noisy_train,
 			y_clean_test, y_noisy_test,
+			y_clean_testSynch, y_noisy_testSynch,
 			model_params, hidden_size=6, n_epochs=100, lr=0.05,
 			output_dir='.', normz_info=None, model=None,
 			trivial_init=False, perturb_trivial_init=True, sd_perturb = 0.001,
@@ -490,10 +592,10 @@ def train_chaosRNN(forward,
 		max_plot = int(np.floor(30./model_params['delta_t']))
 
 	n_plttrain = min(max_plot,y_clean_train.shape[0])
-	n_plttest = min(max_plot,y_clean_test.shape[0])
+	n_plttest = min(max_plot,y_clean_test.shape[1])
 
 	if not plot_state_indices:
-		plot_state_indices = np.arange(y_clean_test.shape[1])
+		plot_state_indices = np.arange(y_clean_test.shape[2])
 
 	# keep_param_history = np.log10( n_epochs * y_clean_train.shape[0] * (hidden_size**2) ) < mem_thresh_order
 	# if not keep_param_history:
@@ -508,6 +610,8 @@ def train_chaosRNN(forward,
 	output_clean_train = torch.FloatTensor(y_clean_train).type(dtype)
 	output_test = torch.FloatTensor(y_noisy_test).type(dtype)
 	output_clean_test = torch.FloatTensor(y_clean_test).type(dtype)
+	test_synch_clean = torch.FloatTensor(y_clean_testSynch).type(dtype)
+	test_synch_noisy = torch.FloatTensor(y_noisy_testSynch).type(dtype)
 
 	avg_output_test = torch.mean(output_test**2).detach().numpy()**0.5
 	# avg_output_test = torch.mean(output_test**2,dim=(0,1)).detach().numpy()**0.5
@@ -516,7 +620,9 @@ def train_chaosRNN(forward,
 
 	output_size = output_train.shape[1]
 	train_seq_length = output_train.size(0)
-	test_seq_length = output_test.size(0)
+	test_seq_length = output_test.size(1)
+	n_test_sets = output_test.size(0)
+	synch_length = test_synch_noisy.size(1)
 
 	# compute one-step-ahead model-based prediction for each point in the training set
 	if precompute_model:
@@ -538,6 +644,7 @@ def train_chaosRNN(forward,
 	for gp_style in style_list:
 		run_GP(y_clean_train, y_noisy_train,
 				y_clean_test, y_noisy_test,
+				y_clean_testSynch, y_noisy_testSynch,
 				model,f_unNormalize_Y,
 				model_pred,
 				train_seq_length,
@@ -550,6 +657,7 @@ def train_chaosRNN(forward,
 				output_dir,
 				n_plttrain,
 				n_plttest,
+				n_test_sets,
 				err_thresh,
 				gp_style,
 				gp_only)
@@ -571,62 +679,71 @@ def train_chaosRNN(forward,
 			C[jj,jj] = 1
 
 
-		hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
-		predictions = np.zeros([test_seq_length, output_size])
-		# yb_normalized = (yb - YMIN)/(YMAX - YMIN)
-		# initializing y0 of hidden state to the true initial condition from the clean signal
-		# hidden_state[0] = float(y_clean_test[0])
-		pred = output_train[-1,:,None]
-		perf_total_loss_test = 0
-		perf_total_loss_clean_test = 0
-		# running_epoch_loss_test = np.zeros(test_seq_length)
-		perf_pw_loss_test = np.zeros(test_seq_length)
-		perf_pw_loss_clean_test = np.zeros(test_seq_length)
-		for i in range(test_seq_length):
-			(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params)
-			# hidden_state = hidden_state
-			predictions[i,:] = pred.data.numpy().ravel()
-			i_loss = (pred.detach().squeeze() - output_test[i,None].squeeze()).pow(2).sum()
-			i_loss_clean = (pred.detach().squeeze() - output_clean_test[i,None].squeeze()).pow(2).sum()
-			perf_total_loss_test += i_loss
-			perf_total_loss_clean_test += i_loss_clean
-			# running_epoch_loss_test[j] = total_loss_test/(j+1)
-			perf_pw_loss_test[i] = i_loss.pow(0.5).numpy() / avg_output_test
-			perf_pw_loss_clean_test[i] = i_loss_clean.pow(0.5).numpy() / avg_output_clean_test
+		perfect_test_loss = []
+		perfect_t_valid = []
+		for kkt in range(n_test_sets):
+			# first, synchronize the hidden state
+			hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+			for i in range(synch_length-1):
+				(pred, hidden_state) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params)
 
-		# get error metrics
-		perfect_test_loss = perf_total_loss_test.numpy() / test_seq_length
-		perfect_test_clean_loss = perf_total_loss_clean_test.numpy() / test_seq_length
-		perfect_t_valid = np.argmax(perf_pw_loss_test > err_thresh)*model_params['delta_t']
-		perfect_t_valid_clean = np.argmax(perf_pw_loss_clean_test > err_thresh)*model_params['delta_t']
+			# hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+			predictions = np.zeros([test_seq_length, output_size])
+			# yb_normalized = (yb - YMIN)/(YMAX - YMIN)
+			# initializing y0 of hidden state to the true initial condition from the clean signal
+			# hidden_state[0] = float(y_clean_test[0])
+			# pred = output_train[-1,:,None]
+			pred = test_synch_noisy[kkt,-1,:,None]
+			perf_total_loss_test = 0
+			perf_total_loss_clean_test = 0
+			# running_epoch_loss_test = np.zeros(test_seq_length)
+			perf_pw_loss_test = np.zeros(test_seq_length)
+			perf_pw_loss_clean_test = np.zeros(test_seq_length)
+			for i in range(test_seq_length):
+				(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params)
+				# hidden_state = hidden_state
+				predictions[i,:] = pred.data.numpy().ravel()
+				i_loss = (pred.detach().squeeze() - output_test[kkt,i,None].squeeze()).pow(2).sum()
+				i_loss_clean = (pred.detach().squeeze() - output_clean_test[kkt,i,None].squeeze()).pow(2).sum()
+				perf_total_loss_test += i_loss
+				perf_total_loss_clean_test += i_loss_clean
+				# running_epoch_loss_test[j] = total_loss_test/(j+1)
+				perf_pw_loss_test[i] = i_loss.pow(0.5).numpy() / avg_output_test
+				perf_pw_loss_clean_test[i] = i_loss_clean.pow(0.5).numpy() / avg_output_clean_test
 
-		with open(output_dir+'/perfectModel_loss_test.txt', "w") as f:
-			f.write(str(perfect_test_loss))
-		with open(output_dir+'/perfectModel_loss_clean_test.txt', "w") as f:
-			f.write(str(perfect_test_clean_loss))
-		with open(output_dir+'/perfectModel_validity_time_test.txt', "w") as f:
-			f.write(str(perfect_t_valid))
-		with open(output_dir+'/perfectModel_validity_time_clean_test.txt', "w") as f:
-			f.write(str(perfect_t_valid_clean))
+			# get error metrics
+			perfect_test_loss = perf_total_loss_test.numpy() / test_seq_length
+			perfect_test_clean_loss = perf_total_loss_clean_test.numpy() / test_seq_length
+			perfect_t_valid = np.argmax(perf_pw_loss_test > err_thresh)*model_params['delta_t']
+			perfect_t_valid_clean = np.argmax(perf_pw_loss_clean_test > err_thresh)*model_params['delta_t']
 
-		# plot predictions vs truth
-		fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-		if not isinstance(ax_list,np.ndarray):
-			ax_list = [ax_list]
+			with open(output_dir+'/perfectModel_loss_test_{0}.txt'.format(kkt), "w") as f:
+				f.write(str(perfect_test_loss))
+			with open(output_dir+'/perfectModel_loss_clean_test_{0}.txt'.format(kkt), "w") as f:
+				f.write(str(perfect_test_clean_loss))
+			with open(output_dir+'/perfectModel_validity_time_test_{0}.txt'.format(kkt), "w") as f:
+				f.write(str(perfect_t_valid))
+			with open(output_dir+'/perfectModel_validity_time_clean_test_{0}.txt'.format(kkt), "w") as f:
+				f.write(str(perfect_t_valid_clean))
 
-		for kk in range(len(ax_list)):
-			ax1 = ax_list[kk]
-			ax1.scatter(np.arange(len(y_noisy_test[:n_plttest,plot_state_indices[kk]])), y_noisy_test[:n_plttest,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
-			ax1.plot(y_clean_test[:n_plttest,kk], color='red', label='clean data')
-			ax1.plot(predictions[:n_plttest,kk], ':' ,color='red', label='NN trivial fit')
-			ax1.set_xlabel('time')
-			ax1.set_ylabel(model_params['state_names'][kk] + '(t)', color='red')
-			ax1.tick_params(axis='y', labelcolor='red')
+			# plot predictions vs truth
+			fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+			if not isinstance(ax_list,np.ndarray):
+				ax_list = [ax_list]
 
-		ax_list[0].legend()
-		fig.suptitle('RNN w/ just mechanism fit to ODE simulation TEST SET')
-		fig.savefig(fname=output_dir+'/PERFECT_MechRnn_fit_ode')
-		plt.close(fig)
+			for kk in range(len(ax_list)):
+				ax1 = ax_list[kk]
+				ax1.scatter(np.arange(len(y_noisy_test[kkt,:n_plttest,plot_state_indices[kk]])), y_noisy_test[kkt,:n_plttest,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+				ax1.plot(y_clean_test[kkt,:n_plttest,kk], color='red', label='clean data')
+				ax1.plot(predictions[:n_plttest,kk], ':' ,color='red', label='NN trivial fit')
+				ax1.set_xlabel('time')
+				ax1.set_ylabel(model_params['state_names'][kk] + '(t)', color='red')
+				ax1.tick_params(axis='y', labelcolor='red')
+
+			ax_list[0].legend()
+			fig.suptitle('RNN w/ just mechanism fit to ODE simulation TEST SET')
+			fig.savefig(fname=output_dir+'/PERFECT_MechRnn_fit_TestODE_'+str(kkt))
+			plt.close(fig)
 
 
 	# Initilize parameters for training
@@ -695,12 +812,13 @@ def train_chaosRNN(forward,
 
 	loss_vec_train = np.zeros(n_epochs)
 	loss_vec_clean_train = np.zeros(n_epochs)
-	loss_vec_test = np.zeros(n_epochs)
-	loss_vec_clean_test = np.zeros(n_epochs)
-	pred_validity_vec_test = np.zeros(n_epochs)
-	pred_validity_vec_clean_test = np.zeros(n_epochs)
-	kl_vec_inv_test = np.zeros((n_epochs, output_size))
-	kl_vec_inv_clean_test = np.zeros((n_epochs, output_size))
+	loss_vec_test = np.zeros((n_epochs,n_test_sets))
+	loss_vec_clean_test = np.zeros((n_epochs,n_test_sets))
+	pred_validity_vec_test = np.zeros((n_epochs,n_test_sets))
+	pred_validity_vec_clean_test = np.zeros((n_epochs,n_test_sets))
+	kl_vec_inv_test = np.zeros((n_epochs,n_test_sets, output_size))
+	kl_vec_inv_clean_test = np.zeros((n_epochs,n_test_sets, output_size))
+
 	cc = -1 # iteration counter for saving weight updates
 	cc_inc = -1
 	for i_epoch in range(n_epochs):
@@ -776,55 +894,67 @@ def train_chaosRNN(forward,
 		loss_vec_train[i_epoch] = total_loss_train
 		loss_vec_clean_train[i_epoch] = total_loss_clean_train
 
-		total_loss_test = 0
-		total_loss_clean_test = 0
-		running_epoch_loss_test = np.zeros(test_seq_length)
-		running_epoch_loss_clean_test = np.zeros(test_seq_length)
-		# hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-		pred = output_train[-1,:,None]
-		pw_loss_test = np.zeros(test_seq_length)
-		pw_loss_clean_test = np.zeros(test_seq_length)
-		long_predictions = np.zeros([test_seq_length, output_size])
-		for j in range(test_seq_length):
-			target = output_test[j,None]
-			target_clean = output_clean_test[j,None]
-			(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
-			j_loss = (pred.detach().squeeze() - target.squeeze()).pow(2).sum()
-			j_loss_clean = (pred.detach().squeeze() - target_clean.squeeze()).pow(2).sum()
-			total_loss_test += j_loss
-			total_loss_clean_test += j_loss_clean
-			running_epoch_loss_clean_test[j] = total_loss_clean_test/(j+1)
-			running_epoch_loss_test[j] = total_loss_test/(j+1)
-			pw_loss_test[j] = j_loss.pow(0.5).numpy() / avg_output_test
-			pw_loss_clean_test[j] = j_loss_clean.pow(0.5).numpy() / avg_output_clean_test
-			pred = pred.detach()
-			long_predictions[j,:] = pred.data.numpy().ravel()
-			hidden_state = hidden_state.detach()
 
-		#normalize losses
-		total_loss_test = total_loss_test / test_seq_length
-		total_loss_clean_test = total_loss_clean_test / test_seq_length
-		#store losses
-		loss_vec_test[i_epoch] = total_loss_test
-		loss_vec_clean_test[i_epoch] = total_loss_clean_test
-		pred_validity_vec_test[i_epoch] = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
-		pred_validity_vec_clean_test[i_epoch] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
+		# now evaluate test loss
+		for kkt in range(n_test_sets):
+			if synch_length > 1:
+				# first, synchronize the hidden state
+				hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+				for i in range(synch_length-1):
+					(pred, hidden_state) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params)
+				pred = test_synch_noisy[kkt,-1,:,None]
+			else:
+				pred = output_train[-1,:,None]
 
-		# compute KL divergence between long predictions and whole test set:
-		if compute_kl:
-			kl_vec_inv_test[i_epoch,:] = kl4dummies(
-							f_unNormalize_Y(normz_info, y_noisy_test),
-							f_unNormalize_Y(normz_info, long_predictions))
-			kl_vec_inv_clean_test[i_epoch,:] = kl4dummies(
-							f_unNormalize_Y(normz_info, y_clean_test),
-							f_unNormalize_Y(normz_info, long_predictions))
+			total_loss_test = 0
+			total_loss_clean_test = 0
+			running_epoch_loss_test = np.zeros(test_seq_length)
+			running_epoch_loss_clean_test = np.zeros(test_seq_length)
+			# hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
+			pw_loss_test = np.zeros(test_seq_length)
+			pw_loss_clean_test = np.zeros(test_seq_length)
+			long_predictions = np.zeros([test_seq_length, output_size])
+			for j in range(test_seq_length):
+				target = output_test[kkt,j,None]
+				target_clean = output_clean_test[kkt,j,None]
+				(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
+				j_loss = (pred.detach().squeeze() - target.squeeze()).pow(2).sum()
+				j_loss_clean = (pred.detach().squeeze() - target_clean.squeeze()).pow(2).sum()
+				total_loss_test += j_loss
+				total_loss_clean_test += j_loss_clean
+				running_epoch_loss_clean_test[j] = total_loss_clean_test/(j+1)
+				running_epoch_loss_test[j] = total_loss_test/(j+1)
+				pw_loss_test[j] = j_loss.pow(0.5).numpy() / avg_output_test
+				pw_loss_clean_test[j] = j_loss_clean.pow(0.5).numpy() / avg_output_clean_test
+				pred = pred.detach()
+				long_predictions[j,:] = pred.data.numpy().ravel()
+				hidden_state = hidden_state.detach()
+
+			#normalize losses
+			total_loss_test = total_loss_test / test_seq_length
+			total_loss_clean_test = total_loss_clean_test / test_seq_length
+			#store losses
+			loss_vec_test[i_epoch,kkt] = total_loss_test
+			loss_vec_clean_test[i_epoch,kkt] = total_loss_clean_test
+			pred_validity_vec_test[i_epoch,kkt] = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
+			pred_validity_vec_clean_test[i_epoch,kkt] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
+
+
+			# compute KL divergence between long predictions and whole test set:
+			if compute_kl:
+				kl_vec_inv_test[i_epoch,kkt,:] = kl4dummies(
+								f_unNormalize_Y(normz_info, y_noisy_test),
+								f_unNormalize_Y(normz_info, long_predictions))
+				kl_vec_inv_clean_test[i_epoch,kkt,:] = kl4dummies(
+								f_unNormalize_Y(normz_info, y_clean_test),
+								f_unNormalize_Y(normz_info, long_predictions))
 
 		# print updates every 10 iterations or in 10% incrememnts
 		if i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0:
 			print("Epoch: {}\nTraining Loss = {}\nTesting Loss = {}".format(
 						i_epoch,
 						total_loss_train.data.item(),
-						total_loss_test.data.item()))
+						np.mean(loss_vec_test[i_epoch,:])))
 				 # plot predictions vs truth
 			# fig, (ax1, ax3) = plt.subplots(1, 2)
 			fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
@@ -845,7 +975,6 @@ def train_chaosRNN(forward,
 				saved_hidden_states[i+1,:] = hidden_state.data.numpy().ravel()
 				predictions[i+1,:] = pred.data.numpy().ravel()
 
-			y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test)
 			y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
 			y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
 			predictions_raw = f_unNormalize_Y(normz_info,predictions)
@@ -889,82 +1018,94 @@ def train_chaosRNN(forward,
 			plt.close(fig)
 
 
-			fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-			if not isinstance(ax_list,np.ndarray):
-				ax_list = [ax_list]
+			# now, loop over testing trajectories
+			for kkt in range(n_test_sets):
+				y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
+				fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+				if not isinstance(ax_list,np.ndarray):
+					ax_list = [ax_list]
 
-			# NOW, show testing fit
-			# hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-			predictions = np.zeros([test_seq_length, output_size])
-			pred = output_train[-1,:,None]
-			saved_hidden_states = np.zeros([test_seq_length, hidden_size])
-			for i in range(test_seq_length):
-				(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
-				# hidden_state = hidden_state
-				predictions[i,:] = pred.data.numpy().ravel()
-				saved_hidden_states[i,:] = hidden_state.data.numpy().ravel()
+				# NOW, show testing fit
+				if synch_length > 1:
+					# first, synchronize the hidden state
+					hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+					for i in range(synch_length-1):
+						(pred, hidden_state) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params)
+					pred = test_synch_noisy[kkt,-1,:,None]
+				else:
+					pred = output_train[-1,:,None]
 
-			predictions_raw = f_unNormalize_Y(normz_info,predictions)
-			for kk in range(len(ax_list)):
-				ax3 = ax_list[kk]
-				t_plot = np.arange(0,len(y_clean_test[:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
-				# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-				ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
-				ax3.plot(t_plot, predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
-				ax3.set_xlabel('time')
-				ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
-				ax3.tick_params(axis='y', labelcolor='red')
+				# hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
+				predictions = np.zeros([test_seq_length, output_size])
+				# pred = output_train[-1,:,None]
+				saved_hidden_states = np.zeros([test_seq_length, hidden_size])
+				for i in range(test_seq_length):
+					(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
+					# hidden_state = hidden_state
+					predictions[i,:] = pred.data.numpy().ravel()
+					saved_hidden_states[i,:] = hidden_state.data.numpy().ravel()
 
-			ax_list[0].legend()
+				predictions_raw = f_unNormalize_Y(normz_info,predictions)
+				for kk in range(len(ax_list)):
+					ax3 = ax_list[kk]
+					t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+					# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
+					ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
+					ax3.plot(t_plot, predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
+					ax3.set_xlabel('time')
+					ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
+					ax3.tick_params(axis='y', labelcolor='red')
 
-			fig.suptitle('RNN TEST fit to ODE simulation--' + str(i_epoch) + 'training epochs')
-			fig.savefig(fname=output_dir+'/rnn_test_fit_ode_iterEpochs'+str(i_epoch))
-			plt.close(fig)
+				ax_list[0].legend()
 
-			# plot dynamics of hidden state over TESTING set
-			n_hidden_plots = min(10, hidden_size)
-			fig, (ax_list) = plt.subplots(n_hidden_plots,1)
-			if not isinstance(ax_list,np.ndarray):
-				ax_list = [ax_list]
-			for kk in range(len(ax_list)):
-				ax1 = ax_list[kk]
-				t_plot = np.arange(0,round(len(saved_hidden_states[:n_plttest,kk])*model_params['delta_t'],8),model_params['delta_t'])
-				ax1.plot(t_plot, saved_hidden_states[:n_plttest,kk], color='red', label='clean data')
-				ax1.set_xlabel('time')
-				ax1.set_ylabel('h_{}'.format(kk), color='red')
-				ax1.tick_params(axis='y', labelcolor='red')
+				fig.suptitle('RNN TEST fit to ODE simulation--' + str(i_epoch) + 'training epochs')
+				fig.savefig(fname=output_dir+'/rnn_test_fit_ode_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
+				plt.close(fig)
 
-			ax_list[0].legend()
+				# plot dynamics of hidden state over TESTING set
+				n_hidden_plots = min(10, hidden_size)
+				fig, (ax_list) = plt.subplots(n_hidden_plots,1)
+				if not isinstance(ax_list,np.ndarray):
+					ax_list = [ax_list]
+				for kk in range(len(ax_list)):
+					ax1 = ax_list[kk]
+					t_plot = np.arange(0,round(len(saved_hidden_states[:n_plttest,kk])*model_params['delta_t'],8),model_params['delta_t'])
+					ax1.plot(t_plot, saved_hidden_states[:n_plttest,kk], color='red', label='clean data')
+					ax1.set_xlabel('time')
+					ax1.set_ylabel('h_{}'.format(kk), color='red')
+					ax1.tick_params(axis='y', labelcolor='red')
 
-			fig.suptitle('Hidden State Dynamics')
-			fig.savefig(fname=output_dir+'/rnn_test_hidden_states_iterEpochs'+str(i_epoch))
-			plt.close(fig)
+				ax_list[0].legend()
 
-			# plot KDE of test data vs predictiosn
-			fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-			if not isinstance(ax_list,np.ndarray):
-				ax_list = [ax_list]
+				fig.suptitle('Hidden State Dynamics')
+				fig.savefig(fname=output_dir+'/rnn_test_hidden_states_ode_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
+				plt.close(fig)
 
-			for kk in range(len(ax_list)):
-				ax1 = ax_list[kk]
-				pk = plot_state_indices[kk]
-				try:
-					x_grid = np.linspace(min(y_clean_test_raw[:,pk]), max(y_clean_test_raw[:,pk]), 1000)
-					ax1.plot(x_grid, kde_func(y_clean_test_raw[:,pk], x_grid), label='clean data')
-				except:
-					pass
-				try:
-					x_grid = np.linspace(min(predictions_raw[:,pk]), max(predictions_raw[:,pk]), 1000)
-					ax1.plot(x_grid, kde_func(predictions_raw[:,pk], x_grid), label='RNN fit')
-				except:
-					pass
-				ax1.set_xlabel(model_params['state_names'][pk])
+				# plot KDE of test data vs predictiosn
+				fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+				if not isinstance(ax_list,np.ndarray):
+					ax_list = [ax_list]
 
-			ax_list[0].legend()
+				for kk in range(len(ax_list)):
+					ax1 = ax_list[kk]
+					pk = plot_state_indices[kk]
+					try:
+						x_grid = np.linspace(min(y_clean_test_raw[:,pk]), max(y_clean_test_raw[:,pk]), 1000)
+						ax1.plot(x_grid, kde_func(y_clean_test_raw[:,pk], x_grid), label='clean data')
+					except:
+						pass
+					try:
+						x_grid = np.linspace(min(predictions_raw[:,pk]), max(predictions_raw[:,pk]), 1000)
+						ax1.plot(x_grid, kde_func(predictions_raw[:,pk], x_grid), label='RNN fit')
+					except:
+						pass
+					ax1.set_xlabel(model_params['state_names'][pk])
 
-			fig.suptitle('Predictions of Invariant Density')
-			fig.savefig(fname=output_dir+'/rnn_test_invDensity_iterEpochs'+str(i_epoch))
-			plt.close(fig)
+				ax_list[0].legend()
+
+				fig.suptitle('Predictions of Invariant Density')
+				fig.savefig(fname=output_dir+'/rnn_test_invDensity_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
+				plt.close(fig)
 
 
 	## save loss_vec
@@ -980,8 +1121,10 @@ def train_chaosRNN(forward,
 		np.savetxt(output_dir+'/loss_vec_clean_test.txt',loss_vec_clean_test)
 		np.savetxt(output_dir+'/prediction_validity_time_test.txt',pred_validity_vec_test)
 		np.savetxt(output_dir+'/prediction_validity_time_clean_test.txt',pred_validity_vec_clean_test)
-		np.savetxt(output_dir+'/kl_vec_inv_test.txt',kl_vec_inv_test)
-		np.savetxt(output_dir+'/kl_vec_inv_clean_test.txt',kl_vec_inv_clean_test)
+		# np.savetxt(output_dir+'/kl_vec_inv_test.txt',kl_vec_inv_test)
+		# np.savetxt(output_dir+'/kl_vec_inv_clean_test.txt',kl_vec_inv_clean_test)
+		np.save(output_dir+'/kl_vec_inv_test.npy',kl_vec_inv_test)
+		np.save(output_dir+'/kl_vec_inv_clean_test.npy',kl_vec_inv_clean_test)
 
 	np.savetxt(output_dir+'/A_mat.txt',A.detach().numpy())
 	np.savetxt(output_dir+'/B_mat.txt',B.detach().numpy())
@@ -1128,7 +1271,8 @@ def train_chaosRNN(forward,
 
 	# plot Train/Test curve
 	x_test = pd.DataFrame(np.loadtxt(output_dir+"/loss_vec_clean_test.txt"))
-	n_vals = len(x_test)
+	n_vals = n_epochs
+	epoch_vec = np.arange(0,n_vals)
 	max_exp = int(np.floor(np.log10(n_vals)))
 	win_list = [None] + list(10**np.arange(1,max_exp))
 	for win in win_list:
@@ -1145,31 +1289,41 @@ def train_chaosRNN(forward,
 		x_test = pd.DataFrame(np.loadtxt(output_dir+"/loss_vec_clean_test.txt"))
 		gpr1_valid_test = np.loadtxt(output_dir+'/GPR1_prediction_validity_time_clean_test.txt')
 		gpr2_valid_test = np.loadtxt(output_dir+'/GPR2_prediction_validity_time_clean_test.txt')
-		gpr1_test = np.loadtxt(output_dir+'/GPR1_clean_loss_test.txt')
-		gpr2_test = np.loadtxt(output_dir+'/GPR2_clean_loss_test.txt')
+		gpr1_test = np.loadtxt(output_dir+'/GPR1_loss_vec_clean_test.txt')
+		gpr2_test = np.loadtxt(output_dir+'/GPR2_loss_vec_clean_test.txt')
 
 		if n_epochs > 1:
 			x_valid_test = pd.DataFrame(np.loadtxt(output_dir+"/prediction_validity_time_clean_test.txt"))
-			x_kl_test = pd.DataFrame(np.loadtxt(output_dir+"/kl_vec_inv_clean_test.txt"))
+			x_kl_test = np.load(output_dir+"/kl_vec_inv_clean_test.npy")
+			# x_kl_test = pd.DataFrame(np.loadtxt(output_dir+"/kl_vec_inv_clean_test.txt"))
 		if win:
 			ax1.plot(x_train.rolling(win).mean())
-			ax2.plot(x_test.rolling(win).mean(),label='RNN')
+			ax2.plot(x_test.median(axis=1).rolling(win).mean(),label='RNN',color='blue')
+			# ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='RNN', color='blue')
+			ax2.errorbar(x=epoch_vec,y=x_test.median(axis=1).rolling(win).mean(), yerr=x_test.std(axis=1), label='RNN', color='blue')
 			if n_epochs > 1:
-				ax3.plot(x_valid_test.rolling(win).mean(),label='RNN')
-				for kk in plot_state_indices:
-					ax4.plot(x_kl_test.loc[:,kk].rolling(win).mean(), label=model_params['state_names'][kk])
+				ax3.plot(x_valid_test.median(axis=1).rolling(win).mean(),label='RNN',color='blue')
+				ax4.plot(np.median(x_kl_test[:,:,kk],axis=1).rolling(win).mean(), label=model_params['state_names'][kk])
 		else:
 			ax1.plot(x_train)
-			ax2.plot(x_test,label='RNN')
+			# ax2.plot(x_test.median(axis=1),label='RNN',color='blue')
+			ax2.errorbar(x=epoch_vec,y=x_test.median(axis=1), yerr=x_test.std(axis=1), label='RNN', color='blue')
 			if n_epochs > 1:
-				ax3.plot(x_valid_test)
-				for kk in plot_state_indices:
-					ax4.plot(x_kl_test.loc[:,kk], label=model_params['state_names'][kk])
+				# ax3.plot(x_valid_test.median(axis=1),label='RNN',color='blue')
+				ax3.errorbar(x=epoch_vec,y=x_valid_test.median(axis=1), yerr=x_valid_test.std(axis=1), label='RNN', color='blue')
+				# ax4.plot(np.median(x_kl_test[:,:,kk],axis=1), label=model_params['state_names'][kk])
+				ax4.errorbar(x=epoch_vec,y=np.median(x_kl_test[:,:,kk],axis=1), yerr=np.std(x_kl_test[:,:,kk],axis=1), label=model_params['state_names'][kk])
 
-		ax2.hlines(gpr1_test,xmin=0,xmax=n_vals-1,label='GPR 1',color='red')
-		ax2.hlines(gpr2_test,xmin=0,xmax=n_vals-1,label='GPR 2',color='purple')
-		ax3.hlines(gpr1_valid_test,xmin=0,xmax=n_vals-1,label='GPR 1',color='red')
-		ax3.hlines(gpr2_valid_test,xmin=0,xmax=n_vals-1,label='GPR 2',color='purple')
+		ax2.errorbar(x=epoch_vec,y=[np.median(gpr1_test)]*len(epoch_vec), yerr=[np.std(gpr1_test)]*len(epoch_vec),label='GPR 1',color='red')
+		ax2.errorbar(x=epoch_vec,y=[np.median(gpr2_test)]*len(epoch_vec), yerr=[np.std(gpr2_test)]*len(epoch_vec),label='GPR 2',color='purple')
+
+		ax3.errorbar(x=epoch_vec,y=[np.median(gpr1_valid_test)]*len(epoch_vec), yerr=[np.std(gpr1_valid_test)]*len(epoch_vec),label='GPR 1',color='red')
+		ax3.errorbar(x=epoch_vec,y=[np.median(gpr2_valid_test)]*len(epoch_vec), yerr=[np.std(gpr2_valid_test)]*len(epoch_vec),label='GPR 2',color='purple')
+
+		# ax2.hlines(gpr1_test,xmin=0,xmax=n_vals-1,label='GPR 1',color='red')
+		# ax2.hlines(gpr2_test,xmin=0,xmax=n_vals-1,label='GPR 2',color='purple')
+		# ax3.hlines(gpr1_valid_test,xmin=0,xmax=n_vals-1,label='GPR 1',color='red')
+		# ax3.hlines(gpr2_valid_test,xmin=0,xmax=n_vals-1,label='GPR 2',color='purple')
 
 		ax2.legend()
 		ax3.legend()
