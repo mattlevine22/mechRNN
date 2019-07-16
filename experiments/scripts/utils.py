@@ -1213,60 +1213,75 @@ def train_chaosRNN(forward,
 	plt.close(fig)
 
 
-	# NOW, show testing fit
-	# hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-	predictions = np.zeros([test_seq_length, output_size])
-	pred = output_train[-1,:,None]
-	for i in range(test_seq_length):
-		(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
-		# hidden_state = hidden_state
-		predictions[i,:] = pred.data.numpy().ravel()
+	# NOW, show final testing fit
+	for kkt in range(n_test_sets):
+		y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
+		fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+		if not isinstance(ax_list,np.ndarray):
+			ax_list = [ax_list]
 
-	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-	if not isinstance(ax_list,np.ndarray):
-		ax_list = [ax_list]
-	predictions_raw = f_unNormalize_Y(normz_info,predictions)
-	for kk in range(len(ax_list)):
-		ax3 = ax_list[kk]
-		t_plot = np.arange(0,len(y_clean_test_raw[:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
-		# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-		ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
-		ax3.plot(t_plot, predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
-		ax3.set_xlabel('time')
-		ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
-		ax3.tick_params(axis='y', labelcolor='red')
-		# ax3.set_title('Testing Fit')
+		# NOW, show testing fit
+		if synch_length > 1:
+			# first, synchronize the hidden state
+			hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+			for i in range(synch_length-1):
+				(pred, hidden_state) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params)
+			pred = test_synch_noisy[kkt,-1,:,None]
+		else:
+			pred = output_train[-1,:,None]
 
-	ax_list[0].legend()
-	fig.suptitle('RNN TEST fit to ODE simulation')
-	fig.savefig(fname=output_dir+'/rnn_fit_ode_TEST')
-	plt.close(fig)
+		# hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
+		predictions = np.zeros([test_seq_length, output_size])
+		# pred = output_train[-1,:,None]
+		saved_hidden_states = np.zeros([test_seq_length, hidden_size])
+		for i in range(test_seq_length):
+			(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
+			# hidden_state = hidden_state
+			predictions[i,:] = pred.data.numpy().ravel()
+			saved_hidden_states[i,:] = hidden_state.data.numpy().ravel()
 
-	# plot KDE of test data vs predictiosn
-	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-	if not isinstance(ax_list,np.ndarray):
-		ax_list = [ax_list]
+		predictions_raw = f_unNormalize_Y(normz_info,predictions)
+		for kk in range(len(ax_list)):
+			ax3 = ax_list[kk]
+			t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+			# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
+			ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
+			ax3.plot(t_plot, predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
+			ax3.set_xlabel('time')
+			ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
+			ax3.tick_params(axis='y', labelcolor='red')
 
-	for kk in range(len(ax_list)):
-		ax1 = ax_list[kk]
-		pk = plot_state_indices[kk]
-		try:
-			x_grid = np.linspace(min(y_clean_test_raw[:,pk]), max(y_clean_test_raw[:,pk]), 1000)
-			ax1.plot(x_grid, kde_func(y_clean_test_raw[:,pk], x_grid), label='clean data')
-		except:
-			pass
-		try:
-			x_grid = np.linspace(min(predictions_raw[:,pk]), max(predictions_raw[:,pk]), 1000)
-			ax1.plot(x_grid, kde_func(predictions_raw[:,pk], x_grid), label='RNN fit')
-		except:
-			pass
-		ax1.set_xlabel(model_params['state_names'][pk])
+		ax_list[0].legend()
 
-	ax_list[0].legend()
+		fig.suptitle('RNN TEST fit to ODE simulation')
+		fig.savefig(fname=output_dir+'/rnn_fit_ode_TEST_{0}'.format(kkt))
+		plt.close(fig)
 
-	fig.suptitle('Predictions of Invariant Density')
-	fig.savefig(fname=output_dir+'/rnn_invDensity_TEST')
-	plt.close(fig)
+		# plot KDE of test data vs predictiosn
+		fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+		if not isinstance(ax_list,np.ndarray):
+			ax_list = [ax_list]
+
+		for kk in range(len(ax_list)):
+			ax1 = ax_list[kk]
+			pk = plot_state_indices[kk]
+			try:
+				x_grid = np.linspace(min(y_clean_test_raw[:,pk]), max(y_clean_test_raw[:,pk]), 1000)
+				ax1.plot(x_grid, kde_func(y_clean_test_raw[:,pk], x_grid), label='clean data')
+			except:
+				pass
+			try:
+				x_grid = np.linspace(min(predictions_raw[:,pk]), max(predictions_raw[:,pk]), 1000)
+				ax1.plot(x_grid, kde_func(predictions_raw[:,pk], x_grid), label='RNN fit')
+			except:
+				pass
+			ax1.set_xlabel(model_params['state_names'][pk])
+
+		ax_list[0].legend()
+
+		fig.suptitle('Predictions of Invariant Density')
+		fig.savefig(fname=output_dir+'/rnn_invDensity_TEST_{0}'.format(kkt))
+		plt.close(fig)
 
 
 	# plot Train/Test curve
