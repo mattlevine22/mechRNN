@@ -135,7 +135,7 @@ def main():
 				# train on clean data
 				run_output_dir = output_dir + '/iter{0}'.format(n) + '/vanillaRNN_clean_hs{0}'.format(hidden_size)
 				all_dirs.append(run_output_dir)
-				if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST.png'):
+				if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
 					# torch.manual_seed(0)
 					train_chaosRNN(forward,
 						y_clean_train_norm, y_clean_train_norm,
@@ -157,7 +157,7 @@ def main():
 				run_output_dir = output_dir + '/iter{0}'.format(n) + '/mechRNN_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size)
 				all_dirs.append(run_output_dir)
 
-				if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST.png'):
+				if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
 					# torch.manual_seed(0)
 					train_chaosRNN(forward,
 						y_clean_train_norm, y_clean_train_norm,
@@ -171,7 +171,7 @@ def main():
 				for gp_style in [1,2]:
 					run_output_dir = output_dir + '/iter{0}'.format(n) + '/hybridGPR{2}_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size, gp_style)
 					all_dirs.append(run_output_dir)
-					if not os.path.exists(run_output_dir+'/fit_ode_TEST.png'):
+					if not os.path.exists(run_output_dir+'/fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
 						# torch.manual_seed(0)
 						train_chaosRNN(forward,
 							y_clean_train_norm, y_clean_train_norm,
