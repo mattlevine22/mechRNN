@@ -1318,7 +1318,7 @@ def train_chaosRNN(forward,
 			ax2.errorbar(x=epoch_vec,y=x_test.median(axis=1).rolling(win).mean(), yerr=x_test.std(axis=1), label='RNN', color='blue')
 			if n_epochs > 1:
 				ax3.plot(x_valid_test.median(axis=1).rolling(win).mean(),label='RNN',color='blue')
-				ax4.plot(np.median(x_kl_test[:,:,kk],axis=1).rolling(win).mean(), label=model_params['state_names'][kk])
+				ax4.plot(pd.DataFrame(np.median(x_kl_test[:,:,kk],axis=1)).rolling(win).mean(), label=model_params['state_names'][kk])
 		else:
 			ax1.plot(x_train)
 			# ax2.plot(x_test.median(axis=1),label='RNN',color='blue')
