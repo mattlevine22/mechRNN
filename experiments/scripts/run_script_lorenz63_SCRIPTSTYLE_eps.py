@@ -109,7 +109,6 @@ def main():
 		y_noisy_train_norm = f_normalize_minmax(normz_info,y_noisy_train)
 		y_clean_test_vec_norm = np.copy(y_clean_test_vec[:,ntsynch:,:])
 		y_noisy_test_vec_norm = np.copy(y_noisy_test_vec[:,ntsynch:,:])
-		pdb.set_trace()
 		# initialize testSynch vec with correct dimensions
 		if FLAGS.continue_trajectory:
 			y_clean_testSynch_vec_norm = np.copy(y_clean_test_vec[:,0,None])
