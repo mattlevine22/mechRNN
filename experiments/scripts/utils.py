@@ -400,25 +400,33 @@ def run_GP(y_clean_train, y_noisy_train,
 	else:
 		gp_nm = 'GPR{0}_'.format(gp_style)
 
+	do_resid = 1
+	y=y_noisy_train[1:]-model_pred
 	if gp_style==1:
 		X = y_noisy_train[:-1]
 	elif gp_style==2:
 		X = np.concatenate((y_noisy_train[:-1],model_pred),axis=1)
+	elif gp_style==3:
+		X = model_pred
+	elif gp_style==4:
+		do_resid = 0
+		X = y_noisy_train[:-1]
+		y=y_noisy_train[1:]
 
 	# NEW. learn residuals with GP
-	gpr = GaussianProcessRegressor().fit(X=X,y=y_noisy_train[1:]-model_pred)
+	gpr = GaussianProcessRegressor().fit(X=X,y=y)
 	# gpr = GaussianProcessRegressor().fit(X=output_train[:-1],y=output_train[1:]-model_pred)
-	gpr_train_predictions_orig = model_pred + gpr.predict(X).squeeze()
+	gpr_train_predictions_orig = do_resid*model_pred + gpr.predict(X).squeeze()
 	# gpr.score(model_pred, y_noisy_train[1:])
 
 	gpr_train_predictions_rerun = np.zeros([train_seq_length-1, output_size])
 	pred = y_noisy_train[0,:,None].squeeze()
+	tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 	for j in range(train_seq_length-1):
 		# target = output_test[j,None]
 		# target_clean = output_clean_train[j,None]
 
 		# generate next-step ODE model prediction
-		tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 		# unnormalize model_input so that it can go through the ODE solver
 		y0 = f_unNormalize_minmax(normz_info, pred)
 		y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
@@ -428,8 +436,13 @@ def run_GP(y_clean_train, y_noisy_train,
 			x = pred
 		elif gp_style==2:
 			x = np.concatenate((pred, my_model_pred))
+		elif gp_style==3:
+			x = my_model_pred
+		elif gp_style==4:
+			x = pred
 
-		pred = my_model_pred + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
+
+		pred = do_resid*my_model_pred + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
 
 		# compute losses
 		# total_loss_test += (pred - target.squeeze()).pow(2).sum()/2
@@ -499,7 +512,12 @@ def run_GP(y_clean_train, y_noisy_train,
 				x = pred
 			elif gp_style==2:
 				x = np.concatenate((pred, my_model_pred))
-			pred = my_model_pred + gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
+			elif gp_style==3:
+				x = my_model_pred
+			elif gp_style==4:
+				x = pred
+
+			pred = do_resid*my_model_pred + gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
 
 			# compute losses
 			j_loss = sum((pred - target)**2)
@@ -637,7 +655,7 @@ def train_chaosRNN(forward,
 		model_pred = [None for j in range(train_seq_length-1)]
 
 	if gp_style is None:
-		style_list = [2,1]
+		style_list = [1,2,3,4]
 	else:
 		style_list = [gp_style]
 
@@ -1305,10 +1323,6 @@ def train_chaosRNN(forward,
 
 		x_train = pd.DataFrame(np.loadtxt(output_dir+'/loss_vec_train.txt'))
 		x_test = pd.DataFrame(np.loadtxt(output_dir+"/loss_vec_clean_test.txt"))
-		gpr1_valid_test = np.loadtxt(output_dir+'/GPR1_prediction_validity_time_clean_test.txt')
-		gpr2_valid_test = np.loadtxt(output_dir+'/GPR2_prediction_validity_time_clean_test.txt')
-		gpr1_test = np.loadtxt(output_dir+'/GPR1_loss_vec_clean_test.txt')
-		gpr2_test = np.loadtxt(output_dir+'/GPR2_loss_vec_clean_test.txt')
 
 		if n_epochs > 1:
 			x_valid_test = pd.DataFrame(np.loadtxt(output_dir+"/prediction_validity_time_clean_test.txt"))
@@ -1318,26 +1332,29 @@ def train_chaosRNN(forward,
 			ax1.plot(x_train.rolling(win).mean())
 			# ax2.plot(x_test.median(axis=1).rolling(win).mean(),label='RNN',color='blue')
 			# ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='RNN', color='blue')
-			ax2.errorbar(x=epoch_vec,y=x_test.median(axis=1).rolling(win).mean(), yerr=x_test.std(axis=1), label='RNN', color='blue')
+			ax2.errorbar(x=epoch_vec,y=x_test.median(axis=1).rolling(win).mean(), yerr=x_test.std(axis=1), label='RNN')
 			if n_epochs > 1:
-				ax3.errorbar(x=epoch_vec,y=x_valid_test.median(axis=1).rolling(win).mean(), yerr=x_valid_test.std(axis=1), label='RNN', color='blue')
-				ax4.errorbar(x=epoch_vec,y=pd.DataFrame(np.median(x_kl_test[:,:,kk],axis=1)).rolling(win).mean(), yerr=np.std(x_kl_test[:,:,kk],axis=1), label='RNN', color='blue')
+				ax3.errorbar(x=epoch_vec,y=x_valid_test.median(axis=1).rolling(win).mean(), yerr=x_valid_test.std(axis=1), label='RNN')
+				for kk in plot_state_indices:
+					ax4.errorbar(x=epoch_vec,y=pd.DataFrame(np.median(x_kl_test[:,:,kk],axis=1)).rolling(win).mean().loc[:,0], yerr=np.std(x_kl_test[:,:,kk],axis=1), label='RNN')
 				# ax4.plot(pd.DataFrame(np.median(x_kl_test[:,:,kk],axis=1)).rolling(win).mean(), label=model_params['state_names'][kk])
 		else:
 			ax1.plot(x_train)
 			# ax2.plot(x_test.median(axis=1),label='RNN',color='blue')
-			ax2.errorbar(x=epoch_vec,y=x_test.median(axis=1), yerr=x_test.std(axis=1), label='RNN', color='blue')
+			ax2.errorbar(x=epoch_vec,y=x_test.median(axis=1), yerr=x_test.std(axis=1), label='RNN')
 			if n_epochs > 1:
 				# ax3.plot(x_valid_test.median(axis=1),label='RNN',color='blue')
-				ax3.errorbar(x=epoch_vec,y=x_valid_test.median(axis=1), yerr=x_valid_test.std(axis=1), label='RNN', color='blue')
+				ax3.errorbar(x=epoch_vec,y=x_valid_test.median(axis=1), yerr=x_valid_test.std(axis=1), label='RNN')
 				# ax4.plot(np.median(x_kl_test[:,:,kk],axis=1), label=model_params['state_names'][kk])
-				ax4.errorbar(x=epoch_vec,y=np.median(x_kl_test[:,:,kk],axis=1), yerr=np.std(x_kl_test[:,:,kk],axis=1), label=model_params['state_names'][kk])
+				for kk in plot_state_indices:
+					ax4.errorbar(x=epoch_vec,y=np.median(x_kl_test[:,:,kk],axis=1), yerr=np.std(x_kl_test[:,:,kk],axis=1), label=model_params['state_names'][kk])
 
-		ax2.errorbar(x=epoch_vec,y=[np.median(gpr1_test)]*len(epoch_vec), yerr=[np.std(gpr1_test)]*len(epoch_vec),label='GPR 1',color='red')
-		ax2.errorbar(x=epoch_vec,y=[np.median(gpr2_test)]*len(epoch_vec), yerr=[np.std(gpr2_test)]*len(epoch_vec),label='GPR 2',color='purple')
-
-		ax3.errorbar(x=epoch_vec,y=[np.median(gpr1_valid_test)]*len(epoch_vec), yerr=[np.std(gpr1_valid_test)]*len(epoch_vec),label='GPR 1',color='red')
-		ax3.errorbar(x=epoch_vec,y=[np.median(gpr2_valid_test)]*len(epoch_vec), yerr=[np.std(gpr2_valid_test)]*len(epoch_vec),label='GPR 2',color='purple')
+		for gp_style in style_list:
+			gp_nm = 'GPR {0}'.format(gp_style)
+			gpr_valid_test = np.loadtxt(output_dir+'/GPR{0}_prediction_validity_time_clean_test.txt'.format(gp_style))
+			gpr_test = np.loadtxt(output_dir+'/GPR{0}_loss_vec_clean_test.txt'.format(gp_style))
+			ax2.errorbar(x=epoch_vec,y=[np.median(gpr_test)]*len(epoch_vec), yerr=[np.std(gpr_test)]*len(epoch_vec),label=gp_nm)
+			ax3.errorbar(x=epoch_vec,y=[np.median(gpr_valid_test)]*len(epoch_vec), yerr=[np.std(gpr_valid_test)]*len(epoch_vec),label=gp_nm)
 
 		# ax2.hlines(gpr1_test,xmin=0,xmax=n_vals-1,label='GPR 1',color='red')
 		# ax2.hlines(gpr2_test,xmin=0,xmax=n_vals-1,label='GPR 2',color='purple')
@@ -1813,7 +1830,7 @@ def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indi
 						ax3.errorbar(x=epoch_vec,y=x_valid_test.median(axis=1).rolling(win).mean(), yerr=x_valid_test.std(axis=1), label=d_label)
 						x_kl_test = np.load(d+"/kl_vec_inv_clean_test.npy")
 						for kk in plot_state_indices:
-							ax4.errorbar(x=epoch_vec,y=pd.DataFrame(np.median(x_kl_test[:,:,kk],axis=1)).rolling(win).mean(), yerr=pd.DataFrame(np.std(x_kl_test[:,:,kk],axis=1)), label=d_label)
+							ax4.errorbar(x=epoch_vec,y=pd.DataFrame(np.median(x_kl_test[:,:,kk],axis=1)).rolling(win).mean().loc[:,0], yerr=np.std(x_kl_test[:,:,kk],axis=1), label=d_label)
 					else:
 						ax3.errorbar(x=epoch_vec,y=[np.median(x_valid_test)]*len(epoch_vec), yerr=[np.std(x_valid_test)]*len(epoch_vec),label=d_label)
 			else:

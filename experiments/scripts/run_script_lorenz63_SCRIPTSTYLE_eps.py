@@ -168,7 +168,7 @@ def main():
 						compute_kl=FLAGS.compute_kl)
 
 				# GP ONLY
-				for gp_style in [1,2]:
+				for gp_style in [1,2,3,4]:
 					run_output_dir = output_dir + '/iter{0}'.format(n) + '/hybridGPR{2}_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size, gp_style)
 					all_dirs.append(run_output_dir)
 					if not os.path.exists(run_output_dir+'/fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
