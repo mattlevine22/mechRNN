@@ -149,9 +149,7 @@ def main():
 			#### run mechRNN w/ BAD parameter ###
 			forward = forward_chaos_hybrid_full
 
-			# for eps_badness in np.random.permutation([0, 0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.4, 1]):
-			for eps_badness in np.random.permutation([0, 0.01, 0.05]):
-			# for eps_badness in [0, 0.01, 0.02]:
+			for eps_badness in np.random.permutation([0, 0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.4, 1]):
 				rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b*(1+eps_badness), c), 'time_avg_norm':0.529}
 
 				# train on clean data
