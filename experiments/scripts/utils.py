@@ -631,9 +631,15 @@ def train_chaosRNN(forward,
 	test_synch_clean = torch.FloatTensor(y_clean_testSynch).type(dtype)
 	test_synch_noisy = torch.FloatTensor(y_noisy_testSynch).type(dtype)
 
-	avg_output_test = torch.mean(output_test**2).detach().numpy()**0.5
+	try:
+		avg_output_test = model_params['time_avg_norm']
+	except:
+		avg_output_test = torch.mean(output_test**2).detach().numpy()**0.5
 	# avg_output_test = torch.mean(output_test**2,dim=(0,1)).detach().numpy()**0.5
-	avg_output_clean_test = torch.mean(output_clean_test**2).detach().numpy()**0.5
+	try:
+		avg_output_clean_test = model_params['time_avg_norm']
+	except:
+		avg_output_clean_test = torch.mean(output_clean_test**2).detach().numpy()**0.5
 	# avg_output_clean_test = torch.mean(output_clean_test**2,dim=(0,1)).detach().numpy()**0.5
 
 	output_size = output_train.shape[1]
