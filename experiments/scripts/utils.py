@@ -1879,8 +1879,9 @@ def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indi
 
 
 
-def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", win=10, many_epochs=True, eps_token='epsBadness'):
+def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", win=1, many_epochs=True, eps_token='epsBadness'):
 	t_vec = [1,2,4,6,8,10]
+	n_gprs = 4
 	# first, get sizes of things...max window size is 10% of whole test set.
 	init_dirs = [x for x in my_dirs if 'RNN' in x.split('/')[-1]]
 	d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
@@ -1891,8 +1892,7 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	model_performance = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
 	rnn_performance = {'mse':(), 't_valid':(), 'mse_time':(), 't_valid_time':{}}
 	hybrid_performance = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
-	gpr1_performance = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
-	gpr2_performance = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
+	gpr_performance = [{'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}} for _ in range(n_gprs)]
 	for d in my_dirs:
 		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
 
@@ -1914,11 +1914,10 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 		# do i need to force ndmin?
 		x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
 		x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
-		gpr1_valid_test = np.loadtxt(d+'/GPR1_prediction_validity_time_clean_test.txt',ndmin=1)
-		gpr2_valid_test = np.loadtxt(d+'/GPR2_prediction_validity_time_clean_test.txt',ndmin=1)
-		gpr1_test = np.loadtxt(d+'/GPR1_loss_vec_clean_test.txt',ndmin=1)
-		gpr2_test = np.loadtxt(d+'/GPR2_loss_vec_clean_test.txt',ndmin=1)
-
+		gpr_valid_test = [np.loadtxt(d+'/GPR{0}_prediction_validity_time_clean_test.txt'.format(gp+1),ndmin=1) for gp in range(n_gprs)]
+		gpr_test = [np.loadtxt(d+'/GPR{0}_loss_vec_clean_test.txt'.format(gp+1),ndmin=1) for gp in range(n_gprs)]
+		# gpr2_test = np.loadtxt(d+'/GPR2_loss_vec_clean_test.txt',ndmin=1)
+		# gpr2_valid_test = np.loadtxt(d+'/GPR2_prediction_validity_time_clean_test.txt',ndmin=1)
 
 		if many_epochs:
 			x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt"))
@@ -1926,13 +1925,12 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 
 		n_tests = x_valid_test.shape[1]
 		for kkt in range(n_tests):
-			if win:
-				x_train = x_train.rolling(win).mean()
-				x_test.loc[:,kkt] = x_test.loc[:,kkt].rolling(win).mean()
-				if many_epochs:
-					x_valid_test.loc[:,kkt] = x_valid_test.loc[:,kkt].rolling(win).mean()
-					# for kk in plot_state_indices:
-					# 	ax4.plot(x_kl_test.loc[:,kk].rolling(win).mean(), label=d_label)
+			x_train = x_train.rolling(win).mean()
+			x_test.loc[:,kkt] = x_test.loc[:,kkt].rolling(win).mean()
+			if many_epochs:
+				x_valid_test.loc[:,kkt] = x_valid_test.loc[:,kkt].rolling(win).mean()
+				# for kk in plot_state_indices:
+				# 	ax4.plot(x_kl_test.loc[:,kk].rolling(win).mean(), label=d_label)
 			if my_eps is None:
 				rnn_performance['mse'] += (float(np.min(x_test.loc[:,kkt])),)
 				# rnn_performance['mse_time'] += (float(np.nanargmin(x_test)),)
@@ -1951,14 +1949,18 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 								rnn_performance['t_valid_time'][tt] = (np.inf,)
 			elif my_eps in hybrid_performance['mse']:
 				hybrid_performance['mse'][my_eps] += (float(np.min(x_test.loc[:,kkt])),)
-				gpr1_performance['mse'][my_eps] += (float(np.min(gpr1_test[kkt])),)
-				gpr2_performance['mse'][my_eps] += (float(np.min(gpr2_test[kkt])),)
+				for gp in range(n_gprs):
+					gpr_performance[gp]['mse'][my_eps] += (float(np.min(gpr_test[gp][kkt])),)
+				# gpr1_performance['mse'][my_eps] += (float(np.min(gpr1_test[kkt])),)
+				# gpr2_performance['mse'][my_eps] += (float(np.min(gpr2_test[kkt])),)
 				# for tt in t_vec:
 				# 	hybrid_performance['mse_time'][my_eps][tt] += (x_test[x_test.iloc[:,0]>tt].index[0],)
 				if many_epochs:
 					hybrid_performance['t_valid'][my_eps] += (float(np.max(x_valid_test.loc[:,kkt])),)
-					gpr1_performance['t_valid'][my_eps] += (float(np.max(gpr1_valid_test[kkt])),)
-					gpr2_performance['t_valid'][my_eps] += (float(np.max(gpr2_valid_test[kkt])),)
+					for gp in range(n_gprs):
+						gpr_performance[gp]['t_valid'][my_eps] += (float(np.max(gpr_valid_test[gp][kkt])),)
+					# gpr1_performance['t_valid'][my_eps] += (float(np.max(gpr1_valid_test[kkt])),)
+					# gpr2_performance['t_valid'][my_eps] += (float(np.max(gpr2_valid_test[kkt])),)
 					for tt in t_vec:
 						try:
 							hybrid_performance['t_valid_time'][my_eps][tt] += (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
@@ -1966,23 +1968,32 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 							# gpr2_performance['t_valid_time'][my_eps][tt] += (gpr2_valid_test.loc[gpr2_valid_test.loc[:,kkt]>tt,kkt].index[0],)
 						except:
 							hybrid_performance['t_valid_time'][my_eps][tt] += (np.inf,)
-							gpr1_performance['t_valid_time'][my_eps][tt] += (np.inf,)
-							gpr2_performance['t_valid_time'][my_eps][tt] += (np.inf,)
+							for gp in range(n_gprs):
+								gpr_performance[gp]['t_valid_time'][my_eps][tt] += (np.inf,)
+							# gpr1_performance['t_valid_time'][my_eps][tt] += (np.inf,)
+							# gpr2_performance['t_valid_time'][my_eps][tt] += (np.inf,)
 			else:
 				hybrid_performance['mse'][my_eps] = (float(np.min(x_test.loc[:,kkt])),)
-				gpr1_performance['mse'][my_eps] = (float(np.min(gpr1_test[kkt])),)
-				gpr2_performance['mse'][my_eps] = (float(np.min(gpr2_test[kkt])),)
+				for gp in range(n_gprs):
+					gpr_performance[gp]['mse'][my_eps] = (float(np.min(gpr_test[gp][kkt])),)
+				# gpr1_performance['mse'][my_eps] = (float(np.min(gpr1_test[kkt])),)
+				# gpr2_performance['mse'][my_eps] = (float(np.min(gpr2_test[kkt])),)
 				# hybrid_performance['mse_time'][my_eps] = {}
 				# for tt in t_vec:
 				# 	hybrid_performance['mse_time'][my_eps][tt] = (x_test[x_test.iloc[:,0]>tt].index[0],)
 				if many_epochs:
 					hybrid_performance['t_valid'][my_eps] = (float(np.max(x_valid_test.loc[:,kkt])),)
-					gpr1_performance['t_valid'][my_eps] = (float(np.max(gpr1_valid_test[kkt])),)
-					gpr2_performance['t_valid'][my_eps] = (float(np.max(gpr2_valid_test[kkt])),)
-
+					# gpr1_performance['t_valid'][my_eps] = (float(np.max(gpr1_valid_test[kkt])),)
+					# gpr2_performance['t_valid'][my_eps] = (float(np.max(gpr2_valid_test[kkt])),)
 					hybrid_performance['t_valid_time'][my_eps] = {}
-					gpr1_performance['t_valid_time'][my_eps] = {}
-					gpr2_performance['t_valid_time'][my_eps] = {}
+					# gpr1_performance['t_valid_time'][my_eps] = {}
+					# gpr2_performance['t_valid_time'][my_eps] = {}
+
+					for gp in range(n_gprs):
+						gpr_performance[gp]['t_valid'][my_eps] = (float(np.max(gpr_valid_test[gp][kkt])),)
+						gpr_performance[gp]['t_valid_time'][my_eps] = {}
+
+
 					for tt in t_vec:
 						try:
 							hybrid_performance['t_valid_time'][my_eps][tt] += (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
@@ -1990,8 +2001,10 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 							# gpr2_performance['t_valid_time'][my_eps][tt] += (gpr2_valid_test.loc[gpr2_valid_test.loc[:,kkt]>tt,kkt].index[0],)
 						except:
 							hybrid_performance['t_valid_time'][my_eps][tt] = (np.inf,)
-							gpr1_performance['t_valid_time'][my_eps][tt] = (np.inf,)
-							gpr2_performance['t_valid_time'][my_eps][tt] = (np.inf,)
+							for gp in range(n_gprs):
+								gpr_performance[gp]['t_valid_time'][my_eps][tt] = (np.inf,)
+							# gpr1_performance['t_valid_time'][my_eps][tt] = (np.inf,)
+							# gpr2_performance['t_valid_time'][my_eps][tt] = (np.inf,)
 
 	# now summarize
 	test_loss_mins = {key: np.min(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
@@ -2000,17 +2013,17 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	test_loss_medians = {key: np.median(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
 	test_loss_stds = {key: np.std(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
 
-	gpr1_test_loss_mins = {key: np.min(gpr1_performance['mse'][key]) for key in gpr1_performance['mse']}
-	gpr1_test_loss_maxes = {key: np.max(gpr1_performance['mse'][key]) for key in gpr1_performance['mse']}
-	gpr1_test_loss_means = {key: np.mean(gpr1_performance['mse'][key]) for key in gpr1_performance['mse']}
-	gpr1_test_loss_medians = {key: np.median(gpr1_performance['mse'][key]) for key in gpr1_performance['mse']}
-	gpr1_test_loss_stds = {key: np.std(gpr1_performance['mse'][key]) for key in gpr1_performance['mse']}
-
-	gpr2_test_loss_mins = {key: np.min(gpr2_performance['mse'][key]) for key in gpr2_performance['mse']}
-	gpr2_test_loss_maxes = {key: np.max(gpr2_performance['mse'][key]) for key in gpr2_performance['mse']}
-	gpr2_test_loss_means = {key: np.mean(gpr2_performance['mse'][key]) for key in gpr2_performance['mse']}
-	gpr2_test_loss_medians = {key: np.median(gpr2_performance['mse'][key]) for key in gpr2_performance['mse']}
-	gpr2_test_loss_stds = {key: np.std(gpr2_performance['mse'][key]) for key in gpr2_performance['mse']}
+	gpr_test_loss_mins = []
+	gpr_test_loss_maxes = []
+	gpr_test_loss_means = []
+	gpr_test_loss_medians = []
+	gpr_test_loss_stds = []
+	for gp in range(n_gprs):
+		gpr_test_loss_mins.append({key: np.min(gpr_performance[gp]['mse'][key]) for key in gpr_performance[gp]['mse']})
+		gpr_test_loss_maxes.append({key: np.max(gpr_performance[gp]['mse'][key]) for key in gpr_performance[gp]['mse']})
+		gpr_test_loss_means.append({key: np.mean(gpr_performance[gp]['mse'][key]) for key in gpr_performance[gp]['mse']})
+		gpr_test_loss_medians.append({key: np.median(gpr_performance[gp]['mse'][key]) for key in gpr_performance[gp]['mse']})
+		gpr_test_loss_stds.append({key: np.std(gpr_performance[gp]['mse'][key]) for key in gpr_performance[gp]['mse']})
 
 	rnn_test_loss_mins = np.min(rnn_performance['mse'])
 	rnn_test_loss_maxes = np.max(rnn_performance['mse'])
@@ -2036,15 +2049,20 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	std_vec = [test_loss_stds[eps] for eps in eps_vec]
 	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN', color='blue')
 
-	# hybrid GPR 1
-	median_vec = [gpr1_test_loss_medians[eps] for eps in eps_vec]
-	std_vec = [gpr1_test_loss_stds[eps] for eps in eps_vec]
-	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 1', color='green', linestyle=':')
+	for gp in range(n_gprs):
+		if gp==3:
+			gp_nm = 'vanilla GPR'
+		else:
+			gp_nm = 'hybrid GPR {0}'.format(gp+1)
+		# hybrid GPR
+		median_vec = [gpr_test_loss_medians[gp][eps] for eps in eps_vec]
+		std_vec = [gpr_test_loss_stds[gp][eps] for eps in eps_vec]
+		ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=gp_nm, linestyle='--')
 
-	# hybrid GPR 2
-	median_vec = [gpr2_test_loss_medians[eps] for eps in eps_vec]
-	std_vec = [gpr2_test_loss_stds[eps] for eps in eps_vec]
-	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 2', color='green', linestyle='--')
+	# # hybrid GPR 2
+	# median_vec = [gpr2_test_loss_medians[eps] for eps in eps_vec]
+	# std_vec = [gpr2_test_loss_stds[eps] for eps in eps_vec]
+	# ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 2', color='green', linestyle='--')
 
 
 	ax1.set_xlabel('epsilon Model Error')
@@ -2071,17 +2089,29 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 		t_valid_means = {key: np.mean(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
 		t_valid_stds = {key: np.std(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
 
-		gpr1_t_valid_mins = {key: np.min(gpr1_performance['t_valid'][key]) for key in gpr1_performance['t_valid']}
-		gpr1_t_valid_maxes = {key: np.max(gpr1_performance['t_valid'][key]) for key in gpr1_performance['t_valid']}
-		gpr1_t_valid_medians = {key: np.median(gpr1_performance['t_valid'][key]) for key in gpr1_performance['t_valid']}
-		gpr1_t_valid_means = {key: np.mean(gpr1_performance['t_valid'][key]) for key in gpr1_performance['t_valid']}
-		gpr1_t_valid_stds = {key: np.std(gpr1_performance['t_valid'][key]) for key in gpr1_performance['t_valid']}
+		gpr_t_valid_mins = []
+		gpr_t_valid_maxes = []
+		gpr_t_valid_means = []
+		gpr_t_valid_medians = []
+		gpr_t_valid_stds = []
+		for gp in range(n_gprs):
+			gpr_t_valid_mins.append({key: np.min(gpr_performance[gp]['t_valid'][key]) for key in gpr_performance[gp]['t_valid']})
+			gpr_t_valid_maxes.append({key: np.max(gpr_performance[gp]['t_valid'][key]) for key in gpr_performance[gp]['t_valid']})
+			gpr_t_valid_means.append({key: np.mean(gpr_performance[gp]['t_valid'][key]) for key in gpr_performance[gp]['t_valid']})
+			gpr_t_valid_medians.append({key: np.median(gpr_performance[gp]['t_valid'][key]) for key in gpr_performance[gp]['t_valid']})
+			gpr_t_valid_stds.append({key: np.std(gpr_performance[gp]['t_valid'][key]) for key in gpr_performance[gp]['t_valid']})
 
-		gpr2_t_valid_mins = {key: np.min(gpr2_performance['t_valid'][key]) for key in gpr2_performance['t_valid']}
-		gpr2_t_valid_maxes = {key: np.max(gpr2_performance['t_valid'][key]) for key in gpr2_performance['t_valid']}
-		gpr2_t_valid_medians = {key: np.median(gpr2_performance['t_valid'][key]) for key in gpr2_performance['t_valid']}
-		gpr2_t_valid_means = {key: np.mean(gpr2_performance['t_valid'][key]) for key in gpr2_performance['t_valid']}
-		gpr2_t_valid_stds = {key: np.std(gpr2_performance['t_valid'][key]) for key in gpr2_performance['t_valid']}
+		# gpr1_t_valid_mins = {key: np.min(gpr1_performance['t_valid'][key]) for key in gpr1_performance['t_valid']}
+		# gpr1_t_valid_maxes = {key: np.max(gpr1_performance['t_valid'][key]) for key in gpr1_performance['t_valid']}
+		# gpr1_t_valid_medians = {key: np.median(gpr1_performance['t_valid'][key]) for key in gpr1_performance['t_valid']}
+		# gpr1_t_valid_means = {key: np.mean(gpr1_performance['t_valid'][key]) for key in gpr1_performance['t_valid']}
+		# gpr1_t_valid_stds = {key: np.std(gpr1_performance['t_valid'][key]) for key in gpr1_performance['t_valid']}
+
+		# gpr2_t_valid_mins = {key: np.min(gpr2_performance['t_valid'][key]) for key in gpr2_performance['t_valid']}
+		# gpr2_t_valid_maxes = {key: np.max(gpr2_performance['t_valid'][key]) for key in gpr2_performance['t_valid']}
+		# gpr2_t_valid_medians = {key: np.median(gpr2_performance['t_valid'][key]) for key in gpr2_performance['t_valid']}
+		# gpr2_t_valid_means = {key: np.mean(gpr2_performance['t_valid'][key]) for key in gpr2_performance['t_valid']}
+		# gpr2_t_valid_stds = {key: np.std(gpr2_performance['t_valid'][key]) for key in gpr2_performance['t_valid']}
 
 		rnn_t_valid_mins = np.min(rnn_performance['t_valid'])
 		rnn_t_valid_maxes = np.max(rnn_performance['t_valid'])
@@ -2101,17 +2131,30 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 		std_vec = [t_valid_stds[eps] for eps in eps_vec]
 		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN', color='blue')
 
-		# hybrid GPR 1
-		eps_vec = sorted(gpr1_t_valid_medians.keys())
-		median_vec = [gpr1_t_valid_medians[eps] for eps in eps_vec]
-		std_vec = [gpr1_t_valid_stds[eps] for eps in eps_vec]
-		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 1', color='green', linestyle=':')
 
-		# hybrid GPR 2
-		eps_vec = sorted(gpr2_t_valid_medians.keys())
-		median_vec = [gpr2_t_valid_medians[eps] for eps in eps_vec]
-		std_vec = [gpr2_t_valid_stds[eps] for eps in eps_vec]
-		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 2', color='green', linestyle='--')
+		for gp in range(n_gprs):
+			if gp==3:
+				gp_nm = 'vanilla GPR'
+			else:
+				gp_nm = 'hybrid GPR {0}'.format(gp+1)
+			# hybrid GPR
+			eps_vec = sorted(gpr_t_valid_medians[gp].keys())
+			median_vec = [gpr_t_valid_medians[gp][eps] for eps in eps_vec]
+			std_vec = [gpr_t_valid_stds[gp][eps] for eps in eps_vec]
+			ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=gp_nm, linestyle='--')
+
+
+		# # hybrid GPR 1
+		# eps_vec = sorted(gpr1_t_valid_medians.keys())
+		# median_vec = [gpr1_t_valid_medians[eps] for eps in eps_vec]
+		# std_vec = [gpr1_t_valid_stds[eps] for eps in eps_vec]
+		# ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 1', color='green', linestyle=':')
+
+		# # hybrid GPR 2
+		# eps_vec = sorted(gpr2_t_valid_medians.keys())
+		# median_vec = [gpr2_t_valid_medians[eps] for eps in eps_vec]
+		# std_vec = [gpr2_t_valid_stds[eps] for eps in eps_vec]
+		# ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 2', color='green', linestyle='--')
 
 		ax2.set_xlabel('epsilon Model Error')
 		ax2.set_ylabel('Validity Time')
