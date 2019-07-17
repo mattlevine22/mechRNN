@@ -1313,12 +1313,13 @@ def train_chaosRNN(forward,
 			# x_kl_test = pd.DataFrame(np.loadtxt(output_dir+"/kl_vec_inv_clean_test.txt"))
 		if win:
 			ax1.plot(x_train.rolling(win).mean())
-			ax2.plot(x_test.median(axis=1).rolling(win).mean(),label='RNN',color='blue')
+			# ax2.plot(x_test.median(axis=1).rolling(win).mean(),label='RNN',color='blue')
 			# ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='RNN', color='blue')
 			ax2.errorbar(x=epoch_vec,y=x_test.median(axis=1).rolling(win).mean(), yerr=x_test.std(axis=1), label='RNN', color='blue')
 			if n_epochs > 1:
-				ax3.plot(x_valid_test.median(axis=1).rolling(win).mean(),label='RNN',color='blue')
-				ax4.plot(pd.DataFrame(np.median(x_kl_test[:,:,kk],axis=1)).rolling(win).mean(), label=model_params['state_names'][kk])
+				ax3.errorbar(x=epoch_vec,y=x_valid_test.median(axis=1).rolling(win).mean(), yerr=x_valid_test.std(axis=1), label='RNN', color='blue')
+				ax4.errorbar(x=epoch_vec,y=pd.DataFrame(np.median(x_kl_test[:,:,kk],axis=1)).rolling(win).mean(), yerr=np.std(x_kl_test[:,:,kk],axis=1), label='RNN', color='blue')
+				# ax4.plot(pd.DataFrame(np.median(x_kl_test[:,:,kk],axis=1)).rolling(win).mean(), label=model_params['state_names'][kk])
 		else:
 			ax1.plot(x_train)
 			# ax2.plot(x_test.median(axis=1),label='RNN',color='blue')
@@ -1755,15 +1756,16 @@ def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indi
 	# first, get sizes of things...max window size is 10% of whole test set.
 	d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
 	x_test = pd.DataFrame(np.loadtxt(my_dirs[0]+"/loss_vec_clean_test.txt"))
-	n_vals = len(x_test)
+	n_vals = x_test.shape[0]
+	epoch_vec = np.arange(0,n_vals)
 	max_exp = int(np.floor(np.log10(n_vals)))
 	win_list = [None] + list(10**np.arange(1,max_exp))
 
 	try:
 		many_epochs = True
-		x_kl_test = pd.DataFrame(np.loadtxt(my_dirs[0]+"/kl_vec_inv_clean_test.txt"))
+		x_kl_test = np.load(my_dirs[0]+"/kl_vec_inv_clean_test.npy")
 		if not plot_state_indices:
-			plot_state_indices = np.arange(x_kl_test.shape[1])
+			plot_state_indices = np.arange(x_kl_test.shape[2])
 	except:
 		many_epochs = False
 
@@ -1780,44 +1782,60 @@ def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indi
 
 		for d in my_dirs:
 			d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
-			if 'GPR' in d_label:
-				continue
-
-			x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
-			x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
+			# if 'GPR' in d_label:
+			# 	continue
+			x_test = np.loadtxt(d+"/loss_vec_clean_test.txt",ndmin=2)
+			if 'GPR' not in d_label:
+				x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
+				x_test = pd.DataFrame(x_test)
 
 			# get GPR fits
-			gpr1_valid_test = np.loadtxt(d+'/GPR1_prediction_validity_time_clean_test.txt')
-			gpr2_valid_test = np.loadtxt(d+'/GPR2_prediction_validity_time_clean_test.txt')
-			gpr1_test = np.loadtxt(d+'/GPR1_clean_loss_test.txt')
-			gpr2_test = np.loadtxt(d+'/GPR2_clean_loss_test.txt')
+			# gpr1_valid_test = np.loadtxt(d+'/GPR1_prediction_validity_time_clean_test.txt')
+			# gpr2_valid_test = np.loadtxt(d+'/GPR2_prediction_validity_time_clean_test.txt')
+			# gpr1_test = np.loadtxt(d+'/GPR1_loss_vec_clean_test.txt')
+			# gpr2_test = np.loadtxt(d+'/GPR2_loss_vec_clean_test.txt')
 
 			if many_epochs:
-				x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt"))
-				x_kl_test = pd.DataFrame(np.loadtxt(d+"/kl_vec_inv_clean_test.txt"))
+				x_valid_test = np.loadtxt(d+"/prediction_validity_time_clean_test.txt",ndmin=2)
+				if 'GPR' not in d_label:
+					x_valid_test = pd.DataFrame(x_valid_test)
 			if win:
-				ax1.plot(x_train.rolling(win).mean(), label=d_label)
-				ax2.plot(x_test.rolling(win).mean(), label=d_label)
+				if 'GPR' not in d_label:
+					ax1.plot(x_train.rolling(win).mean(), label=d_label)
+					ax2.errorbar(x=epoch_vec,y=x_test.median(axis=1).rolling(win).mean(), yerr=x_test.std(axis=1), label=d_label)
+				else:
+					ax2.errorbar(x=epoch_vec,y=[np.median(x_test)]*len(epoch_vec), yerr=[np.std(x_test)]*len(epoch_vec), label=d_label)
 				if many_epochs:
-					ax3.plot(x_valid_test.rolling(win).mean(), label=d_label)
-					for kk in plot_state_indices:
-						ax4.plot(x_kl_test.loc[:,kk].rolling(win).mean(), label=d_label)
+					if 'GPR' not in d_label:
+						ax3.errorbar(x=epoch_vec,y=x_valid_test.median(axis=1).rolling(win).mean(), yerr=x_valid_test.std(axis=1), label=d_label)
+						x_kl_test = np.load(d+"/kl_vec_inv_clean_test.npy")
+						for kk in plot_state_indices:
+							ax4.errorbar(x=epoch_vec,y=pd.DataFrame(np.median(x_kl_test[:,:,kk],axis=1)).rolling(win).mean(), yerr=pd.DataFrame(np.std(x_kl_test[:,:,kk],axis=1)), label=d_label)
+					else:
+						ax3.errorbar(x=epoch_vec,y=[np.median(x_valid_test)]*len(epoch_vec), yerr=[np.std(x_valid_test)]*len(epoch_vec),label=d_label)
 			else:
-				ax1.plot(x_train, label=d_label)
-				ax2.plot(x_test, label=d_label)
+				if 'GPR' not in d_label:
+					ax1.plot(x_train, label=d_label)
+					ax2.errorbar(x=epoch_vec,y=x_test.median(axis=1), yerr=x_test.std(axis=1), label=d_label)
+				else:
+					ax2.errorbar(x=epoch_vec,y=[np.median(x_test)]*len(epoch_vec), yerr=[np.std(x_test)]*len(epoch_vec), label=d_label)
 				if many_epochs:
-					ax3.plot(x_valid_test, label=d_label)
-					for kk in plot_state_indices:
-						ax4.plot(x_kl_test.loc[:,kk], label=d_label)
+					if 'GPR' not in d_label:
+						ax3.errorbar(x=epoch_vec,y=x_valid_test.median(axis=1), yerr=x_valid_test.std(axis=1), label=d_label)
+						x_kl_test = np.load(d+"/kl_vec_inv_clean_test.npy")
+						for kk in plot_state_indices:
+							ax4.errorbar(x=epoch_vec,y=np.median(x_kl_test[:,:,kk],axis=1), yerr=np.std(x_kl_test[:,:,kk],axis=1), label=d_label)
+					else:
+						ax3.errorbar(x=epoch_vec,y=[np.median(x_valid_test)]*len(epoch_vec), yerr=[np.std(x_valid_test)]*len(epoch_vec),label=d_label)
 
-			try:
-				gp_label = [x for x in d_label.split('_') if 'epsBad' in x][0]
-				ax2.plot([0,n_vals-1],[gpr1_test,gpr1_test],label='GPR 1 ' + gp_label)
-				ax2.plot([0,n_vals-1],[gpr2_test,gpr2_test],label='GPR 2 '+gp_label)
-				ax3.plot([0,n_vals-1],[gpr1_valid_test,gpr1_valid_test],label='GPR 1 ' + gp_label)
-				ax3.plot([0,n_vals-1],[gpr2_valid_test,gpr2_valid_test],label='GPR 2 ' + gp_label)
-			except:
-				pass
+			# try:
+			# 	gp_label = [x for x in d_label.split('_') if 'epsBad' in x][0]
+			# 	ax2.plot([0,n_vals-1],[gpr1_test,gpr1_test],label='GPR 1 ' + gp_label)
+			# 	ax2.plot([0,n_vals-1],[gpr2_test,gpr2_test],label='GPR 2 '+gp_label)
+			# 	ax3.plot([0,n_vals-1],[gpr1_valid_test,gpr1_valid_test],label='GPR 1 ' + gp_label)
+			# 	ax3.plot([0,n_vals-1],[gpr2_valid_test,gpr2_valid_test],label='GPR 2 ' + gp_label)
+			# except:
+			# 	pass
 
 		ax2.legend(fontsize=6, handlelength=2, loc='upper right')
 			# x = np.loadtxt(d+"/loss_vec_test.txt")
@@ -1886,7 +1904,7 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 		x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
 		gpr1_valid_test = np.loadtxt(d+'/GPR1_prediction_validity_time_clean_test.txt')
 		gpr2_valid_test = np.loadtxt(d+'/GPR2_prediction_validity_time_clean_test.txt')
-		gpr1_test = np.loadtxt(d+'/GPR1_clean_loss_test.txt')
+		gpr1_test = np.loadtxt(d+'/GPR1_loss_vec_clean_test.txt')
 		gpr2_test = np.loadtxt(d+'/GPR2_clean_loss_test.txt')
 
 		if many_epochs:
