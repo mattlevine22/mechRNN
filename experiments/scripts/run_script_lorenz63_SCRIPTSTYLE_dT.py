@@ -19,7 +19,7 @@ parser.add_argument('--n_experiments', type=int, default=1, help='number of sim/
 parser.add_argument('--random_state_inits', type=str2bool, default=True, help='whether to randomly initialize initial conditions for simulated trajectory')
 parser.add_argument('--compute_kl', type=str2bool, default=False, help='whether to compute KL divergence between test set density and predicted density')
 parser.add_argument('--continue_trajectory', type=str2bool, default=False, help='if true, ignore n_tests and synch length. Instead, simply continue train trajectory into the test trajectory.')
-parser.add_argument('--mxstep', type=float, default=0, help='max number of solver steps. 0 lets solver use defaults.')
+parser.add_argument('--mxstep', type=int, default=0, help='max number of solver steps. 0 lets solver use defaults.')
 FLAGS = parser.parse_args()
 
 
