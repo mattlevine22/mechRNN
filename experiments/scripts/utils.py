@@ -2769,13 +2769,13 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 	plt.close(fig)
 
 
-def extract_n_data_performance(my_dirs, output_fname="./n_data_comparisons", win=1000, many_epochs=True, dt_token='Ndata_'):
-
+def extract_n_data_performance(my_dirs, output_fname="./n_data_comparisons", win=1, many_epochs=True, dt_token='Ndata_'):
+	n_gprs = 4
 	# first, get sizes of things...max window size is 10% of whole test set.
 	init_dirs = [x for x in my_dirs if 'RNN' in x.split('/')[-1]]
 	# d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
-	x_test = pd.DataFrame(np.loadtxt(init_dirs[0]+"/loss_vec_clean_test.txt"))
-	n_vals = len(x_test)
+	x_test = pd.DataFrame(np.loadtxt(init_dirs[0]+"/loss_vec_clean_test.txt",ndmin=2))
+	n_vals = x_test.shape[0]
 
 	win = min(win,n_vals//3)
 	model_performance = {'mse':(), 't_valid':()}
@@ -2783,31 +2783,39 @@ def extract_n_data_performance(my_dirs, output_fname="./n_data_comparisons", win
 	hybrid_performance = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
 	dict_performance = {'rnn':rnn_performance,
 						'mechRNN': {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}},
-						'hybrid GPR1': {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}},
-						'hybrid GPR2': {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}},
+						# 'hybrid GPR1': {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}},
+						# 'hybrid GPR2': {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}},
 						 'model': model_performance}
+	for gp in range(n_gprs):
+		gp_nm = 'hybrid GPR{0}'.format(gp+1)
+		dict_performance[gp_nm] = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
+
+
 	for d in my_dirs:
 		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
 		my_dt = float(d.split("/")[-3].lstrip(dt_token))
 		try:
-			model_loss = np.loadtxt(d+'/perfectModel_loss_clean_test.txt')
-			model_t_valid = np.loadtxt(d+'/perfectModel_validity_time_clean_test.txt')
-			dict_performance['model']['mse'] += (float(model_loss),)
-			dict_performance['model']['t_valid'] += (float(model_t_valid),)
+			if ('vanilla' not in d_label) and ('GPR' not in d_label):
+				model_loss = np.loadtxt(d+'/perfectModel_loss_vec_clean_test.txt',ndmin=1)
+				model_t_valid = np.loadtxt(d+'/perfectModel_prediction_validity_time_clean_test.txt',ndmin=1)
+				for kkt in range(model_loss.shape[0]):
+					dict_performance['model']['mse'] += (float(model_loss[kkt]),)
+					dict_performance['model']['t_valid'] += (float(model_t_valid[kkt]),)
 		except:
+			pdb.set_trace()
 			pass
 
 		# x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
 		try:
-			x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
+			x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt",ndmin=2))
 		except:
-			x_test = np.loadtxt(d+"/clean_loss_test.txt") # for GPR runs, which don't have epochs
+			pdb.set_trace()
 
 		if many_epochs:
-			try:
-				x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt"))
-			except:
-				x_valid_test = np.loadtxt(d+"/prediction_validity_time_clean_test.txt")
+			# try:
+			x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt",ndmin=2))
+			# except:
+			# 	x_valid_test = np.loadtxt(d+"/prediction_validity_time_clean_test.txt")
 			# x_kl_test = pd.DataFrame(np.loadtxt(d+"/kl_vec_inv_clean_test.txt"))
 		if win and 'GPR' not in d_label:
 			# x_train = x_train.rolling(win).mean()
@@ -2824,25 +2832,25 @@ def extract_n_data_performance(my_dirs, output_fname="./n_data_comparisons", win
 			mtype = 'rnn'
 		elif 'mech' in d_label:
 			mtype = 'mechRNN'
-		elif 'GPR1' in d_label:
-			mtype = 'hybrid GPR1'
-		elif 'GPR2' in d_label:
-			mtype = 'hybrid GPR2'
+		elif 'GPR' in d_label:
+			mtype = 'hybrid GPR{0}'.format(d_label[d_label.find('GPR') + 3])
 		else:
 			pdb.set_trace()
 
-		if my_dt in dict_performance[mtype]['mse']:
-			dict_performance[mtype]['mse'][my_dt] += (float(np.min(x_test)),)
-			dict_performance[mtype]['mse_time'][my_dt] += (float(np.nanargmin(x_test)),)
-			if many_epochs:
-				dict_performance[mtype]['t_valid'][my_dt] += (float(np.max(x_valid_test)),)
-				dict_performance[mtype]['t_valid_time'][my_dt] += (float(np.nanargmax(x_valid_test)),)
-		else:
-			dict_performance[mtype]['mse'][my_dt] = (float(np.min(x_test)),)
-			dict_performance[mtype]['mse_time'][my_dt] = (float(np.nanargmin(x_test)),)
-			if many_epochs:
-				dict_performance[mtype]['t_valid'][my_dt] = (float(np.max(x_valid_test)),)
-				dict_performance[mtype]['t_valid_time'][my_dt] = (float(np.nanargmax(x_valid_test)),)
+		n_tests = x_valid_test.shape[1]
+		for kkt in range(n_tests):
+			if my_dt in dict_performance[mtype]['mse']:
+				dict_performance[mtype]['mse'][my_dt] += (float(np.min(x_test.loc[:,kkt])),)
+				dict_performance[mtype]['mse_time'][my_dt] += (float(np.nanargmin(x_test.loc[:,kkt])),)
+				if many_epochs:
+					dict_performance[mtype]['t_valid'][my_dt] += (float(np.max(x_valid_test.loc[:,kkt])),)
+					dict_performance[mtype]['t_valid_time'][my_dt] += (float(np.nanargmax(x_valid_test.loc[:,kkt])),)
+			else:
+				dict_performance[mtype]['mse'][my_dt] = (float(np.min(x_test.loc[:,kkt])),)
+				dict_performance[mtype]['mse_time'][my_dt] = (float(np.nanargmin(x_test.loc[:,kkt])),)
+				if many_epochs:
+					dict_performance[mtype]['t_valid'][my_dt] = (float(np.max(x_valid_test.loc[:,kkt])),)
+					dict_performance[mtype]['t_valid_time'][my_dt] = (float(np.nanargmax(x_valid_test.loc[:,kkt])),)
 
 	# now summarize
 	test_loss_mins = {key: np.min(dict_performance['mechRNN']['mse'][key]) for key in dict_performance['mechRNN']['mse']}
@@ -2851,23 +2859,26 @@ def extract_n_data_performance(my_dirs, output_fname="./n_data_comparisons", win
 	test_loss_medians = {key: np.median(dict_performance['mechRNN']['mse'][key]) for key in dict_performance['mechRNN']['mse']}
 	test_loss_stds = {key: np.std(dict_performance['mechRNN']['mse'][key]) for key in dict_performance['mechRNN']['mse']}
 
-	gpr1_test_loss_mins = {key: np.min(dict_performance['hybrid GPR1']['mse'][key]) for key in dict_performance['hybrid GPR1']['mse']}
-	gpr1_test_loss_maxes = {key: np.max(dict_performance['hybrid GPR1']['mse'][key]) for key in dict_performance['hybrid GPR1']['mse']}
-	gpr1_test_loss_means = {key: np.mean(dict_performance['hybrid GPR1']['mse'][key]) for key in dict_performance['hybrid GPR1']['mse']}
-	gpr1_test_loss_medians = {key: np.median(dict_performance['hybrid GPR1']['mse'][key]) for key in dict_performance['hybrid GPR1']['mse']}
-	gpr1_test_loss_stds = {key: np.std(dict_performance['hybrid GPR1']['mse'][key]) for key in dict_performance['hybrid GPR1']['mse']}
 
-	gpr2_test_loss_mins = {key: np.min(dict_performance['hybrid GPR2']['mse'][key]) for key in dict_performance['hybrid GPR2']['mse']}
-	gpr2_test_loss_maxes = {key: np.max(dict_performance['hybrid GPR2']['mse'][key]) for key in dict_performance['hybrid GPR2']['mse']}
-	gpr2_test_loss_means = {key: np.mean(dict_performance['hybrid GPR2']['mse'][key]) for key in dict_performance['hybrid GPR2']['mse']}
-	gpr2_test_loss_medians = {key: np.median(dict_performance['hybrid GPR2']['mse'][key]) for key in dict_performance['hybrid GPR2']['mse']}
-	gpr2_test_loss_stds = {key: np.std(dict_performance['hybrid GPR2']['mse'][key]) for key in dict_performance['hybrid GPR2']['mse']}
+	gpr_test_loss_mins = {}
+	gpr_test_loss_maxes = {}
+	gpr_test_loss_means = {}
+	gpr_test_loss_medians = {}
+	gpr_test_loss_stds = {}
+	for gp in range(n_gprs):
+		gp_nm = 'hybrid GPR{0}'.format(gp+1)
+		gpr_test_loss_mins[gp_nm] = {key: np.min(dict_performance[gp_nm]['mse'][key]) for key in dict_performance[gp_nm]['mse']}
+		gpr_test_loss_maxes[gp_nm] = {key: np.max(dict_performance[gp_nm]['mse'][key]) for key in dict_performance[gp_nm]['mse']}
+		gpr_test_loss_means[gp_nm] = {key: np.mean(dict_performance[gp_nm]['mse'][key]) for key in dict_performance[gp_nm]['mse']}
+		gpr_test_loss_medians[gp_nm] = {key: np.median(dict_performance[gp_nm]['mse'][key]) for key in dict_performance[gp_nm]['mse']}
+		gpr_test_loss_stds[gp_nm] = {key: np.std(dict_performance[gp_nm]['mse'][key]) for key in dict_performance[gp_nm]['mse']}
 
 	rnn_test_loss_mins = {key: np.min(dict_performance['rnn']['mse'][key]) for key in dict_performance['rnn']['mse']}
 	rnn_test_loss_maxes = {key: np.max(dict_performance['rnn']['mse'][key]) for key in dict_performance['rnn']['mse']}
 	rnn_test_loss_means = {key: np.mean(dict_performance['rnn']['mse'][key]) for key in dict_performance['rnn']['mse']}
 	rnn_test_loss_medians = {key: np.median(dict_performance['rnn']['mse'][key]) for key in dict_performance['rnn']['mse']}
 	rnn_test_loss_stds = {key: np.std(dict_performance['rnn']['mse'][key]) for key in dict_performance['rnn']['mse']}
+
 	ode_test_loss_mins = np.min(dict_performance['model']['mse'])
 	ode_test_loss_maxes = np.max(dict_performance['model']['mse'])
 	ode_test_loss_means = np.mean(dict_performance['model']['mse'])
@@ -2885,17 +2896,24 @@ def extract_n_data_performance(my_dirs, output_fname="./n_data_comparisons", win
 	std_vec = [test_loss_stds[eps] for eps in eps_vec]
 	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='mechRNN (eps=0.05)', color='blue')
 
-	# Hybrid GPR 1
-	eps_vec = sorted(gpr1_test_loss_medians.keys())
-	median_vec = [gpr1_test_loss_medians[eps] for eps in eps_vec]
-	std_vec = [gpr1_test_loss_stds[eps] for eps in eps_vec]
-	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 1 (eps=0.05)', color='green', linestyle=':')
+	for gp_nm in gpr_test_loss_medians:
+		# Hybrid GPR 1
+		eps_vec = sorted(gpr_test_loss_medians[gp_nm].keys())
+		median_vec = [gpr_test_loss_medians[gp_nm][eps] for eps in eps_vec]
+		std_vec = [gpr_test_loss_stds[gp_nm][eps] for eps in eps_vec]
+		ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=gp_nm + ' (eps=0.05)',linestyle='--')
 
-	# Hybrid GPR 1
-	eps_vec = sorted(gpr2_test_loss_medians.keys())
-	median_vec = [gpr2_test_loss_medians[eps] for eps in eps_vec]
-	std_vec = [gpr2_test_loss_stds[eps] for eps in eps_vec]
-	ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 2 (eps=0.05)', color='green', linestyle='--')
+	# # Hybrid GPR 1
+	# eps_vec = sorted(gpr1_test_loss_medians.keys())
+	# median_vec = [gpr1_test_loss_medians[eps] for eps in eps_vec]
+	# std_vec = [gpr1_test_loss_stds[eps] for eps in eps_vec]
+	# ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 1 (eps=0.05)', color='green', linestyle=':')
+
+	# # Hybrid GPR 1
+	# eps_vec = sorted(gpr2_test_loss_medians.keys())
+	# median_vec = [gpr2_test_loss_medians[eps] for eps in eps_vec]
+	# std_vec = [gpr2_test_loss_stds[eps] for eps in eps_vec]
+	# ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 2 (eps=0.05)', color='green', linestyle='--')
 
 
 	ax1.set_xlabel('Number of Training Points')
@@ -2921,17 +2939,18 @@ def extract_n_data_performance(my_dirs, output_fname="./n_data_comparisons", win
 		t_valid_medians = {key: np.median(dict_performance['mechRNN']['t_valid'][key]) for key in dict_performance['mechRNN']['t_valid']}
 		t_valid_stds = {key: np.std(dict_performance['mechRNN']['t_valid'][key]) for key in dict_performance['mechRNN']['t_valid']}
 
-		gpr1_t_valid_mins = {key: np.min(dict_performance['hybrid GPR1']['t_valid'][key]) for key in dict_performance['hybrid GPR1']['t_valid']}
-		gpr1_t_valid_maxes = {key: np.max(dict_performance['hybrid GPR1']['t_valid'][key]) for key in dict_performance['hybrid GPR1']['t_valid']}
-		gpr1_t_valid_means = {key: np.mean(dict_performance['hybrid GPR1']['t_valid'][key]) for key in dict_performance['hybrid GPR1']['t_valid']}
-		gpr1_t_valid_medians = {key: np.median(dict_performance['hybrid GPR1']['t_valid'][key]) for key in dict_performance['hybrid GPR1']['t_valid']}
-		gpr1_t_valid_stds = {key: np.std(dict_performance['hybrid GPR1']['t_valid'][key]) for key in dict_performance['hybrid GPR1']['t_valid']}
-
-		gpr2_t_valid_mins = {key: np.min(dict_performance['hybrid GPR2']['t_valid'][key]) for key in dict_performance['hybrid GPR2']['t_valid']}
-		gpr2_t_valid_maxes = {key: np.max(dict_performance['hybrid GPR2']['t_valid'][key]) for key in dict_performance['hybrid GPR2']['t_valid']}
-		gpr2_t_valid_means = {key: np.mean(dict_performance['hybrid GPR2']['t_valid'][key]) for key in dict_performance['hybrid GPR2']['t_valid']}
-		gpr2_t_valid_medians = {key: np.median(dict_performance['hybrid GPR2']['t_valid'][key]) for key in dict_performance['hybrid GPR2']['t_valid']}
-		gpr2_t_valid_stds = {key: np.std(dict_performance['hybrid GPR2']['t_valid'][key]) for key in dict_performance['hybrid GPR2']['t_valid']}
+		gpr_t_valid_mins = {}
+		gpr_t_valid_maxes = {}
+		gpr_t_valid_means = {}
+		gpr_t_valid_medians = {}
+		gpr_t_valid_stds = {}
+		for gp in range(n_gprs):
+			gp_nm = 'hybrid GPR{0}'.format(gp+1)
+			gpr_t_valid_mins[gp_nm] = {key: np.min(dict_performance[gp_nm]['t_valid'][key]) for key in dict_performance[gp_nm]['t_valid']}
+			gpr_t_valid_maxes[gp_nm] = {key: np.max(dict_performance[gp_nm]['t_valid'][key]) for key in dict_performance[gp_nm]['t_valid']}
+			gpr_t_valid_means[gp_nm] = {key: np.mean(dict_performance[gp_nm]['t_valid'][key]) for key in dict_performance[gp_nm]['t_valid']}
+			gpr_t_valid_medians[gp_nm] = {key: np.median(dict_performance[gp_nm]['t_valid'][key]) for key in dict_performance[gp_nm]['t_valid']}
+			gpr_t_valid_stds[gp_nm] = {key: np.std(dict_performance[gp_nm]['t_valid'][key]) for key in dict_performance[gp_nm]['t_valid']}
 
 		rnn_t_valid_mins = {key: np.min(dict_performance['rnn']['t_valid'][key]) for key in dict_performance['rnn']['t_valid']}
 		rnn_t_valid_maxes = {key: np.max(dict_performance['rnn']['t_valid'][key]) for key in dict_performance['rnn']['t_valid']}
@@ -2951,17 +2970,24 @@ def extract_n_data_performance(my_dirs, output_fname="./n_data_comparisons", win
 		std_vec = [t_valid_stds[eps] for eps in eps_vec]
 		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='mechRNN (eps=0.05)', color='blue')
 
-		# Hybrid GPR 1
-		eps_vec = sorted(gpr1_t_valid_medians.keys())
-		median_vec = [gpr1_t_valid_medians[eps] for eps in eps_vec]
-		std_vec = [gpr1_t_valid_stds[eps] for eps in eps_vec]
-		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 1 (eps=0.05)', color='green', linestyle=':')
+		for gp_nm in gpr_t_valid_medians:
+			# Hybrid GPR 1
+			eps_vec = sorted(gpr_t_valid_medians[gp_nm].keys())
+			median_vec = [gpr_t_valid_medians[gp_nm][eps] for eps in eps_vec]
+			std_vec = [gpr_t_valid_stds[gp_nm][eps] for eps in eps_vec]
+			ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=gp_nm + ' (eps=0.05)',linestyle='--')
 
-		# Hybrid GPR 2
-		eps_vec = sorted(gpr2_t_valid_medians.keys())
-		median_vec = [gpr2_t_valid_medians[eps] for eps in eps_vec]
-		std_vec = [gpr2_t_valid_stds[eps] for eps in eps_vec]
-		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 2 (eps=0.05)', color='green', linestyle='--')
+		# # Hybrid GPR 1
+		# eps_vec = sorted(gpr1_t_valid_medians.keys())
+		# median_vec = [gpr1_t_valid_medians[eps] for eps in eps_vec]
+		# std_vec = [gpr1_t_valid_stds[eps] for eps in eps_vec]
+		# ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 1 (eps=0.05)', color='green', linestyle=':')
+
+		# # Hybrid GPR 2
+		# eps_vec = sorted(gpr2_t_valid_medians.keys())
+		# median_vec = [gpr2_t_valid_medians[eps] for eps in eps_vec]
+		# std_vec = [gpr2_t_valid_stds[eps] for eps in eps_vec]
+		# ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 2 (eps=0.05)', color='green', linestyle='--')
 
 		ax2.set_xlabel('Number of Training Points')
 		ax2.set_ylabel('Validity Time')
