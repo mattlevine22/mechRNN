@@ -46,6 +46,7 @@ def main():
 			raise ValueError('t_test_synch (synch-length) must be larger than delta_t step size')
 
 	lr = FLAGS.lr # learning rate
+	delta_t = FLAGS.delta_t
 
 	# tspan_train = np.arange(0,FLAGS.t_train,delta_t)  #np.arange(0,10000,delta_t)
 	sim_model = FLAGS.model_solver
