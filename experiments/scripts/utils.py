@@ -162,7 +162,7 @@ def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_d
 		x = None
 
 	y0 = sim_model_params['state_init']
-	y_clean = odeint(model, y0, tspan, args=my_args)
+	y_clean = odeint(model, y0, tspan, args=my_args, mxstep=sim_model_params['mxstep'])
 	# CHOOSE noise size based on range of the data...if you base on mean or mean(abs),
 	# can get disproportionate SDs if one state oscillates between pos/neg, and another state is always POS.
 	y_noisy = y_clean + noise_frac*(np.max(y_clean,0) - np.min(y_clean,0))*np.random.randn(len(y_clean),y_clean.shape[1])
@@ -257,7 +257,7 @@ def make_RNN_data2(model, tspan_train, tspan_test, sim_model_params, noise_frac=
 			# increment 1 time step from end of training data
 			y0 = y_clean_train[-1,:]
 			tspan = [0, 0.5*sim_model_params['delta_t'], sim_model_params['delta_t']]
-			y_out = odeint(model, y0, tspan, args=sim_model_params['ode_params'])
+			y_out = odeint(model, y0, tspan, args=sim_model_params['ode_params'], mxstep=sim_model_params['mxstep'])
 			init_continued = y_out[-1,:]
 			sim_model_params['state_init'] = init_continued #y_clean_train[-1,:]
 		else:
@@ -334,7 +334,7 @@ def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_in
 		#
 		# unnormalize model_input so that it can go through the ODE solver
 		y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
-		y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
+		y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'])
 
 		y_pred = y_out[-1,:] #last column
 		y_pred_normalized = f_normalize_minmax(normz_info, y_pred)
@@ -366,7 +366,7 @@ def forward_mech(input, hidden_state, w1, w2, b, c, v, normz_info, model, model_
 	tspan = [0,0.5,1]
 	driver = xmean + xsd*input.detach().numpy()
 	my_args = model_params + (driver,)
-	y_out = odeint(model, y0, tspan, args=my_args)
+	y_out = odeint(model, y0, tspan, args=my_args, mxstep=model_params['mxstep'])
 
 	# renormalize
 	hidden_state[0] = torch.from_numpy( (y_out[-1] - ymin) / (ymax - ymin) )
@@ -429,7 +429,7 @@ def run_GP(y_clean_train, y_noisy_train,
 		# generate next-step ODE model prediction
 		# unnormalize model_input so that it can go through the ODE solver
 		y0 = f_unNormalize_minmax(normz_info, pred)
-		y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
+		y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'])
 		my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
 
 		if gp_style==1:
@@ -505,7 +505,7 @@ def run_GP(y_clean_train, y_noisy_train,
 			# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 			# unnormalize model_input so that it can go through the ODE solver
 			y0 = f_unNormalize_minmax(normz_info, pred)
-			y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
+			y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'])
 			my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
 
 			if gp_style==1:
@@ -655,7 +655,7 @@ def train_chaosRNN(forward,
 			tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 			# unnormalize model_input so that it can go through the ODE solver
 			y0 = f_unNormalize_minmax(normz_info, output_train[j,:].numpy())
-			y_out = odeint(model, y0, tspan, args=model_params['ode_params'])
+			y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'])
 			model_pred[j,:] = f_normalize_minmax(normz_info, y_out[-1,:])
 	else:
 		model_pred = [None for j in range(train_seq_length-1)]
