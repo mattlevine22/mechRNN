@@ -63,7 +63,7 @@ def main():
 
 		for delta_t in [0.1, 0.01, 0.05, 0.15, 0.2, 0.5]:
 			all_dirs = []
-			if n_train_points is not None:
+			if FLAGS.n_train_points is not None:
 				print('Looping over dT with a fixed NUMBER of training points')
 				tspan_train = np.arange(0,FLAGS.n_train_points) * delta_t
 			else:
