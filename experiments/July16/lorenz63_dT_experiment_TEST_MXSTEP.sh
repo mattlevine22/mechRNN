@@ -16,6 +16,6 @@ module load python/2.7.15-tf
 
 srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --n_tests=10 --savedir=Test_dT_constant_LENGTH_defaultMXSTEP &
 srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --n_tests=10 --savedir=Test_dT_constant_LENGTH_5000000MXSTEP --mxstep=5000000 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --n_tests=10 --savedir=Test_dT_constant_NTRAIN_defaultMXSTEP &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --n_tests=10 --savedir=Test_dT_constant_NTRAIN_5000000MXSTEP --mxstep=5000000
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --n_tests=10 --n_train_points=1000 --savedir=Test_dT_constant_NTRAIN_defaultMXSTEP &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --n_tests=10 --n_train_points=1000 --savedir=Test_dT_constant_NTRAIN_5000000MXSTEP --mxstep=5000000
 wait
