@@ -220,7 +220,7 @@ def make_RNN_data(model, tspan, sim_model_params, noise_frac=0, output_dir=".", 
 	t0 = time()
 
 	# make denser tspan
-	tspan_dense = np.linspace(tspan[0],tspan[-1],(tspan[-1] - tspan[0])/model_params['smaller_delta_t']+1)
+	tspan_dense = np.linspace(tspan[0],tspan[-1],np.ceil((tspan[-1] - tspan[0])/model_params['smaller_delta_t']+1))
 
 	# intersect tspan_dense with original tspan, then get original indices
 	tspan_solve = np.union1d(tspan_dense, tspan)
@@ -229,7 +229,7 @@ def make_RNN_data(model, tspan, sim_model_params, noise_frac=0, output_dir=".", 
 	if not np.array_equal(tspan_solve[ind_orig_tspan],tspan):
 		raise ValueError('BUG IN THE CODE with subsetting tspan')
 
-	y_clean_dense, y_noisy_dense, x_dense  = run_ode_model(model, tspan_dense, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
+	y_clean_dense, y_noisy_dense, x_dense  = run_ode_model(model, tspan_solve, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
 
 	# find subset of dense
 	y_clean = y_clean_dense[ind_orig_tspan,:]
@@ -269,10 +269,10 @@ def make_RNN_data2(model, tspan_train, tspan_test, sim_model_params, noise_frac=
 
 	# first get training set
 	sim_model_params['state_init'] = init_vec[0,:]
-	y_clean_train, y_noisy_train, x_train  = run_ode_model(model, tspan_train, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
+	# y_clean_train, y_noisy_train, x_train  = run_ode_model(model, tspan_train, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
 
 	# make denser tspan
-	tspan_dense = np.linspace(tspan_train[0],tspan_train[-1],(tspan_train[-1] - tspan_train[0])/sim_model_params['smaller_delta_t']+1)
+	tspan_dense = np.linspace(tspan_train[0],tspan_train[-1],np.ceil((tspan_train[-1] - tspan_train[0])/sim_model_params['smaller_delta_t']+1))
 
 	# intersect tspan_dense with original tspan, then get original indices
 	tspan_solve = np.union1d(tspan_dense, tspan_train)
@@ -282,7 +282,7 @@ def make_RNN_data2(model, tspan_train, tspan_test, sim_model_params, noise_frac=
 	if not np.array_equal(tspan_solve[ind_orig_tspan],tspan_train):
 		raise ValueError('BUG IN THE CODE with subsetting tspan')
 
-	y_clean_train_dense, y_noisy_train_dense, x_train_dense  = run_ode_model(model, tspan_dense, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
+	y_clean_train_dense, y_noisy_train_dense, x_train_dense  = run_ode_model(model, tspan_solve, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
 
 	y_clean_train = y_clean_train_dense[ind_orig_tspan,:]
 	y_noisy_train = y_noisy_train_dense[ind_orig_tspan,:]
@@ -340,30 +340,33 @@ def make_RNN_data2(model, tspan_train, tspan_test, sim_model_params, noise_frac=
 
 ### RNN fitting section
 def forward_vanilla(data_input, hidden_state, w1, w2, b, c, v, *args, **kwargs):
+	solver_failed = False
 	hidden_state = torch.relu(b + torch.mm(w2,data_input) + torch.mm(w1,hidden_state))
 	out = c + torch.mm(v,hidden_state)
-	return  (out, hidden_state)
+	return  (out, hidden_state, solver_failed)
 
 def forward_chaos_pureML(data_input, hidden_state, A, B, C, a, b, *args, **kwargs):
+	solver_failed = False
 	hidden_state = torch.relu(a + torch.mm(A,hidden_state) + torch.mm(B,data_input))
 	# hidden_state = torch.relu(a + torch.mm(A,hidden_state))
 	out = b + torch.mm(C,hidden_state)
-	return  (out, hidden_state)
+	return  (out, hidden_state, solver_failed)
 
 def forward_chaos_pureML2(data_input, hidden_state, A, B, C, a, b, *args, **kwargs):
+	solver_failed = False
 	hidden_state = torch.tanh(a + torch.mm(A,hidden_state))
 	out = b + torch.mm(C,hidden_state)
-	return  (out, hidden_state)
+	return  (out, hidden_state, solver_failed)
 
 
 def get_tspan(model_params):
-	tspan = np.linspace(0,model_params['delta_t'],model_params['delta_t']/model_params['smaller_delta_t']+1)
+	tspan = np.linspace(0,model_params['delta_t'],np.ceil(model_params['delta_t']/model_params['smaller_delta_t']+1))
 	if tspan[-1] != model_params['delta_t']:
 		raise ValueError('BUG IN THE CODE with computing new tspan')
 	return tspan
 
 
-def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_info, model, model_params, model_output=None):
+def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_info, model, model_params, model_output=None, solver_failed=False):
 	# unnormalize
 	# ymin = normz_info['Ymin']
 	# ymax = normz_info['Ymax']
@@ -382,12 +385,26 @@ def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_in
 		# my_args = model_params + (driver,)
 		#
 		# unnormalize model_input so that it can go through the ODE solver
-		y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
-		y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'])
+		# y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
+		# y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'])
+		# # pdb.set_trace()
 
-		y_pred = y_out[-1,:] #last column
-		y_pred_normalized = f_normalize_minmax(normz_info, y_pred)
+		# y_pred = y_out[-1,:] #last column
+		# y_pred_normalized = f_normalize_minmax(normz_info, y_pred)
+		y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
+		if not solver_failed:
+			y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+			if info_dict['message'] != 'Integration successful.':
+				# solver failed
+				print('ODE solver has failed at y0=',y0)
+				solver_failed = True
+		if solver_failed:
+			y_pred_normalized = np.copy(y0_normalized.numpy()) # persist previous solution
+		else:
+			# solver is OKAY--use the solution like a good boy!
+			y_pred_normalized = f_normalize_minmax(normz_info, y_out[-1,:])
 	else:
+		# pdb.set_trace()
 		y_pred_normalized = model_output
 
 	# renormalize
@@ -398,7 +415,7 @@ def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_in
 	hidden_state = torch.relu( a + torch.mm(A,hidden_state) + torch.mm(B,stacked_input) )
 	stacked_output = torch.cat( ( torch.FloatTensor(y_pred_normalized[:,None]), hidden_state ) )
 	out = b + torch.mm(C,stacked_output)
-	return  (out, hidden_state)
+	return  (out, hidden_state, solver_failed)
 
 
 def forward_mech(input, hidden_state, w1, w2, b, c, v, normz_info, model, model_params):
@@ -444,6 +461,7 @@ def run_GP(y_clean_train, y_noisy_train,
 			n_test_sets,
 			err_thresh, gp_style=1, gp_only=False):
 
+
 	if gp_only:
 		gp_nm = ''
 	else:
@@ -472,15 +490,30 @@ def run_GP(y_clean_train, y_noisy_train,
 	pred = y_noisy_train[0,:,None].squeeze()
 	# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 	tspan = get_tspan(model_params)
+	# pdb.set_trace()
+	solver_failed = False
 	for j in range(train_seq_length-1):
 		# target = output_test[j,None]
 		# target_clean = output_clean_train[j,None]
 
 		# generate next-step ODE model prediction
 		# unnormalize model_input so that it can go through the ODE solver
-		y0 = f_unNormalize_minmax(normz_info, pred)
-		y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'])
-		my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+		if do_resid:
+			y0 = f_unNormalize_minmax(normz_info, pred)
+			if not solver_failed:
+				y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+				if info_dict['message'] != 'Integration successful.':
+					# solver failed
+					print('ODE solver has failed at y0=',y0)
+					solver_failed = True
+			if solver_failed:
+				my_model_pred = np.copy(pred) # persist previous solution
+			else:
+				# solver is OKAY--use the solution like a good boy!
+				my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+		else:
+			# don't need it anyway, so just make it 0
+			my_model_pred = 0
 
 		if gp_style==1:
 			x = pred
@@ -500,7 +533,7 @@ def run_GP(y_clean_train, y_noisy_train,
 		# pw_loss_test[j] = total_loss_test / avg_output_test
 		# pw_loss_clean_test[j] = total_loss_clean_test / avg_output_clean_test
 		gpr_train_predictions_rerun[j,:] = pred
-
+	# pdb.set_trace()
 	# plot training fits
 	y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
 	y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
@@ -539,6 +572,7 @@ def run_GP(y_clean_train, y_noisy_train,
 	# loop over test sets
 	tspan = get_tspan(model_params)
 	# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+	# pdb.set_trace()
 	for kkt in range(n_test_sets):
 		# now compute test loss
 		total_loss_test = 0
@@ -548,6 +582,7 @@ def run_GP(y_clean_train, y_noisy_train,
 		pw_loss_test = np.zeros(test_seq_length)
 		pw_loss_clean_test = np.zeros(test_seq_length)
 		gpr_test_predictions = np.zeros([test_seq_length, output_size])
+		solver_failed = False
 		for j in range(test_seq_length):
 			target = y_noisy_test[kkt,j,:]
 			target_clean = y_clean_test[kkt,j,:]
@@ -555,9 +590,24 @@ def run_GP(y_clean_train, y_noisy_train,
 			# generate next-step ODE model prediction
 			# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 			# unnormalize model_input so that it can go through the ODE solver
-			y0 = f_unNormalize_minmax(normz_info, pred)
-			y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'])
-			my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+			if do_resid:
+				y0 = f_unNormalize_minmax(normz_info, pred)
+				if not solver_failed:
+					y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+					if info_dict['message'] != 'Integration successful.':
+						# solver failed
+						print('ODE solver has failed at y0=',y0)
+						solver_failed = True
+						# pdb.set_trace()
+				if solver_failed:
+					my_model_pred = np.copy(pred) # persist previous normalized solution
+					# pdb.set_trace()
+				else:
+					# solver is OKAY--use the solution like a good boy!
+					my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+			else:
+				# don't need it anyway, so just make it 0
+				my_model_pred = 0
 
 			if gp_style==1:
 				x = pred
@@ -614,6 +664,7 @@ def run_GP(y_clean_train, y_noisy_train,
 		fig.savefig(fname=output_dir+'/{0}fit_ode_TEST_{1}'.format(gp_nm,kkt))
 		plt.close(fig)
 
+	# pdb.set_trace()
 	# write pw losses to file
 	# gpr_pred_validity_vec_test = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
 	# gpr_pred_validity_vec_clean_test = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
@@ -649,6 +700,7 @@ def train_chaosRNN(forward,
 			err_thresh=0.4, plot_state_indices=None,
 			precompute_model=True, kde_func=kde_scipy,
 			compute_kl=False, gp_only=False, gp_style=None):
+
 
 	if torch.cuda.is_available():
 		print('Using CUDA FloatTensor')
@@ -712,12 +764,15 @@ def train_chaosRNN(forward,
 	else:
 		model_pred = [None for j in range(train_seq_length-1)]
 
+
 	if gp_style is None:
 		style_list = [1,2,3,4]
 	else:
 		style_list = [gp_style]
 
+	# pdb.set_trace()
 	for gp_style in style_list:
+		print('Running GPR',gp_style)
 		run_GP(y_clean_train, y_noisy_train,
 				y_clean_test, y_noisy_test,
 				y_clean_testSynch, y_noisy_testSynch,
@@ -737,6 +792,8 @@ def train_chaosRNN(forward,
 				err_thresh,
 				gp_style,
 				gp_only)
+
+	# pdb.set_trace()
 
 	if gp_only:
 		return
@@ -766,8 +823,9 @@ def train_chaosRNN(forward,
 		for kkt in range(n_test_sets):
 			# first, synchronize the hidden state
 			hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+			solver_failed = False
 			for i in range(synch_length-1):
-				(pred, hidden_state) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params)
+				(pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
 
 			# hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
 			predictions = np.zeros([test_seq_length, output_size])
@@ -781,8 +839,9 @@ def train_chaosRNN(forward,
 			# running_epoch_loss_test = np.zeros(test_seq_length)
 			perf_pw_loss_test = np.zeros(test_seq_length)
 			perf_pw_loss_clean_test = np.zeros(test_seq_length)
+			solver_failed = False
 			for i in range(test_seq_length):
-				(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params)
+				(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
 				# hidden_state = hidden_state
 				predictions[i,:] = pred.data.numpy().ravel()
 				i_loss = (pred.detach().squeeze() - output_test[kkt,i,None].squeeze()).pow(2).sum()
@@ -832,6 +891,7 @@ def train_chaosRNN(forward,
 	C = torch.zeros(output_size, hidden_size + (stack_output*output_size) ).type(dtype)
 	b = torch.zeros(output_size, 1).type(dtype)
 
+	# pdb.set_trace()
 	# trivial_init trains the mechRNN starting from parameters (specified above)
 	# that trivialize the RNN to the forward ODE model
 	# now, TRAIN to fit the output from the previous model
@@ -910,11 +970,13 @@ def train_chaosRNN(forward,
 		init.normal_(hidden_state,0.0,0.1)
 		running_epoch_loss_train = np.zeros(train_seq_length)
 		running_epoch_loss_clean_train = np.zeros(train_seq_length)
+		solver_failed = False
 		for j in range(train_seq_length-1):
 			cc += 1
 			target = output_train[j+1,None]
 			target_clean = output_clean_train[j+1,None]
-			(pred, hidden_state) = forward(output_train[j,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[j])
+			# pdb.set_trace()
+			(pred, hidden_state, solver_failed) = forward(output_train[j,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[j], solver_failed=solver_failed)
 			# (pred, hidden_state) = forward(pred.detach(), hidden_state, A,B,C,a,b, normz_info, model, model_params)
 			loss = (pred.squeeze() - target.squeeze()).pow(2).sum()
 			total_loss_train += loss
@@ -973,14 +1035,14 @@ def train_chaosRNN(forward,
 		loss_vec_train[i_epoch] = total_loss_train
 		loss_vec_clean_train[i_epoch] = total_loss_clean_train
 
-
 		# now evaluate test loss
 		for kkt in range(n_test_sets):
 			if synch_length > 1:
 				# first, synchronize the hidden state
 				hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+				solver_failed = False
 				for i in range(synch_length-1):
-					(pred, hidden_state) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params)
+					(pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
 				pred = test_synch_noisy[kkt,-1,:,None]
 			else:
 				pred = output_train[-1,:,None]
@@ -993,10 +1055,11 @@ def train_chaosRNN(forward,
 			pw_loss_test = np.zeros(test_seq_length)
 			pw_loss_clean_test = np.zeros(test_seq_length)
 			long_predictions = np.zeros([test_seq_length, output_size])
+			solver_failed = False
 			for j in range(test_seq_length):
 				target = output_test[kkt,j,None]
 				target_clean = output_clean_test[kkt,j,None]
-				(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
+				(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed)
 				j_loss = (pred.detach().squeeze() - target.squeeze()).pow(2).sum()
 				j_loss_clean = (pred.detach().squeeze() - target_clean.squeeze()).pow(2).sum()
 				total_loss_test += j_loss
@@ -1027,7 +1090,6 @@ def train_chaosRNN(forward,
 				kl_vec_inv_clean_test[i_epoch,kkt,:] = kl4dummies(
 								f_unNormalize_Y(normz_info, y_clean_test),
 								f_unNormalize_Y(normz_info, long_predictions))
-
 		# print updates every 10 iterations or in 10% incrememnts
 		if i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0:
 			print("Epoch: {}\nTraining Loss = {}\nTesting Loss = {}".format(
@@ -1047,8 +1109,9 @@ def train_chaosRNN(forward,
 			predictions[0,:] = np.squeeze(output_train[0,:,None])
 			saved_hidden_states = np.zeros([train_seq_length, hidden_size])
 			saved_hidden_states[0,:] = hidden_state.data.numpy().ravel()
+			solver_failed = False
 			for i in range(train_seq_length-1):
-				(pred, hidden_state) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i])
+				(pred, hidden_state, solver_failed) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i], solver_failed=solver_failed)
 				# (pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
 				# hidden_state = hidden_state
 				saved_hidden_states[i+1,:] = hidden_state.data.numpy().ravel()
@@ -1108,8 +1171,9 @@ def train_chaosRNN(forward,
 				if synch_length > 1:
 					# first, synchronize the hidden state
 					hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+					solver_failed = False
 					for i in range(synch_length-1):
-						(pred, hidden_state) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params)
+						(pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
 					pred = test_synch_noisy[kkt,-1,:,None]
 				else:
 					pred = output_train[-1,:,None]
@@ -1118,8 +1182,9 @@ def train_chaosRNN(forward,
 				predictions = np.zeros([test_seq_length, output_size])
 				# pred = output_train[-1,:,None]
 				saved_hidden_states = np.zeros([test_seq_length, hidden_size])
+				solver_failed = False
 				for i in range(test_seq_length):
-					(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
+					(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed)
 					# hidden_state = hidden_state
 					predictions[i,:] = pred.data.numpy().ravel()
 					saved_hidden_states[i,:] = hidden_state.data.numpy().ravel()
@@ -1268,8 +1333,9 @@ def train_chaosRNN(forward,
 	predictions = np.zeros([train_seq_length, output_size])
 	pred = output_train[0,:,None]
 	predictions[0,:] = np.squeeze(output_train[0,:,None])
+	solver_failed = False
 	for i in range(train_seq_length-1):
-		(pred, hidden_state) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i])
+		(pred, hidden_state, solver_failed) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i], solver_failed=solver_failed)
 		# (pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
 		# hidden_state = hidden_state
 		predictions[i+1,:] = pred.data.numpy().ravel()
@@ -1303,8 +1369,9 @@ def train_chaosRNN(forward,
 		if synch_length > 1:
 			# first, synchronize the hidden state
 			hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+			solver_failed = False
 			for i in range(synch_length-1):
-				(pred, hidden_state) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params)
+				(pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
 			pred = test_synch_noisy[kkt,-1,:,None]
 		else:
 			pred = output_train[-1,:,None]
@@ -1313,8 +1380,9 @@ def train_chaosRNN(forward,
 		predictions = np.zeros([test_seq_length, output_size])
 		# pred = output_train[-1,:,None]
 		saved_hidden_states = np.zeros([test_seq_length, hidden_size])
+		solver_failed = False
 		for i in range(test_seq_length):
-			(pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
+			(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed)
 			# hidden_state = hidden_state
 			predictions[i,:] = pred.data.numpy().ravel()
 			saved_hidden_states[i,:] = hidden_state.data.numpy().ravel()
