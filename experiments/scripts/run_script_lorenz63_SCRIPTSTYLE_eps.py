@@ -59,8 +59,8 @@ def main():
 	i = 0
 	for state_init in my_state_inits:
 		i += 1
-		sim_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, 0.1), 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'mxstep':0}
-		rnn_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, 0.1), 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'mxstep':0}
+		sim_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'mxstep':0}
+		rnn_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'mxstep':0}
 		all_dirs = []
 
 		# np.random.seed()
@@ -149,7 +149,7 @@ def main():
 			forward = forward_chaos_hybrid_full
 
 			for eps_badness in np.random.permutation([0, 0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.4, 1.0, 2.0]):
-				rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, 0.1), 'ode_params':(a, b*(1+eps_badness), c), 'time_avg_norm':0.529, 'mxstep':0}
+				rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b*(1+eps_badness), c), 'time_avg_norm':0.529, 'mxstep':0}
 
 				# train on clean data
 				run_output_dir = output_dir + '/iter{0}'.format(n) + '/mechRNN_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size)

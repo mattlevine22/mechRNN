@@ -37,8 +37,8 @@ def main():
 	i = 0
 	for state_init in my_state_inits:
 		i += 1
-		sim_model_params = {'state_names': ['x','y'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, 0.1), 'ode_params':(a, b, c)}
-		rnn_model_params = {'state_names': ['x','y'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, 0.1), 'ode_params':(a, b, c)}
+		sim_model_params = {'state_names': ['x','y'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b, c)}
+		rnn_model_params = {'state_names': ['x','y'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b, c)}
 		all_dirs = []
 
 		np.random.seed()
@@ -193,7 +193,7 @@ def main():
 		forward = forward_chaos_hybrid_full
 
 		for eps_badness in [-0.99, 0.1, 1, 10]:
-			rnn_BAD_model_params = {'state_names': ['x','y'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, 0.1), 'ode_params':(a, b*(1+eps_badness), c)}
+			rnn_BAD_model_params = {'state_names': ['x','y'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b*(1+eps_badness), c)}
 
 			# train on clean data
 			normz_info = normz_info_clean
