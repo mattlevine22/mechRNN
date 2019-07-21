@@ -6,10 +6,10 @@ import argparse
 parser = argparse.ArgumentParser(description='mechRNN')
 parser.add_argument('--epoch', type=int, default=4, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.05, help='learning rate')
-parser.add_argument('--delta_t', type=float, default=0.1, help='time step of simulation')
+# parser.add_argument('--delta_t', type=float, default=0.1, help='time step of simulation')
 parser.add_argument('--t_train', type=float, default=100, help='length of train simulation')
 parser.add_argument('--n_train_points', type=float, default=None, help='total number of train+testing data points. Default is to have this setting inactive (i.e None)')
-parser.add_argument('--t_test', type=float, default=200, help='length of test simulation')
+parser.add_argument('--t_test', type=float, default=30, help='length of test simulation')
 parser.add_argument('--t_test_synch', type=float, default=10, help='length of test simulation')
 parser.add_argument('--savedir', type=str, default='default_output_dT', help='parent dir of output')
 parser.add_argument('--model_solver', default=lorenz63, help='ode function')
@@ -38,12 +38,6 @@ def main():
 	else:
 		my_state_inits = [[-5, 0, 30]]
 
-	if FLAGS.continue_trajectory:
-		FLAGS.n_tests = 1
-		FLAGS.t_test_synch = 0
-	else:
-		if FLAGS.t_test_synch < FLAGS.delta_t:
-			raise ValueError('t_test_synch (synch-length) must be larger than delta_t step size')
 
 	lr = FLAGS.lr # learning rate
 
@@ -62,6 +56,12 @@ def main():
 		init_output_dir = FLAGS.savedir + '_output' + str(i)
 
 		for delta_t in [0.1, 0.01, 0.05, 0.15, 0.2, 0.5]:
+			if FLAGS.continue_trajectory:
+				FLAGS.n_tests = 1
+				FLAGS.t_test_synch = 0
+			else:
+				if FLAGS.t_test_synch < delta_t:
+					raise ValueError('t_test_synch (synch-length) must be larger than delta_t step size')
 			all_dirs = []
 			if FLAGS.n_train_points is not None:
 				print('Looping over dT with a fixed NUMBER of training points')

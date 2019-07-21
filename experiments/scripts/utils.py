@@ -218,7 +218,27 @@ def make_RNN_data(model, tspan, sim_model_params, noise_frac=0, output_dir=".", 
 		os.makedirs(output_dir)
 
 	t0 = time()
-	y_clean, y_noisy, x  = run_ode_model(model, tspan, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
+
+	# make denser tspan
+	tspan_dense = np.linspace(tspan[0],tspan[-1],(tspan[-1] - tspan[0])/model_params['smaller_delta_t']+1)
+
+	# intersect tspan_dense with original tspan, then get original indices
+	tspan_solve = np.union1d(tspan_dense, tspan)
+
+	ind_orig_tspan = np.searchsorted(tspan_solve, tspan)
+	if not np.array_equal(tspan_solve[ind_orig_tspan],tspan):
+		raise ValueError('BUG IN THE CODE with subsetting tspan')
+
+	y_clean_dense, y_noisy_dense, x_dense  = run_ode_model(model, tspan_dense, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
+
+	# find subset of dense
+	y_clean = y_clean_dense[ind_orig_tspan,:]
+	y_noisy = y_noisy_dense[ind_orig_tspan,:]
+	if x_dense:
+		x = x_dense[ind_orig_tspan,:]
+	else:
+		x = x_dense
+
 	print("Took {0} seconds to integrate the ODE.".format(time()-t0))
 	if drive_system:
 		# little section to upsample the random, piecewise constant x(t) function
@@ -250,6 +270,26 @@ def make_RNN_data2(model, tspan_train, tspan_test, sim_model_params, noise_frac=
 	# first get training set
 	sim_model_params['state_init'] = init_vec[0,:]
 	y_clean_train, y_noisy_train, x_train  = run_ode_model(model, tspan_train, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
+
+	# make denser tspan
+	tspan_dense = np.linspace(tspan_train[0],tspan_train[-1],(tspan_train[-1] - tspan_train[0])/sim_model_params['smaller_delta_t']+1)
+
+	# intersect tspan_dense with original tspan, then get original indices
+	tspan_solve = np.union1d(tspan_dense, tspan_train)
+
+	ind_orig_tspan = np.searchsorted(tspan_solve, tspan_train)
+
+	if not np.array_equal(tspan_solve[ind_orig_tspan],tspan_train):
+		raise ValueError('BUG IN THE CODE with subsetting tspan')
+
+	y_clean_train_dense, y_noisy_train_dense, x_train_dense  = run_ode_model(model, tspan_dense, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
+
+	y_clean_train = y_clean_train_dense[ind_orig_tspan,:]
+	y_noisy_train = y_noisy_train_dense[ind_orig_tspan,:]
+	if x_train_dense:
+		x_train = x_train_dense[ind_orig_tspan,:]
+	else:
+		x_train = x_train_dense
 
 	# now, get N test sets
 	for n in range(n_test_sets):
@@ -319,7 +359,7 @@ def forward_chaos_pureML2(data_input, hidden_state, A, B, C, a, b, *args, **kwar
 def get_tspan(model_params):
 	tspan = np.linspace(0,model_params['delta_t'],model_params['delta_t']/model_params['smaller_delta_t']+1)
 	if tspan[-1] != model_params['delta_t']:
-		pdb.set_trace()
+		raise ValueError('BUG IN THE CODE with computing new tspan')
 	return tspan
 
 
