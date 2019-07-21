@@ -256,7 +256,8 @@ def make_RNN_data2(model, tspan_train, tspan_test, sim_model_params, noise_frac=
 		if continue_trajectory:
 			# increment 1 time step from end of training data
 			y0 = y_clean_train[-1,:]
-			tspan = [0, 0.5*sim_model_params['delta_t'], sim_model_params['delta_t']]
+			tspan = get_tspan(sim_model_params)
+			# tspan = [0, 0.5*sim_model_params['delta_t'], sim_model_params['delta_t']]
 			y_out = odeint(model, y0, tspan, args=sim_model_params['ode_params'], mxstep=sim_model_params['mxstep'])
 			init_continued = y_out[-1,:]
 			sim_model_params['state_init'] = init_continued #y_clean_train[-1,:]
@@ -315,6 +316,13 @@ def forward_chaos_pureML2(data_input, hidden_state, A, B, C, a, b, *args, **kwar
 	return  (out, hidden_state)
 
 
+def get_tspan(model_params):
+	tspan = np.linspace(0,model_params['delta_t'],model_params['delta_t']/model_params['smaller_delta_t']+1)
+	if tspan[-1] != model_params['delta_t']:
+		pdb.set_trace()
+	return tspan
+
+
 def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_info, model, model_params, model_output=None):
 	# unnormalize
 	# ymin = normz_info['Ymin']
@@ -328,7 +336,8 @@ def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_in
 	# y0 = ymin + ( hidden_state[0].detach().numpy()*(ymax - ymin) )
 	y0_normalized = torch.squeeze(model_input).detach()
 	if model_output is None:
-		tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+		# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+		tspan = get_tspan(model_params)
 		# driver = xmean + xsd*model_input.detach().numpy()
 		# my_args = model_params + (driver,)
 		#
@@ -421,7 +430,8 @@ def run_GP(y_clean_train, y_noisy_train,
 
 	gpr_train_predictions_rerun = np.zeros([train_seq_length-1, output_size])
 	pred = y_noisy_train[0,:,None].squeeze()
-	tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+	# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+	tspan = get_tspan(model_params)
 	for j in range(train_seq_length-1):
 		# target = output_test[j,None]
 		# target_clean = output_clean_train[j,None]
@@ -487,7 +497,8 @@ def run_GP(y_clean_train, y_noisy_train,
 	pred_validity_vec_clean_test = np.zeros((1,n_test_sets))
 
 	# loop over test sets
-	tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+	tspan = get_tspan(model_params)
+	# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 	for kkt in range(n_test_sets):
 		# now compute test loss
 		total_loss_test = 0
@@ -652,7 +663,8 @@ def train_chaosRNN(forward,
 	if precompute_model:
 		model_pred = np.zeros((train_seq_length-1,output_size))
 		for j in range(train_seq_length-1):
-			tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+			tspan = get_tspan(model_params)
+			# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 			# unnormalize model_input so that it can go through the ODE solver
 			y0 = f_unNormalize_minmax(normz_info, output_train[j,:].numpy())
 			y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'])

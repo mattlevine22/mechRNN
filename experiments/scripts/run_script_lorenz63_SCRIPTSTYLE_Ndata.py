@@ -67,8 +67,8 @@ def main():
 			tspan_train = np.arange(0,FLAGS.t_train,delta_t)
 			tspan_test = np.arange(0,(FLAGS.t_test_synch+FLAGS.t_test),delta_t)  #np.arange(0,10000,delta_t)
 			ntsynch = int(FLAGS.t_test_synch/delta_t)
-			sim_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'mxstep':FLAGS.mxstep}
-			rnn_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'mxstep':FLAGS.mxstep}
+			sim_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, 0.1), 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'mxstep':FLAGS.mxstep}
+			rnn_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, 0.1), 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'mxstep':FLAGS.mxstep}
 
 			output_dir = init_output_dir + '/Ndata_{0}'.format(t_train)
 
@@ -154,7 +154,7 @@ def main():
 				forward = forward_chaos_hybrid_full
 
 				for eps_badness in [0.05]:
-					rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'ode_params':(a, b*(1+eps_badness), c), 'time_avg_norm':0.529, 'mxstep':FLAGS.mxstep}
+					rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, 0.1), 'ode_params':(a, b*(1+eps_badness), c), 'time_avg_norm':0.529, 'mxstep':FLAGS.mxstep}
 
 					# train on clean data
 					run_output_dir = output_dir + '/iter{0}'.format(n) + '/mechRNN_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size)
