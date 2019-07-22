@@ -7,6 +7,7 @@
 # based off of code from https://www.cpuheater.com/deep-learning/introduction-to-recurrent-neural-networks-in-pytorch/
 import os
 from time import time
+from datetime import timedelta
 import math
 import numpy as np
 import numpy.matlib
@@ -702,6 +703,7 @@ def train_chaosRNN(forward,
 			compute_kl=False, gp_only=False, gp_style=None,
 			save_iterEpochs=False):
 
+	t0 = time()
 
 	if torch.cuda.is_available():
 		print('Using CUDA FloatTensor')
@@ -1092,12 +1094,15 @@ def train_chaosRNN(forward,
 								f_unNormalize_Y(normz_info, y_clean_test),
 								f_unNormalize_Y(normz_info, long_predictions))
 		# print updates every 10 iterations or in 10% incrememnts
-		if save_iterEpochs and (i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0):
-			print("Epoch: {}\nTraining Loss = {}\nTesting Loss = {}".format(
+		if  i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0:
+			print("Epoch {0}\nTotal run-time = {1}\nTraining Loss = {2}\nTesting Loss = {3}".format(
 						i_epoch,
+						str(timedelta(seconds=time()-t0)),
 						total_loss_train.data.item(),
 						np.mean(loss_vec_test[i_epoch,:])))
-				 # plot predictions vs truth
+
+		if  save_iterEpochs and (i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0):
+			 # plot predictions vs truth
 			# fig, (ax1, ax3) = plt.subplots(1, 2)
 			fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
 			if not isinstance(ax_list,np.ndarray):
