@@ -8,8 +8,8 @@ parser.add_argument('--epoch', type=int, default=4, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.05, help='learning rate')
 parser.add_argument('--delta_t', type=float, default=0.1, help='time step of simulation')
 parser.add_argument('--t_train', type=float, default=100, help='length of train simulation')
-parser.add_argument('--n_train_points', type=float, default=None, help='total number of train+testing data points. Default is to have this setting inactive (i.e None)')
-parser.add_argument('--t_test', type=float, default=200, help='length of test simulation')
+# parser.add_argument('--n_train_points', type=float, default=None, help='total number of train+testing data points. Default is to have this setting inactive (i.e None)')
+parser.add_argument('--t_test', type=float, default=30, help='length of test simulation')
 parser.add_argument('--t_test_synch', type=float, default=10, help='length of test simulation')
 parser.add_argument('--savedir', type=str, default='default_output_dT', help='parent dir of output')
 parser.add_argument('--model_solver', default=lorenz63, help='ode function')
@@ -62,9 +62,9 @@ def main():
 		i += 1
 		init_output_dir = FLAGS.savedir + '_output' + str(i)
 
-		for t_train in [10, 50, 100, 500, 1000]:
+		for t_train in np.random.permutation([10, 50, 100, 500, 1000]):
 			all_dirs = []
-			tspan_train = np.arange(0,FLAGS.t_train,delta_t)
+			tspan_train = np.arange(0,t_train,delta_t)
 			tspan_test = np.arange(0,(FLAGS.t_test_synch+FLAGS.t_test),delta_t)  #np.arange(0,10000,delta_t)
 			ntsynch = int(FLAGS.t_test_synch/delta_t)
 			sim_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'mxstep':FLAGS.mxstep}
