@@ -15,7 +15,8 @@ def main(pathname):
 		if os.path.exists(x+'/loss_vec_clean_test.txt'):
 			my_dirs.append(x)
 
-	extract_delta_t_performance(my_dirs,output_fname=pathname+'/compare_delta_t')
+	if len(my_dirs):
+		extract_delta_t_performance(my_dirs,output_fname=pathname+'/compare_delta_t')
 
 if __name__ == '__main__':
 	main(sys.argv[1])
