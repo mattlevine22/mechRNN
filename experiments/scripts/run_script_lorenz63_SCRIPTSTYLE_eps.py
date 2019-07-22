@@ -7,10 +7,11 @@ parser = argparse.ArgumentParser(description='mechRNN')
 parser.add_argument('--epoch', type=int, default=4, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.05, help='learning rate')
 parser.add_argument('--delta_t', type=float, default=0.1, help='time step of simulation')
-parser.add_argument('--t_train', type=float, default=200, help='length of train simulation')
-parser.add_argument('--t_test', type=float, default=100, help='length of test simulation')
+parser.add_argument('--t_train', type=float, default=100, help='length of train simulation')
+# parser.add_argument('--n_train_points', type=float, default=None, help='total number of train+testing data points. Default is to have this setting inactive (i.e None)')
+parser.add_argument('--t_test', type=float, default=30, help='length of test simulation')
 parser.add_argument('--t_test_synch', type=float, default=10, help='length of test simulation')
-parser.add_argument('--savedir', type=str, default='default_output', help='parent dir of output')
+parser.add_argument('--savedir', type=str, default='default_output_eps', help='parent dir of output')
 parser.add_argument('--model_solver', default=lorenz63, help='ode function')
 parser.add_argument('--drive_system', type=str2bool, default=False, help='whether to force the system with a time-dependent driver')
 parser.add_argument('--n_tests', type=int, default=1, help='number of independent testing sets to use')
@@ -148,7 +149,7 @@ def main():
 			#### run mechRNN w/ BAD parameter ###
 			forward = forward_chaos_hybrid_full
 
-			for eps_badness in np.random.permutation([0, 0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.4, 1.0, 2.0]):
+			for eps_badness in np.random.permutation([0, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0]):
 				rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b*(1+eps_badness), c), 'time_avg_norm':0.529, 'mxstep':0}
 
 				# train on clean data
