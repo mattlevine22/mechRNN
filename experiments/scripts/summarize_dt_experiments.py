@@ -8,11 +8,11 @@ def main(pathname):
 	my_dirs = []
 	for x in Path(pathname).glob('**/*RNN*'):
 		x = str(x)
-		if os.path.exists(x+'/rnn_fit_ode_TEST.png') or os.path.exists(x+'/test_fit_ode.png'):
+		if os.path.exists(x+'/loss_vec_clean_test.txt'):
 			my_dirs.append(x)
 	for x in Path(pathname).glob('**/*hybrid*'):
 		x = str(x)
-		if os.path.exists(x+'/rnn_fit_ode_TEST.png') or os.path.exists(x+'/test_fit_ode.png') or os.path.exists(x+'/fit_ode_TEST.png'):
+		if os.path.exists(x+'/loss_vec_clean_test.txt'):
 			my_dirs.append(x)
 
 	extract_delta_t_performance(my_dirs,output_fname=pathname+'/compare_delta_t')
