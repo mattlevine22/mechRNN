@@ -1,7 +1,7 @@
 import sys
 import os
 from pathlib import Path
-from utils import extract_delta_t_performance
+from summarizers import extract_delta_t_performance
 
 def main(pathname):
 	# pathname = '/Users/matthewlevine/code_projects/mechRNN/experiments/June4/lorenz63_eps_loop_10000epochs_v2'
