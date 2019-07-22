@@ -1101,7 +1101,7 @@ def train_chaosRNN(forward,
 						total_loss_train.data.item(),
 						np.mean(loss_vec_test[i_epoch,:])))
 
-		if  (i_epoch==(n_epochs-1)) or (save_iterEpochs and (i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0):
+		if  (i_epoch==(n_epochs-1)) or (save_iterEpochs and (i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0)):
 			 # plot predictions vs truth
 			# fig, (ax1, ax3) = plt.subplots(1, 2)
 			fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
