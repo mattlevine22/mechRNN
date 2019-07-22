@@ -55,7 +55,7 @@ def main():
 		i += 1
 		init_output_dir = FLAGS.savedir + '_output' + str(i)
 
-		for delta_t in [0.1, 0.01, 0.05, 0.15, 0.2, 0.5]:
+		for delta_t in np.random.permutation([0.1, 0.01, 0.05, 0.15, 0.2, 0.5, 1.0]):
 			if FLAGS.continue_trajectory:
 				FLAGS.n_tests = 1
 				FLAGS.t_test_synch = 0
