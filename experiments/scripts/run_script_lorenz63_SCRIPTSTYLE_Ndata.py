@@ -62,7 +62,7 @@ def main():
 		i += 1
 		init_output_dir = FLAGS.savedir + '_output' + str(i)
 
-		for t_train in np.random.permutation([10, 50, 100, 500, 1000]):
+		for t_train in np.random.permutation([10, 50, 100, 500]):
 			all_dirs = []
 			tspan_train = np.arange(0,t_train,delta_t)
 			tspan_test = np.arange(0,(FLAGS.t_test_synch+FLAGS.t_test),delta_t)  #np.arange(0,10000,delta_t)
