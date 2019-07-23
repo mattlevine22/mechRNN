@@ -310,6 +310,10 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 
 	fig.suptitle('Performance on Test Set Under Varying Model Error')
 	fig.savefig(fname=output_fname)
+
+	ax1.set_xscale('log')
+	ax2.set_xscale('log')
+	fig.savefig(fname=output_fname + '_xlog')
 	plt.close(fig)
 
 	# TRAIN TIME ANALYSIS
@@ -361,7 +365,11 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	ax2.set_yscale('log')
 	fig.suptitle('Train-time until reaching optimal test performance (w.r.t. model error)')
 	fig.savefig(fname=output_fname+'_train_time')
+
+	ax2.set_xscale('log')
+	fig.savefig(fname=output_fname+'_train_time_xlog')
 	plt.close(fig)
+
 
 
 def extract_hidden_size_performance(my_dirs, output_fname="./hidden_size_comparisons", win=1000, many_epochs=True, hs_token='hs'):
@@ -835,6 +843,10 @@ def extract_n_data_performance(my_dirs, output_fname="./n_data_comparisons", win
 
 	fig.suptitle(r'Performance on Test Set Under Varying training data quantity')
 	fig.savefig(fname=output_fname)
+
+	ax1.set_xscale('log')
+	ax2.set_xscale('log')
+	fig.savefig(fname=output_fname + '_xlog')
 	plt.close(fig)
 
 	# plot summary of Time to Train
@@ -1160,6 +1172,11 @@ def extract_delta_t_performance(my_dirs, output_fname="./delta_t_comparisons", w
 
 	fig.suptitle(r'Performance on Test Set Under Varying training data quantity')
 	fig.savefig(fname=output_fname)
+
+
+	ax1.set_xscale('log')
+	ax2.set_xscale('log')
+	fig.savefig(fname=output_fname + '_xlog')
 	plt.close(fig)
 
 	# plot summary of Time to Train
