@@ -14,8 +14,8 @@ def main(pathname):
 	# 	x = str(x)
 	# 	if os.path.exists(x+'/rnn_fit_ode_TEST.png') or os.path.exists(x+'/test_fit_ode.png'):
 	# 		my_dirs.append(x)
-
-	extract_epsilon_performance(my_dirs,output_fname=pathname+'/compare_epsilons')
+	if len(my_dirs):
+		extract_epsilon_performance(my_dirs,output_fname=pathname+'/compare_epsilons')
 
 if __name__ == '__main__':
 	main(sys.argv[1])
