@@ -8,7 +8,7 @@ def main(pathname):
 	my_dirs = []
 	for x in Path(pathname).glob('**/*RNN*'):
 		x = str(x)
-		if os.path.exists(x+'/rnn_fit_ode_TEST_0.png') or os.path.exists(x+'/test_fit_ode_0.png'):
+		if os.path.exists(x+'/loss_vec_clean_test.txt'):
 			my_dirs.append(x)
 	# for x in Path(pathname).glob('**/*hybrid*'):
 	# 	x = str(x)
