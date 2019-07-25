@@ -19,14 +19,14 @@ module load python/2.7.15-tf
 
 
 # Execute jobs in parallel
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs/Init0 --epoch 10000 --t_train=1000 --n_tests=10 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs/Init1 --epoch 10000 --t_train=1000 --n_tests=10 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs/Init2 --epoch 10000 --t_train=1000 --n_tests=10 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs/Init3 --epoch 10000 --t_train=1000 --n_tests=10 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs/Init4 --epoch 10000 --t_train=1000 --n_tests=10 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs/Init5 --epoch 10000 --t_train=1000 --n_tests=10 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs/Init6 --epoch 10000 --t_train=1000 --n_tests=10 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs/Init7 --epoch 10000 --t_train=1000 --n_tests=10 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs/Init8 --epoch 10000 --t_train=1000 --n_tests=10 &
-srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs/Init9 --epoch 10000 --t_train=1000 --n_tests=10
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs_10xNdata/Init0 --epoch 10000 --t_train=1000 --n_tests=10 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs_10xNdata/Init1 --epoch 10000 --t_train=1000 --n_tests=10 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs_10xNdata/Init2 --epoch 10000 --t_train=1000 --n_tests=10 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs_10xNdata/Init3 --epoch 10000 --t_train=1000 --n_tests=10 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs_10xNdata/Init4 --epoch 10000 --t_train=1000 --n_tests=10 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs_10xNdata/Init5 --epoch 10000 --t_train=1000 --n_tests=10 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs_10xNdata/Init6 --epoch 10000 --t_train=1000 --n_tests=10 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs_10xNdata/Init7 --epoch 10000 --t_train=1000 --n_tests=10 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs_10xNdata/Init8 --epoch 10000 --t_train=1000 --n_tests=10 &
+srun --exclusive -N 1 -n 1 python ../scripts/run_script_lorenz63_SCRIPTSTYLE_dT.py --savedir lorenz63_dT_withGP_constantTIMELENGTH_10synchs_10xNdata/Init9 --epoch 10000 --t_train=1000 --n_tests=10
 wait
