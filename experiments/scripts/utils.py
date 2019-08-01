@@ -31,6 +31,8 @@ import pandas as pd
 import pdb
 
 
+LORENZ_DEFAULT_PARAMS = (10, 28, 8/3)
+
 def get_lorenz_inits(model=None, params=None, n=2):
 	init_vec = np.zeros((n, 3))
 	for k in range(n):
@@ -454,7 +456,7 @@ def run_GP(y_clean_train, y_noisy_train,
 			output_size,
 			avg_output_test,
 			avg_output_clean_test,
-			normz_info, model_params,
+			normz_info, model_params, model_params_TRUE, random_attractor_points,
 			plot_state_indices,
 			output_dir,
 			n_plttrain,
@@ -481,8 +483,13 @@ def run_GP(y_clean_train, y_noisy_train,
 		X = y_noisy_train[:-1]
 		y=y_noisy_train[1:]
 
+	nXDim = X.shape[1]
+	nYDim = y.shape[1]
+
 	# NEW. learn residuals with GP
 	gpr = GaussianProcessRegressor().fit(X=X,y=y)
+	print(gp_nm,'Training Score =',gpr.score(X=X,y=y))
+
 	# gpr = GaussianProcessRegressor().fit(X=output_train[:-1],y=output_train[1:]-model_pred)
 	gpr_train_predictions_orig = do_resid*model_pred + gpr.predict(X).squeeze()
 	# gpr.score(model_pred, y_noisy_train[1:])
@@ -682,6 +689,193 @@ def run_GP(y_clean_train, y_noisy_train,
 	np.savetxt(output_dir+'/{0}prediction_validity_time_test.txt'.format(gp_nm),pred_validity_vec_test)
 	np.savetxt(output_dir+'/{0}prediction_validity_time_clean_test.txt'.format(gp_nm),pred_validity_vec_clean_test)
 
+	## Evaluate GP vs actual residuals on a BOX
+	t0grid = time()
+	n_residuals = 5000
+	GP_error_grid = np.zeros((n_residuals,n_residuals,n_residuals))
+	GP_total_error = 0
+	# bigX = np.zeros((len(xvals)*len(yvals)*len(zvals),nXDim))
+	# bigY = np.zeros((len(xvals)*len(yvals)*len(zvals),nYDim))
+	tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+
+	# FIRST, find the attractor and have something to sample from
+	# initialize at FIXED starting point for TRUE model to get the attractor!!!
+	# bigTspan = np.arange(0, 2*n_residuals, 0.1)
+	# run_again = True
+	# while run_again:
+	# 	y_out_ATT, info_dict = odeint(model, np.squeeze(get_lorenz_inits(n=1)), bigTspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+	# 	if info_dict['message'] == 'Integration successful.':
+	# 		run_again = False
+
+	# y_out_ATT = y_out_ATT[int(y_out_ATT.shape[0]/3):,]
+
+	# random_attractor_points
+
+	bigX = np.zeros((n_residuals,nXDim))
+	bigY = np.zeros((n_residuals,nYDim))
+
+	my_inds = np.random.randint(low=0, high=random_attractor_points.shape[0]-1, size=n_residuals)
+	for n in range(len(my_inds)):
+		y0 = random_attractor_points[my_inds[n],:]
+		y0_normalized = f_normalize_minmax(normz_info, y0)
+
+		y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+		bad_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+
+		if gp_style==1:
+			x_input = y0_normalized
+		elif gp_style==2:
+			x_input = np.concatenate((y0_normalized, bad_model_pred))
+		elif gp_style==3:
+			x_input = bad_model_pred
+		elif gp_style==4:
+			x_input = y0_normalized
+
+		gp_forecast = do_resid*bad_model_pred + gpr.predict(x_input.reshape(1, -1) , return_std=False).squeeze()
+
+		y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+		true_model_pred = f_normalize_minmax(normz_info, y_out_TRUE[-1,:])
+
+		bigX[n,:] = x_input
+		bigY[n,:] = (true_model_pred - do_resid*bad_model_pred)
+
+		# try:
+		# 	my_score = gpr.score(X=x_input, y = (true_model_pred - do_resid*bad_model_pred))
+		# except:
+		my_score = np.linalg.norm(gp_forecast - true_model_pred)
+		# GP_error_grid[ix,iy,iz] = my_score
+		GP_total_error += my_score
+
+	print('ATTRACTOR sampling took',str(timedelta(seconds=time()-t0grid)))
+	# plot 1-d marginal errors
+	print('Total {0} ATTRACTOR error = {1}'.format(gp_nm,GP_total_error))
+	print('{0} ATTRACTOR score = {1}'.format(gp_nm,gpr.score(X=bigX,y=bigY)))
+
+	# np.savez(output_dir+'/{0}GP_error_grid'.format(gp_nm), GP_error_grid=GP_error_grid, xvals=xvals, yvals=yvals, zvals=zvals, GP_total_error=GP_total_error)
+
+
+
+	## Evaluate GP vs actual residuals on a BOX
+	xvals = np.linspace(-10,10,10)
+	yvals = np.linspace(-20,30,10)
+	zvals = np.linspace(10,40,10)
+
+	t0grid = time()
+	ix = 0
+	iy = 0
+	iz = 0
+	GP_error_grid = np.zeros((len(xvals),len(yvals),len(zvals)))
+	GP_total_error = 0
+	bigX = np.zeros((len(xvals)*len(yvals)*len(zvals),nXDim))
+	bigY = np.zeros((len(xvals)*len(yvals)*len(zvals),nYDim))
+	tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+	n = -1
+	for ix in range(len(xvals)):
+		x = xvals[ix]
+		for iy in range(len(yvals)):
+			y = yvals[iy]
+			for iz in range(len(zvals)):
+				n += 1
+				z = zvals[iz]
+
+				# FIRST, find the attractor (idk, run for >10 lyapunov times...)
+				y_out_INIT, info_dict = odeint(model, np.array([x,y,z]), [0, 5, 10], args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+				y0 = y_out_INIT[-1,:]
+				y0_normalized = f_normalize_minmax(normz_info, y0)
+				# now, we assume that y0 is on the attractor
+
+				y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+				bad_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+				if gp_style==1:
+					x_input = y0_normalized
+				elif gp_style==2:
+					x_input = np.concatenate((y0_normalized, bad_model_pred))
+				elif gp_style==3:
+					x_input = bad_model_pred
+				elif gp_style==4:
+					x_input = y0_normalized
+
+				gp_forecast = do_resid*bad_model_pred + gpr.predict(x_input.reshape(1, -1) , return_std=False).squeeze()
+
+				y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+				true_model_pred = f_normalize_minmax(normz_info, y_out_TRUE[-1,:])
+
+				bigX[n,:] = x_input
+				bigY[n,:] = (true_model_pred - do_resid*bad_model_pred)
+
+				# try:
+				# 	my_score = gpr.score(X=x_input, y = (true_model_pred - do_resid*bad_model_pred))
+				# except:
+				my_score = np.linalg.norm(gp_forecast - true_model_pred)
+				GP_error_grid[ix,iy,iz] = my_score
+				GP_total_error += my_score
+
+	print('Grid took',str(timedelta(seconds=time()-t0grid)))
+	# plot 1-d marginal errors
+	print('Total {0} grid error = {1}'.format(gp_nm,GP_total_error))
+	print('{0} grid score = {1}'.format(gp_nm,gpr.score(X=bigX,y=bigY)))
+
+	np.savez(output_dir+'/{0}GP_error_grid'.format(gp_nm), GP_error_grid=GP_error_grid, xvals=xvals, yvals=yvals, zvals=zvals, GP_total_error=GP_total_error)
+
+
+def compare_GPs(output_dir,style_list):
+
+	# 1d-marginals
+	fig, (ax1, ax2, ax3) = plt.subplots(1,3, sharey=True)
+	for gp_style in style_list:
+		gp_nm = 'GPR{0}_'.format(gp_style)
+		npzfile = np.load(output_dir+'/{0}GP_error_grid.npz'.format(gp_nm))
+
+		ax1.plot(npzfile['xvals'], np.mean(npzfile['GP_error_grid'], axis=(1,2)), label=gp_nm)
+		ax2.plot(npzfile['yvals'], np.mean(npzfile['GP_error_grid'], axis=(0,2)), label=gp_nm)
+		ax3.plot(npzfile['zvals'], np.mean(npzfile['GP_error_grid'], axis=(0,1)), label=gp_nm)
+
+	ax1.set_xlabel('x')
+	ax2.set_xlabel('y')
+	ax3.set_xlabel('z')
+
+	ax1.set_ylabel('MSE')
+	ax2.set_ylabel('MSE')
+	ax3.set_ylabel('MSE')
+
+	ax3.legend()
+
+	fig.suptitle('1-d Marginalized Squared Error of GP-approximated residuals')
+	fig.savefig(fname=output_dir+'/1d_Maringal_GP_errors')
+
+	ax1.set_yscale('log')
+	ax2.set_yscale('log')
+	ax3.set_yscale('log')
+
+	fig.savefig(fname=output_dir+'/1d_Maringal_GP_errors_log')
+
+	plt.close(fig)
+
+
+	# 2d-marginals
+	for gp_style in style_list:
+		fig, (ax_XY, ax_XZ, ax_YZ) = plt.subplots(1,3)
+		gp_nm = 'GPR{0}_'.format(gp_style)
+		npzfile = np.load(output_dir+'/{0}GP_error_grid.npz'.format(gp_nm))
+
+		ax_XY.imshow(np.mean(npzfile['GP_error_grid'], axis=2), label=gp_nm)
+		ax_XZ.imshow(np.mean(npzfile['GP_error_grid'], axis=1), label=gp_nm)
+		ax_YZ.imshow(np.mean(npzfile['GP_error_grid'], axis=0), label=gp_nm)
+
+		ax_XY.set_xlabel('X')
+		ax_XY.set_ylabel('Y')
+
+		ax_XZ.set_xlabel('X')
+		ax_XZ.set_ylabel('Z')
+
+		ax_YZ.set_xlabel('Y')
+		ax_YZ.set_ylabel('Z')
+
+
+		fig.suptitle('2-d Marginalized Squared Error of GP-approximated residuals')
+		fig.savefig(fname=output_dir+'/2d_Maringal_GP_errors_{0}'.format(gp_nm))
+		plt.close(fig)
+
 
 
 def train_chaosRNN(forward,
@@ -701,7 +895,8 @@ def train_chaosRNN(forward,
 			err_thresh=0.4, plot_state_indices=None,
 			precompute_model=True, kde_func=kde_scipy,
 			compute_kl=False, gp_only=False, gp_style=None,
-			save_iterEpochs=False):
+			save_iterEpochs=False,
+			model_params_TRUE=None):
 
 	t0 = time()
 
@@ -720,6 +915,10 @@ def train_chaosRNN(forward,
 
 	if not plot_state_indices:
 		plot_state_indices = np.arange(y_clean_test.shape[2])
+
+	if not model_params_TRUE:
+		model_params_TRUE = model_params.copy()
+		model_params_TRUE['ode_params'] = LORENZ_DEFAULT_PARAMS
 
 	# keep_param_history = np.log10( n_epochs * y_clean_train.shape[0] * (hidden_size**2) ) < mem_thresh_order
 	# if not keep_param_history:
@@ -774,6 +973,19 @@ def train_chaosRNN(forward,
 		style_list = [gp_style]
 
 	# pdb.set_trace()
+	# identify Attractor points for GP grid eval
+	n_points = 1000
+	bigTspan = np.arange(0, 10*n_points, 0.1)
+	run_again = True
+	while run_again:
+		y_out_ATT, info_dict = odeint(model, np.squeeze(get_lorenz_inits(n=1)), bigTspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+		if info_dict['message'] == 'Integration successful.':
+			run_again = False
+
+	# do a one 1/10 burn-in, then randomly downsample.
+	my_inds = np.random.randint(low=n_points, high=(10*n_points)-1, size=n_points)
+	random_attractor_points = y_out_ATT[my_inds,]
+
 	for gp_style in style_list:
 		print('Running GPR',gp_style)
 		run_GP(y_clean_train, y_noisy_train,
@@ -786,7 +998,7 @@ def train_chaosRNN(forward,
 				output_size,
 				avg_output_test,
 				avg_output_clean_test,
-				normz_info, model_params,
+				normz_info, model_params, model_params_TRUE, random_attractor_points,
 				plot_state_indices,
 				output_dir,
 				n_plttrain,
@@ -796,10 +1008,12 @@ def train_chaosRNN(forward,
 				gp_style,
 				gp_only)
 
-	# pdb.set_trace()
-
 	if gp_only:
 		return
+
+	# plot GP comparisons
+	compare_GPs(output_dir,style_list)
+
 
 	# first, SHOW that a simple mechRNN can fit the data perfectly (if we are running a mechRNN)
 	if stack_hidden or stack_output:
