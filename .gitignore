@@ -1,9 +1,8 @@
 *.pyc
 **/*.pyc
 results/
-output/
+*output*/
 .DS_Store
-*output/
-
+**/*.out
 .python_history
 __pycache__/
