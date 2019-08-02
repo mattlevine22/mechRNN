@@ -896,7 +896,9 @@ def train_chaosRNN(forward,
 			precompute_model=True, kde_func=kde_scipy,
 			compute_kl=False, gp_only=False, gp_style=None,
 			save_iterEpochs=False,
-			model_params_TRUE=None):
+			model_params_TRUE=None,
+			force_train = True, get_random_inits=get_lorenz_inits,
+			Hobs=None, eta=None, Gvar=None):
 
 	t0 = time()
 
@@ -953,6 +955,25 @@ def train_chaosRNN(forward,
 	n_test_sets = output_test.size(0)
 	synch_length = test_synch_noisy.size(1)
 
+
+	# 3DVAR settings
+	if (eta is not None) or (Gvar is not None):
+		# we are running 3Dvar in this case, so need to eval model on the fly
+		precompute_model = False
+		force_train = False
+		ThreeDvar = True
+		gp_style_list = [] # don't run GPR when doing 3DVar version
+
+		if eta is None:
+			eta = np.inf
+
+		if Gvar is None:
+			Gvar = (1/(1+eta))*Hobs.T
+
+	if Hobs is None:
+		Hobs = np.eye(output_size)
+
+
 	# compute one-step-ahead model-based prediction for each point in the training set
 	if precompute_model:
 		model_pred = np.zeros((train_seq_length-1,output_size))
@@ -968,7 +989,10 @@ def train_chaosRNN(forward,
 
 
 	if gp_style is None:
-		style_list = [1,2,3,4]
+		if ThreeDvar:
+			style_list = []
+		else:
+			style_list = [1,2,3,4]
 	else:
 		style_list = [gp_style]
 
@@ -1012,7 +1036,8 @@ def train_chaosRNN(forward,
 		return
 
 	# plot GP comparisons
-	compare_GPs(output_dir,style_list)
+	if style_list:
+		compare_GPs(output_dir,style_list)
 
 
 	# first, SHOW that a simple mechRNN can fit the data perfectly (if we are running a mechRNN)
@@ -1041,8 +1066,15 @@ def train_chaosRNN(forward,
 			# first, synchronize the hidden state
 			hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
 			solver_failed = False
+			pred = get_random_inits(n=1)
 			for i in range(synch_length-1):
-				(pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
+				if not ThreeDvar:
+					pred = test_synch_noisy[kkt,i,:,None]
+				# else:
+				# 	pred = pred.detach() #NOTE that at i=0, we start synching from the last pred of the training trajectory, rather than randomly initializing
+
+				(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
+				pred = pred.detach()
 
 			# hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
 			predictions = np.zeros([test_seq_length, output_size])
@@ -1050,7 +1082,9 @@ def train_chaosRNN(forward,
 			# initializing y0 of hidden state to the true initial condition from the clean signal
 			# hidden_state[0] = float(y_clean_test[0])
 			# pred = output_train[-1,:,None]
-			pred = test_synch_noisy[kkt,-1,:,None]
+			if not ThreeDvar:
+				pred = test_synch_noisy[kkt,-1,:,None]
+
 			perf_total_loss_test = 0
 			perf_total_loss_clean_test = 0
 			# running_epoch_loss_test = np.zeros(test_seq_length)
@@ -1182,7 +1216,9 @@ def train_chaosRNN(forward,
 		total_loss_clean_train = 0
 		#init.normal_(hidden_state, 0.0, 1)
 		#hidden_state = Variable(hidden_state, requires_grad=True)
-		pred = output_train[0,:,None]
+		if not force_train:
+			pred = get_random_inits(n=1)
+
 		hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=True)
 		init.normal_(hidden_state,0.0,0.1)
 		running_epoch_loss_train = np.zeros(train_seq_length)
@@ -1190,14 +1226,19 @@ def train_chaosRNN(forward,
 		solver_failed = False
 		for j in range(train_seq_length-1):
 			cc += 1
-			target = output_train[j+1,None]
-			target_clean = output_clean_train[j+1,None]
+			target = np.matmul(Hobs,output_train[j+1,None])
+			target_clean = np.matmul(Hobs,output_clean_train[j+1,None])
+
+			if force_train:
+				pred = output_train[j,:,None]
+
 			# pdb.set_trace()
-			(pred, hidden_state, solver_failed) = forward(output_train[j,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[j], solver_failed=solver_failed)
+			(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[j], solver_failed=solver_failed)
+			pred = pred.detach()
 			# (pred, hidden_state) = forward(pred.detach(), hidden_state, A,B,C,a,b, normz_info, model, model_params)
-			loss = (pred.squeeze() - target.squeeze()).pow(2).sum()
+			loss = (np.matmul(Hobs,pred.squeeze()) - target.squeeze()).pow(2).sum()
 			total_loss_train += loss
-			total_loss_clean_train += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()
+			total_loss_clean_train += (np.matmul(Hobs,pred.squeeze()) - target_clean.squeeze()).pow(2).sum()
 			running_epoch_loss_train[j] = total_loss_train/(j+1)
 			running_epoch_loss_clean_train[j] = total_loss_clean_train/(j+1)
 			loss.backward()
@@ -1254,15 +1295,22 @@ def train_chaosRNN(forward,
 
 		# now evaluate test loss
 		for kkt in range(n_test_sets):
+			if ThreeDvar:
+				pred = get_random_inits(n=1) #initialize randomly, but only use this if doing ThreeDvar
 			if synch_length > 1:
 				# first, synchronize the hidden state
 				hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
 				solver_failed = False
 				for i in range(synch_length-1):
-					(pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
-				pred = test_synch_noisy[kkt,-1,:,None]
+					if not ThreeDvar:
+						pred = test_synch_noisy[kkt,i,:,None]
+					(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
+					pred = pred.detach()
+				if not ThreeDvar:
+					pred = test_synch_noisy[kkt,-1,:,None]
 			else:
-				pred = output_train[-1,:,None]
+				if not ThreeDvar:
+					pred = output_train[-1,:,None]
 
 			total_loss_test = 0
 			total_loss_clean_test = 0
@@ -1325,13 +1373,20 @@ def train_chaosRNN(forward,
 			hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
 			# init.normal_(hidden_state,0.0,0.1)
 			predictions = np.zeros([train_seq_length, output_size])
-			pred = output_train[0,:,None]
-			predictions[0,:] = np.squeeze(output_train[0,:,None])
+			if not ThreeDvar:
+				pred = output_train[0,:,None]
+			else:
+				pred = get_random_inits(n=1)
+			predictions[0,:] = pred #np.squeeze(output_train[0,:,None])
 			saved_hidden_states = np.zeros([train_seq_length, hidden_size])
 			saved_hidden_states[0,:] = hidden_state.data.numpy().ravel()
 			solver_failed = False
 			for i in range(train_seq_length-1):
-				(pred, hidden_state, solver_failed) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i], solver_failed=solver_failed)
+				if force_train:
+					pred = output_train[i,:,None]
+				else:
+					pred = pred.detach()
+				(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i], solver_failed=solver_failed)
 				# (pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
 				# hidden_state = hidden_state
 				saved_hidden_states[i+1,:] = hidden_state.data.numpy().ravel()
@@ -1388,15 +1443,22 @@ def train_chaosRNN(forward,
 					ax_list = [ax_list]
 
 				# NOW, show testing fit
+				if ThreeDvar:
+					pred = get_random_inits(n=1) #initialize randomly, but only use this if doing ThreeDvar
 				if synch_length > 1:
 					# first, synchronize the hidden state
 					hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
 					solver_failed = False
 					for i in range(synch_length-1):
-						(pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
-					pred = test_synch_noisy[kkt,-1,:,None]
+						if not ThreeDvar:
+							pred = test_synch_noisy[kkt,i,:,None]
+						(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
+						pred = pred.detach()
+					if not ThreeDvar:
+						pred = test_synch_noisy[kkt,-1,:,None]
 				else:
-					pred = output_train[-1,:,None]
+					if not ThreeDvar:
+						pred = output_train[-1,:,None]
 
 				# hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
 				predictions = np.zeros([test_seq_length, output_size])
@@ -1551,14 +1613,25 @@ def train_chaosRNN(forward,
 	hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
 	init.normal_(hidden_state,0.0,0.1)
 	predictions = np.zeros([train_seq_length, output_size])
-	pred = output_train[0,:,None]
-	predictions[0,:] = np.squeeze(output_train[0,:,None])
+	if not ThreeDvar:
+		pred = output_train[0,:,None]
+	else:
+		pred = get_random_inits(n=1)
+	predictions[0,:] = pred #np.squeeze(output_train[0,:,None])
+	saved_hidden_states = np.zeros([train_seq_length, hidden_size])
+	saved_hidden_states[0,:] = hidden_state.data.numpy().ravel()
 	solver_failed = False
 	for i in range(train_seq_length-1):
-		(pred, hidden_state, solver_failed) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i], solver_failed=solver_failed)
+		if force_train:
+			pred = output_train[i,:,None]
+		else:
+			pred = pred.detach()
+		(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i], solver_failed=solver_failed)
 		# (pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
 		# hidden_state = hidden_state
+		saved_hidden_states[i+1,:] = hidden_state.data.numpy().ravel()
 		predictions[i+1,:] = pred.data.numpy().ravel()
+
 
 	predictions_raw = f_unNormalize_Y(normz_info,predictions)
 	for kk in range(len(ax_list)):
@@ -1586,15 +1659,22 @@ def train_chaosRNN(forward,
 			ax_list = [ax_list]
 
 		# NOW, show testing fit
+		if ThreeDvar:
+			pred = get_random_inits(n=1) #initialize randomly, but only use this if doing ThreeDvar
 		if synch_length > 1:
 			# first, synchronize the hidden state
 			hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
 			solver_failed = False
 			for i in range(synch_length-1):
-				(pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
-			pred = test_synch_noisy[kkt,-1,:,None]
+				if not ThreeDvar:
+					pred = test_synch_noisy[kkt,i,:,None]
+				(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
+				pred = pred.detach()
+			if not ThreeDvar:
+				pred = test_synch_noisy[kkt,-1,:,None]
 		else:
-			pred = output_train[-1,:,None]
+			if not ThreeDvar:
+				pred = output_train[-1,:,None]
 
 		# hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
 		predictions = np.zeros([test_seq_length, output_size])
