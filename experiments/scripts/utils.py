@@ -421,6 +421,53 @@ def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_in
 	return  (out, hidden_state, solver_failed)
 
 
+
+def forward_chaos_hybrid_3DVAR(model_input, hidden_state, A, B, C, a, b, normz_info, model, model_params, model_output=None, solver_failed=False, G=None, H=None, prev_model_input=None, y_obs=None, **kwargs):
+
+	#ignore model_input!!!
+	tspan = get_tspan(model_params)
+
+	# run predictor
+	y0_normalized = torch.squeeze(prev_model_input).detach()
+	y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
+	if not solver_failed:
+		y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+		if info_dict['message'] != 'Integration successful.':
+			# solver failed
+			print('ODE solver has failed at y0=',y0)
+			solver_failed = True
+	if solver_failed:
+		m_assim_normalized = np.copy(y0_normalized.numpy()) # persist previous solution
+	else:
+		# solver is OKAY--use the solution like a good boy!
+		m_model = torch.FloatTensor(y_out[-1,:,None]) #last column #this is m_k
+		m_assim = torch.mm(torch.eye(len(m_model)) - np.matmul(G, H), m_model) + np.matmul(G, y_obs)
+		m_assim = m_assim.squeeze().numpy()
+		m_assim_normalized = f_normalize_minmax(normz_info, m_assim)
+
+	#now compute m_pred by mapping from m_assim
+	if not solver_failed:
+		y_out, info_dict = odeint(model, m_assim, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+		if info_dict['message'] != 'Integration successful.':
+			# solver failed
+			print('ODE solver has failed at y0=',y0)
+			solver_failed = True
+	if solver_failed:
+		m_pred_normalized = np.copy(m_assim_normalized.numpy()) # persist previous solution
+	else:
+		# solver is OKAY--use the solution like a good boy!
+		m_pred_normalized = f_normalize_minmax(normz_info, y_out[-1,:])
+
+	# renormalize
+	# hidden_state[0] = torch.from_numpy( (y_out[-1] - ymin) / (ymax - ymin) )
+	# hidden_state[0] = torch.from_numpy( (y_out[-1] - ymean) / ysd )
+
+	stacked_input = torch.FloatTensor(np.hstack( (m_pred_normalized, m_assim_normalized) )[:,None])
+	hidden_state = torch.relu( a + torch.mm(A,hidden_state) + torch.mm(B,stacked_input) )
+	stacked_output = torch.cat( ( torch.FloatTensor(m_pred_normalized[:,None]), hidden_state ) )
+	out = b + torch.mm(C,stacked_output)
+	return  (out, hidden_state, solver_failed)
+
 def forward_mech(input, hidden_state, w1, w2, b, c, v, normz_info, model, model_params):
 	# unnormalize
 	ymin = normz_info['Ymin']
@@ -899,7 +946,7 @@ def train_chaosRNN(forward,
 			save_iterEpochs=True,
 			model_params_TRUE=None,
 			force_train = False, get_random_inits=get_lorenz_inits,
-			Hobs=np.array([[1,0,0],[0,0,0],[0,0,0]]), eta=0.1, Gvar=None,
+			Hobs=np.array([[1,0,0]]), eta=0.1, Gvar=None,
 			GP_grid=False):
 
 	#
@@ -914,7 +961,7 @@ def train_chaosRNN(forward,
 		dtype = torch.FloatTensor
 
 	if max_plot is None:
-		max_plot = int(np.floor(30./model_params['delta_t']))
+		max_plot = int(np.floor(10./model_params['delta_t']))
 
 	n_plttrain = min(max_plot,y_clean_train.shape[0])
 	n_plttest = min(max_plot,y_clean_test.shape[1])
@@ -1083,15 +1130,25 @@ def train_chaosRNN(forward,
 			# first, synchronize the hidden state
 			hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
 			solver_failed = False
-			pred = get_random_inits(n=1)
+			if ThreeDvar:
+				pred = torch.FloatTensor(f_normalize_minmax(normz_info, get_random_inits(n=1)).T)#torch.FloatTensor(np.array([[0.5,0.5,0.5]]).T)#torch.FloatTensor(f_normalize_minmax(normz_info, get_random_inits(n=1)).T)
+				prev_model_input = pred
+				y_obs = np.matmul(Hobs,pred)
+			else:
+				prev_model_input = None #output_train[0,:,None]
+				y_obs = None
+				pred = output_train[0,:,None]
 			for i in range(synch_length-1):
 				if not ThreeDvar:
 					pred = test_synch_noisy[kkt,i,:,None]
+				else:
+					yobs = np.matmul(Hobs,pred)
+
 				# else:
 				# 	pred = pred.detach() #NOTE that at i=0, we start synching from the last pred of the training trajectory, rather than randomly initializing
-
-				(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
-				pred = pred.detach()
+				(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
+				prev_model_input = pred
+				pred = pred_new.detach()
 
 			# hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
 			predictions = np.zeros([test_seq_length, output_size])
@@ -1109,7 +1166,7 @@ def train_chaosRNN(forward,
 			perf_pw_loss_clean_test = np.zeros(test_seq_length)
 			solver_failed = False
 			for i in range(test_seq_length):
-				(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
+				(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
 				# hidden_state = hidden_state
 				predictions[i,:] = pred.data.numpy().ravel()
 				i_loss = (pred.detach().squeeze() - output_test[kkt,i,None].squeeze()).pow(2).sum()
@@ -1234,28 +1291,39 @@ def train_chaosRNN(forward,
 		#init.normal_(hidden_state, 0.0, 1)
 		#hidden_state = Variable(hidden_state, requires_grad=True)
 		if not force_train:
-			pred = get_random_inits(n=1)
+			pred = torch.FloatTensor(f_normalize_minmax(normz_info, get_random_inits(n=1)).T)#torch.FloatTensor(np.array([[0.5,0.5,0.5]]).T)#torch.FloatTensor(f_normalize_minmax(normz_info, get_random_inits(n=1)).T)
 
 		hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=True)
 		init.normal_(hidden_state,0.0,0.1)
 		running_epoch_loss_train = np.zeros(train_seq_length)
 		running_epoch_loss_clean_train = np.zeros(train_seq_length)
 		solver_failed = False
+
+		if ThreeDvar:
+			prev_model_input = torch.FloatTensor(f_normalize_minmax(normz_info, get_random_inits(n=1)).T)
+		else:
+			prev_model_input = None #output_train[0,:,None]
+
 		for j in range(train_seq_length-1):
 			cc += 1
-			target = np.matmul(Hobs,output_train[j+1,None])
-			target_clean = np.matmul(Hobs,output_clean_train[j+1,None])
+			target = torch.matmul(Hobs,output_train[j+1,None].squeeze())
+			target_clean = torch.matmul(Hobs,output_clean_train[j+1,None].squeeze())
 
 			if force_train:
 				pred = output_train[j,:,None]
+				yobs = np.matmul(Hobs,output_train[j,:,None])
+			else:
+				yobs = np.matmul(Hobs,pred)
 
-			# pdb.set_trace()
-			(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[j], solver_failed=solver_failed)
-			pred = pred.detach()
+			(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[j], solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
+
+			prev_model_input = pred
+			pred = pred_new
+
 			# (pred, hidden_state) = forward(pred.detach(), hidden_state, A,B,C,a,b, normz_info, model, model_params)
-			loss = (np.matmul(Hobs,pred.squeeze()) - target.squeeze()).pow(2).sum()
+			loss = (torch.matmul(Hobs,pred.squeeze()) - target.squeeze()).pow(2).sum()
 			total_loss_train += loss
-			total_loss_clean_train += (np.matmul(Hobs,pred.squeeze()) - target_clean.squeeze()).pow(2).sum()
+			total_loss_clean_train += (torch.matmul(Hobs,pred.squeeze()) - target_clean.squeeze()).pow(2).sum()
 			running_epoch_loss_train[j] = total_loss_train/(j+1)
 			running_epoch_loss_clean_train[j] = total_loss_clean_train/(j+1)
 			loss.backward()
@@ -1282,6 +1350,7 @@ def train_chaosRNN(forward,
 			a.grad.data.zero_()
 			b.grad.data.zero_()
 
+			pred = pred.detach()
 			hidden_state = hidden_state.detach()
 			# print updates every 2 iterations or in 5% incrememnts
 			if (n_epochs==1) and (cc % int( max(2, np.ceil(train_seq_length/20)) ) == 0):
@@ -1313,16 +1382,21 @@ def train_chaosRNN(forward,
 		# now evaluate test loss
 		for kkt in range(n_test_sets):
 			if ThreeDvar:
-				pred = get_random_inits(n=1) #initialize randomly, but only use this if doing ThreeDvar
+				pred = torch.FloatTensor(f_normalize_minmax(normz_info, get_random_inits(n=1)).T)#torch.FloatTensor(np.array([[0.5,0.5,0.5]]).T)#torch.FloatTensor(f_normalize_minmax(normz_info, get_random_inits(n=1)).T) #initialize randomly, but only use this if doing ThreeDvar
+				prev_model_input = pred #only using one or the other, right?
 			if synch_length > 1:
 				# first, synchronize the hidden state
 				hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
 				solver_failed = False
 				for i in range(synch_length-1):
-					if not ThreeDvar:
+					if force_train:
 						pred = test_synch_noisy[kkt,i,:,None]
-					(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
-					pred = pred.detach()
+						yobs = np.matmul(Hobs,test_synch_noisy[j,:,None])
+					else:
+						yobs = np.matmul(Hobs,pred)
+					(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
+					prev_model_input = pred
+					pred = pred_new.detach()
 				if not ThreeDvar:
 					pred = test_synch_noisy[kkt,-1,:,None]
 			else:
@@ -1341,7 +1415,10 @@ def train_chaosRNN(forward,
 			for j in range(test_seq_length):
 				target = output_test[kkt,j,None]
 				target_clean = output_clean_test[kkt,j,None]
-				(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed)
+				yobs = np.matmul(Hobs,pred)
+				(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
+				prev_model_input = pred
+				pred = pred_new
 				j_loss = (pred.detach().squeeze() - target.squeeze()).pow(2).sum()
 				j_loss_clean = (pred.detach().squeeze() - target_clean.squeeze()).pow(2).sum()
 				total_loss_test += j_loss
@@ -1392,18 +1469,27 @@ def train_chaosRNN(forward,
 			predictions = np.zeros([train_seq_length, output_size])
 			if not ThreeDvar:
 				pred = output_train[0,:,None]
+				prev_model_input = None
 			else:
-				pred = get_random_inits(n=1)
-			predictions[0,:] = pred #np.squeeze(output_train[0,:,None])
+				pred = torch.FloatTensor(f_normalize_minmax(normz_info, get_random_inits(n=1)).T)#torch.FloatTensor(np.array([[0.5,0.5,0.5]]).T)#torch.FloatTensor(f_normalize_minmax(normz_info, get_random_inits(n=1)).T)
+				prev_model_input = pred
+
+			predictions[0,:] = pred.squeeze() #np.squeeze(output_train[0,:,None])
 			saved_hidden_states = np.zeros([train_seq_length, hidden_size])
 			saved_hidden_states[0,:] = hidden_state.data.numpy().ravel()
 			solver_failed = False
 			for i in range(train_seq_length-1):
 				if force_train:
 					pred = output_train[i,:,None]
+					yobs = np.matmul(Hobs,output_train[j,:,None])
 				else:
 					pred = pred.detach()
-				(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i], solver_failed=solver_failed)
+					yobs = np.matmul(Hobs,pred)
+				(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i], solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
+
+				prev_model_input = pred
+				pred = pred_new
+
 				# (pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
 				# hidden_state = hidden_state
 				saved_hidden_states[i+1,:] = hidden_state.data.numpy().ravel()
@@ -1461,16 +1547,26 @@ def train_chaosRNN(forward,
 
 				# NOW, show testing fit
 				if ThreeDvar:
-					pred = get_random_inits(n=1) #initialize randomly, but only use this if doing ThreeDvar
+					pred = torch.FloatTensor(f_normalize_minmax(normz_info, get_random_inits(n=1)).T)#torch.FloatTensor(np.array([[0.5,0.5,0.5]]).T)#torch.FloatTensor(f_normalize_minmax(normz_info, get_random_inits(n=1)).T) #initialize randomly, but only use this if doing ThreeDvar
+					prev_model_input = pred
+				else:
+					prev_model_input = None #output_train[0,:,None]
+
 				if synch_length > 1:
 					# first, synchronize the hidden state
 					hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
 					solver_failed = False
 					for i in range(synch_length-1):
-						if not ThreeDvar:
+
+						if force_train:
 							pred = test_synch_noisy[kkt,i,:,None]
-						(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
-						pred = pred.detach()
+							yobs = np.matmul(Hobs,test_synch_noisy[kkt,i,:,None])
+						else:
+							yobs = np.matmul(Hobs,pred)
+
+						(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
+						prev_model_input = pred
+						pred = pred_new.detach()
 					if not ThreeDvar:
 						pred = test_synch_noisy[kkt,-1,:,None]
 				else:
@@ -1483,7 +1579,10 @@ def train_chaosRNN(forward,
 				saved_hidden_states = np.zeros([test_seq_length, hidden_size])
 				solver_failed = False
 				for i in range(test_seq_length):
-					(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed)
+					yobs = np.matmul(Hobs,pred)
+					(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
+					prev_model_input = pred
+					pred = pred_new.detach()
 					# hidden_state = hidden_state
 					predictions[i,:] = pred.data.numpy().ravel()
 					saved_hidden_states[i,:] = hidden_state.data.numpy().ravel()
@@ -1632,18 +1731,24 @@ def train_chaosRNN(forward,
 	predictions = np.zeros([train_seq_length, output_size])
 	if not ThreeDvar:
 		pred = output_train[0,:,None]
+		prev_model_input = None
 	else:
-		pred = get_random_inits(n=1)
-	predictions[0,:] = pred #np.squeeze(output_train[0,:,None])
+		pred = torch.FloatTensor(f_normalize_minmax(normz_info, get_random_inits(n=1)).T)#torch.FloatTensor(np.array([[0.5,0.5,0.5]]).T)#torch.FloatTensor(f_normalize_minmax(normz_info, get_random_inits(n=1)).T)
+		prev_model_input = pred
+	predictions[0,:] = pred.squeeze() #np.squeeze(output_train[0,:,None])
 	saved_hidden_states = np.zeros([train_seq_length, hidden_size])
 	saved_hidden_states[0,:] = hidden_state.data.numpy().ravel()
 	solver_failed = False
 	for i in range(train_seq_length-1):
 		if force_train:
 			pred = output_train[i,:,None]
+			yobs = np.matmul(Hobs,output_train[i,:,None])
 		else:
 			pred = pred.detach()
-		(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i], solver_failed=solver_failed)
+			yobs = np.matmul(Hobs,pred)
+		(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i], solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
+		prev_model_input = pred
+		pred = pred_new
 		# (pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
 		# hidden_state = hidden_state
 		saved_hidden_states[i+1,:] = hidden_state.data.numpy().ravel()
@@ -1677,7 +1782,10 @@ def train_chaosRNN(forward,
 
 		# NOW, show testing fit
 		if ThreeDvar:
-			pred = get_random_inits(n=1) #initialize randomly, but only use this if doing ThreeDvar
+			pred = torch.FloatTensor(f_normalize_minmax(normz_info, get_random_inits(n=1)).T)#torch.FloatTensor(np.array([[0.5,0.5,0.5]]).T)#torch.FloatTensor(f_normalize_minmax(normz_info, get_random_inits(n=1)).T) #initialize randomly, but only use this if doing ThreeDvar
+			prev_model_input = pred
+		else:
+			prev_model_input = None
 		if synch_length > 1:
 			# first, synchronize the hidden state
 			hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
@@ -1685,8 +1793,12 @@ def train_chaosRNN(forward,
 			for i in range(synch_length-1):
 				if not ThreeDvar:
 					pred = test_synch_noisy[kkt,i,:,None]
-				(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
-				pred = pred.detach()
+					yobs = np.matmul(Hobs,test_synch_noisy[kkt,i,:,None])
+				else:
+					yobs = np.matmul(Hobs,pred)
+				(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
+				prev_model_input = pred
+				pred = pred_new.detach()
 			if not ThreeDvar:
 				pred = test_synch_noisy[kkt,-1,:,None]
 		else:
@@ -1698,8 +1810,13 @@ def train_chaosRNN(forward,
 		# pred = output_train[-1,:,None]
 		saved_hidden_states = np.zeros([test_seq_length, hidden_size])
 		solver_failed = False
+		yobs = np.matmul(Hobs,pred)
 		for i in range(test_seq_length):
-			(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed)
+			yobs = np.matmul(Hobs,pred)
+			(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
+			prev_model_input = pred
+			pred = pred_new.detach()
+
 			# hidden_state = hidden_state
 			predictions[i,:] = pred.data.numpy().ravel()
 			saved_hidden_states[i,:] = hidden_state.data.numpy().ravel()
