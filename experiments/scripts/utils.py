@@ -441,7 +441,7 @@ def forward_chaos_hybrid_3DVAR(model_input, hidden_state, A, B, C, a, b, normz_i
 	else:
 		# solver is OKAY--use the solution like a good boy!
 		m_model = torch.FloatTensor(y_out[-1,:,None]) #last column #this is m_k
-		m_assim = torch.mm(torch.eye(len(m_model)) - np.matmul(G, H), m_model) + np.matmul(G, y_obs)
+		m_assim = torch.mm(torch.eye(len(m_model)) - np.matmul(G, H), m_model) + np.matmul(G, f_unNormalize_minmax(normz_info, y_obs) )
 		m_assim = m_assim.squeeze().numpy()
 		m_assim_normalized = f_normalize_minmax(normz_info, m_assim)
 
