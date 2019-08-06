@@ -19,6 +19,9 @@ parser.add_argument('--n_experiments', type=int, default=1, help='number of sim/
 parser.add_argument('--random_state_inits', type=str2bool, default=True, help='whether to randomly initialize initial conditions for simulated trajectory')
 parser.add_argument('--compute_kl', type=str2bool, default=False, help='whether to compute KL divergence between test set density and predicted density')
 parser.add_argument('--continue_trajectory', type=str2bool, default=False, help='if true, ignore n_tests and synch length. Instead, simply continue train trajectory into the test trajectory.')
+parser.add_argument('--noisy_training', type=str2bool, default=False, help='Optionally add measurement noise to training set.')
+parser.add_argument('--noisy_testing', type=str2bool, default=False, help='Optionally add measurement noise to synch and test sets.')
+
 FLAGS = parser.parse_args()
 
 
@@ -65,9 +68,20 @@ def main():
 		all_dirs = []
 
 		# np.random.seed()
+		if FLAGS.noisy_training:
+			nm_train = 'noisy'
+		else:
+			nm_train = 'clean'
+
+		if FLAGS.noisy_testing:
+			nm_test = 'noisy'
+		else:
+			nm_test = 'clean'
+
 
 		# master output directory name
-		output_dir = FLAGS.savedir + '_output' + str(i)
+		output_dir = FLAGS.savedir + '_output' + str(i) + '_{0}Train_{1}Test'.format(nm_train, nm_test)
+
 		# simulate clean and noisy data
 		(input_data_train, y_clean_train, y_noisy_train,
 		y_clean_test_vec, y_noisy_test_vec, x_test_vec) = make_RNN_data2(
@@ -87,24 +101,21 @@ def main():
 		# x_test = input_data[:, n_train:]
 		# y_list = [y_clean_train, y_noisy_train, y_clean_test, y_noisy_test]
 
+		if not FLAGS.noisy_training:
+			y_noisy_train = y_clean_train
+		if not FLAGS.noisy_testing:
+			# makes synch and test sets clean
+			y_noisy_test_vec = y_clean_test_vec
+
 		####### collect normalization information from TRAINING SET ONLY ######
-		normz_info_clean = {}
-		normz_info_clean['Ymax'] = np.max(y_clean_train,axis=0)
-		normz_info_clean['Ymin'] = np.min(y_clean_train,axis=0)
-		normz_info_clean['Ymean'] = np.mean(y_clean_train)
-		normz_info_clean['Ysd'] = np.std(y_clean_train)
-		# normz_info_clean['Xmean'] = np.mean(x_train)
-		# normz_info_clean['Xsd'] = np.std(x_train)
+		normz_info = {}
+		normz_info['Ymax'] = np.max(y_noisy_train,axis=0)
+		normz_info['Ymin'] = np.min(y_noisy_train,axis=0)
+		normz_info['Ymean'] = np.mean(y_noisy_train)
+		normz_info['Ysd'] = np.std(y_noisy_train)
+		# normz_info['Xmean'] = np.mean(x_train)
+		# normz_info['Xsd'] = np.std(x_train)
 
-		normz_info_noisy = {}
-		normz_info_noisy['Ymax'] = np.max(y_noisy_train,axis=0)
-		normz_info_noisy['Ymin'] = np.min(y_noisy_train,axis=0)
-		normz_info_noisy['Ymean'] = np.mean(y_noisy_train)
-		normz_info_noisy['Ysd'] = np.std(y_noisy_train)
-		# normz_info_noisy['Xmean'] = np.mean(x_train)
-		# normz_info_noisy['Xsd'] = np.std(x_train)
-
-		normz_info = normz_info_clean
 		y_clean_train_norm = f_normalize_minmax(normz_info,y_clean_train)
 		y_noisy_train_norm = f_normalize_minmax(normz_info,y_noisy_train)
 		y_clean_test_vec_norm = np.copy(y_clean_test_vec[:,ntsynch:,:])
@@ -138,9 +149,9 @@ def main():
 				if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
 					# torch.manual_seed(0)
 					train_chaosRNN(forward,
-						y_clean_train_norm, y_clean_train_norm,
+						y_clean_train_norm, y_noisy_train_norm,
 						y_clean_test_vec_norm, y_noisy_test_vec_norm,
-						y_clean_testSynch_vec_norm, y_clean_testSynch_vec_norm,
+						y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
 						rnn_model_params, hidden_size, n_epochs, lr,
 						run_output_dir, normz_info, rnn_sim_model,
 						stack_hidden=False, stack_output=False,
@@ -159,11 +170,11 @@ def main():
 				if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
 					# torch.manual_seed(0)
 					train_chaosRNN(forward,
-						y_clean_train_norm, y_clean_train_norm,
+						y_clean_train_norm, y_noisy_train_norm,
 						y_clean_test_vec_norm, y_noisy_test_vec_norm,
-						y_clean_testSynch_vec_norm, y_clean_testSynch_vec_norm,
+						y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
 						rnn_BAD_model_params, hidden_size, n_epochs, lr,
-						run_output_dir, normz_info_clean, rnn_sim_model,
+						run_output_dir, normz_info, rnn_sim_model,
 						compute_kl=FLAGS.compute_kl)
 
 				# GP ONLY
@@ -173,11 +184,11 @@ def main():
 					if not os.path.exists(run_output_dir+'/fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
 						# torch.manual_seed(0)
 						train_chaosRNN(forward,
-							y_clean_train_norm, y_clean_train_norm,
+							y_clean_train_norm, y_noisy_train_norm,
 							y_clean_test_vec_norm, y_noisy_test_vec_norm,
-							y_clean_testSynch_vec_norm, y_clean_testSynch_vec_norm,
+							y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
 							rnn_BAD_model_params, hidden_size, n_epochs, lr,
-							run_output_dir, normz_info_clean, rnn_sim_model,
+							run_output_dir, normz_info, rnn_sim_model,
 							compute_kl=FLAGS.compute_kl, gp_only=True, gp_style=gp_style)
 
 			# plot comparative training errors
