@@ -21,6 +21,7 @@ parser.add_argument('--compute_kl', type=str2bool, default=False, help='whether 
 parser.add_argument('--continue_trajectory', type=str2bool, default=False, help='if true, ignore n_tests and synch length. Instead, simply continue train trajectory into the test trajectory.')
 parser.add_argument('--noisy_training', type=str2bool, default=False, help='Optionally add measurement noise to training set.')
 parser.add_argument('--noisy_testing', type=str2bool, default=False, help='Optionally add measurement noise to synch and test sets.')
+parser.add_argument('--noise_frac', type=float, default=0.01, help='Relative SD of additive gaussian measurement noise')
 
 FLAGS = parser.parse_args()
 
@@ -69,12 +70,12 @@ def main():
 
 		# np.random.seed()
 		if FLAGS.noisy_training:
-			nm_train = 'noisy'
+			nm_train = 'noisy{0}'.format(FLAGS.noise_frac)
 		else:
 			nm_train = 'clean'
 
 		if FLAGS.noisy_testing:
-			nm_test = 'noisy'
+			nm_test = 'noisy{0}'.format(FLAGS.noise_frac)
 		else:
 			nm_test = 'clean'
 
@@ -86,7 +87,7 @@ def main():
 		(input_data_train, y_clean_train, y_noisy_train,
 		y_clean_test_vec, y_noisy_test_vec, x_test_vec) = make_RNN_data2(
 			sim_model, tspan_train, tspan_test, sim_model_params,
-			noise_frac=0.05, output_dir=output_dir, drive_system=False,
+			noise_frac=FLAGS.noise_frac, output_dir=output_dir, drive_system=False,
 			n_test_sets=FLAGS.n_tests,
 			f_get_state_inits=get_lorenz_inits,
 			continue_trajectory=FLAGS.continue_trajectory)
