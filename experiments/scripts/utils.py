@@ -1142,7 +1142,7 @@ def train_chaosRNN(forward,
 				if not ThreeDvar:
 					pred = test_synch_noisy[kkt,i,:,None]
 				else:
-					yobs = np.matmul(Hobs,pred)
+					y_obs = np.matmul(Hobs,pred)
 
 				# else:
 				# 	pred = pred.detach() #NOTE that at i=0, we start synching from the last pred of the training trajectory, rather than randomly initializing
@@ -1311,9 +1311,9 @@ def train_chaosRNN(forward,
 
 			if force_train:
 				pred = output_train[j,:,None]
-				yobs = np.matmul(Hobs,output_train[j,:,None])
+				y_obs = np.matmul(Hobs,output_train[j,:,None])
 			else:
-				yobs = np.matmul(Hobs,pred)
+				y_obs = np.matmul(Hobs,pred)
 
 			(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[j], solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
 
@@ -1391,9 +1391,9 @@ def train_chaosRNN(forward,
 				for i in range(synch_length-1):
 					if force_train:
 						pred = test_synch_noisy[kkt,i,:,None]
-						yobs = np.matmul(Hobs,test_synch_noisy[j,:,None])
+						y_obs = np.matmul(Hobs,test_synch_noisy[j,:,None])
 					else:
-						yobs = np.matmul(Hobs,pred)
+						y_obs = np.matmul(Hobs,pred)
 					(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
 					prev_model_input = pred
 					pred = pred_new.detach()
@@ -1415,7 +1415,7 @@ def train_chaosRNN(forward,
 			for j in range(test_seq_length):
 				target = output_test[kkt,j,None]
 				target_clean = output_clean_test[kkt,j,None]
-				yobs = np.matmul(Hobs,pred)
+				y_obs = np.matmul(Hobs,pred)
 				(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
 				prev_model_input = pred
 				pred = pred_new
@@ -1481,10 +1481,10 @@ def train_chaosRNN(forward,
 			for i in range(train_seq_length-1):
 				if force_train:
 					pred = output_train[i,:,None]
-					yobs = np.matmul(Hobs,output_train[j,:,None])
+					y_obs = np.matmul(Hobs,output_train[j,:,None])
 				else:
 					pred = pred.detach()
-					yobs = np.matmul(Hobs,pred)
+					y_obs = np.matmul(Hobs,pred)
 				(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i], solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
 
 				prev_model_input = pred
@@ -1560,9 +1560,9 @@ def train_chaosRNN(forward,
 
 						if force_train:
 							pred = test_synch_noisy[kkt,i,:,None]
-							yobs = np.matmul(Hobs,test_synch_noisy[kkt,i,:,None])
+							y_obs = np.matmul(Hobs,test_synch_noisy[kkt,i,:,None])
 						else:
-							yobs = np.matmul(Hobs,pred)
+							y_obs = np.matmul(Hobs,pred)
 
 						(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
 						prev_model_input = pred
@@ -1579,7 +1579,7 @@ def train_chaosRNN(forward,
 				saved_hidden_states = np.zeros([test_seq_length, hidden_size])
 				solver_failed = False
 				for i in range(test_seq_length):
-					yobs = np.matmul(Hobs,pred)
+					y_obs = np.matmul(Hobs,pred)
 					(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
 					prev_model_input = pred
 					pred = pred_new.detach()
@@ -1742,10 +1742,10 @@ def train_chaosRNN(forward,
 	for i in range(train_seq_length-1):
 		if force_train:
 			pred = output_train[i,:,None]
-			yobs = np.matmul(Hobs,output_train[i,:,None])
+			y_obs = np.matmul(Hobs,output_train[i,:,None])
 		else:
 			pred = pred.detach()
-			yobs = np.matmul(Hobs,pred)
+			y_obs = np.matmul(Hobs,pred)
 		(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i], solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
 		prev_model_input = pred
 		pred = pred_new
@@ -1793,9 +1793,9 @@ def train_chaosRNN(forward,
 			for i in range(synch_length-1):
 				if not ThreeDvar:
 					pred = test_synch_noisy[kkt,i,:,None]
-					yobs = np.matmul(Hobs,test_synch_noisy[kkt,i,:,None])
+					y_obs = np.matmul(Hobs,test_synch_noisy[kkt,i,:,None])
 				else:
-					yobs = np.matmul(Hobs,pred)
+					y_obs = np.matmul(Hobs,pred)
 				(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
 				prev_model_input = pred
 				pred = pred_new.detach()
@@ -1810,9 +1810,9 @@ def train_chaosRNN(forward,
 		# pred = output_train[-1,:,None]
 		saved_hidden_states = np.zeros([test_seq_length, hidden_size])
 		solver_failed = False
-		yobs = np.matmul(Hobs,pred)
+		y_obs = np.matmul(Hobs,pred)
 		for i in range(test_seq_length):
-			yobs = np.matmul(Hobs,pred)
+			y_obs = np.matmul(Hobs,pred)
 			(pred_new, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed, G=Gvar, H=Hobs, prev_model_input=prev_model_input, y_obs=y_obs)
 			prev_model_input = pred
 			pred = pred_new.detach()
