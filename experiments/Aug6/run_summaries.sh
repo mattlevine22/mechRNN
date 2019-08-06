@@ -13,9 +13,15 @@ module load python3/3.6.4
 
 
 
-# python3 ../scripts/summarize_epsilon_experiments.py ~/mechRNN/experiments/Aug6/lorenz63_eps_withGP_10synchs
+python3 ../scripts/summarize_epsilon_experiments.py ~/mechRNN/experiments/Aug6/lorenz63_eps_withGP_10synchs
 
 python3 ../scripts/summarize_epsilon_experiments.py ~/mechRNN/experiments/Aug6/lorenz63_eps_withGP_10synchs_TEST
+
+python3 ../scripts/summarize_epsilon_experiments.py ~/mechRNN/experiments/Aug6/lorenz63_eps_withGP_10synchs_TEST_alpha1e-10
+python3 ../scripts/summarize_epsilon_experiments.py ~/mechRNN/experiments/Aug6/lorenz63_eps_withGP_10synchs_TEST_alpha1e-8
+python3 ../scripts/summarize_epsilon_experiments.py ~/mechRNN/experiments/Aug6/lorenz63_eps_withGP_10synchs_TEST_alpha1e-6
+python3 ../scripts/summarize_epsilon_experiments.py ~/mechRNN/experiments/Aug6/lorenz63_eps_withGP_10synchs_TEST_alpha1e-4
+python3 ../scripts/summarize_epsilon_experiments.py ~/mechRNN/experiments/Aug6/lorenz63_eps_withGP_10synchs_TEST_alpha1e-2
 
 
 
