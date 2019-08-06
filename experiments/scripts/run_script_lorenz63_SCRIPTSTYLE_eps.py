@@ -22,6 +22,7 @@ parser.add_argument('--continue_trajectory', type=str2bool, default=False, help=
 parser.add_argument('--noisy_training', type=str2bool, default=False, help='Optionally add measurement noise to training set.')
 parser.add_argument('--noisy_testing', type=str2bool, default=False, help='Optionally add measurement noise to synch and test sets.')
 parser.add_argument('--noise_frac', type=float, default=0.01, help='Relative SD of additive gaussian measurement noise')
+parser.add_argument('--alpha', type=float, default=1e-10, help='Alpha parameter for Gaussian Process Regression (scales w/ measurement noise)')
 
 FLAGS = parser.parse_args()
 
@@ -156,12 +157,13 @@ def main():
 						rnn_model_params, hidden_size, n_epochs, lr,
 						run_output_dir, normz_info, rnn_sim_model,
 						stack_hidden=False, stack_output=False,
-						compute_kl=FLAGS.compute_kl)
+						compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha])
 
 			#### run mechRNN w/ BAD parameter ###
 			forward = forward_chaos_hybrid_full
 
 			for eps_badness in np.random.permutation([0, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0]):
+			# for eps_badness in np.random.permutation([0.05, 0]):
 				rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b*(1+eps_badness), c), 'time_avg_norm':0.529, 'mxstep':0}
 
 				# train on clean data
@@ -176,7 +178,7 @@ def main():
 						y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
 						rnn_BAD_model_params, hidden_size, n_epochs, lr,
 						run_output_dir, normz_info, rnn_sim_model,
-						compute_kl=FLAGS.compute_kl)
+						compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha])
 
 				# GP ONLY
 				for gp_style in [1,2,3,4]:
@@ -190,7 +192,7 @@ def main():
 							y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
 							rnn_BAD_model_params, hidden_size, n_epochs, lr,
 							run_output_dir, normz_info, rnn_sim_model,
-							compute_kl=FLAGS.compute_kl, gp_only=True, gp_style=gp_style)
+							compute_kl=FLAGS.compute_kl, gp_only=True, gp_style=gp_style, alpha_list=[FLAGS.alpha])
 
 			# plot comparative training errors
 			my_dirs = [d for d in all_dirs if "clean" in d]

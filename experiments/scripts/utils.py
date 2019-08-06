@@ -463,7 +463,8 @@ def run_GP(y_clean_train, y_noisy_train,
 			n_plttest,
 			n_test_sets,
 			err_thresh, gp_style=1, gp_only=False,
-			GP_grid = False):
+			GP_grid = False,
+			alpha=1e-10):
 
 
 	if gp_only:
@@ -488,7 +489,7 @@ def run_GP(y_clean_train, y_noisy_train,
 	nYDim = y.shape[1]
 
 	# NEW. learn residuals with GP
-	gpr = GaussianProcessRegressor().fit(X=X,y=y)
+	gpr = GaussianProcessRegressor(alpha=alpha).fit(X=X,y=y)
 	print(gp_nm,'Training Score =',gpr.score(X=X,y=y))
 
 	# gpr = GaussianProcessRegressor().fit(X=output_train[:-1],y=output_train[1:]-model_pred)
@@ -899,7 +900,8 @@ def train_chaosRNN(forward,
 			compute_kl=False, gp_only=False, gp_style=None,
 			save_iterEpochs=False,
 			model_params_TRUE=None,
-			GP_grid = False):
+			GP_grid = False,
+			alpha_list = [1e-10, 1e-8, 1e-6, 1e-4, 1e-2]):
 
 	t0 = time()
 
@@ -990,27 +992,29 @@ def train_chaosRNN(forward,
 	random_attractor_points = y_out_ATT[my_inds,]
 
 	for gp_style in style_list:
-		print('Running GPR',gp_style)
-		run_GP(y_clean_train, y_noisy_train,
-				y_clean_test, y_noisy_test,
-				y_clean_testSynch, y_noisy_testSynch,
-				model,f_unNormalize_Y,
-				model_pred,
-				train_seq_length,
-				test_seq_length,
-				output_size,
-				avg_output_test,
-				avg_output_clean_test,
-				normz_info, model_params, model_params_TRUE, random_attractor_points,
-				plot_state_indices,
-				output_dir,
-				n_plttrain,
-				n_plttest,
-				n_test_sets,
-				err_thresh,
-				gp_style,
-				gp_only,
-				GP_grid = GP_grid)
+		for alpha in alpha_list:
+			print('Running GPR',gp_style,'for alpha=',alpha)
+			run_GP(y_clean_train, y_noisy_train,
+					y_clean_test, y_noisy_test,
+					y_clean_testSynch, y_noisy_testSynch,
+					model,f_unNormalize_Y,
+					model_pred,
+					train_seq_length,
+					test_seq_length,
+					output_size,
+					avg_output_test,
+					avg_output_clean_test,
+					normz_info, model_params, model_params_TRUE, random_attractor_points,
+					plot_state_indices,
+					output_dir,
+					n_plttrain,
+					n_plttest,
+					n_test_sets,
+					err_thresh,
+					gp_style,
+					gp_only,
+					GP_grid = GP_grid,
+					alpha = alpha)
 
 	if gp_only:
 		return
