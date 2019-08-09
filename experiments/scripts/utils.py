@@ -1092,8 +1092,8 @@ def train_chaosRNN(forward,
 			for kk in range(len(ax_list)):
 				ax1 = ax_list[kk]
 				ax1.scatter(np.arange(len(y_noisy_test[kkt,:n_plttest,plot_state_indices[kk]])), y_noisy_test[kkt,:n_plttest,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
-				ax1.plot(y_clean_test[kkt,:n_plttest,kk], color='red', label='clean data')
-				ax1.plot(predictions[:n_plttest,kk], ':' ,color='red', label='NN trivial fit')
+				ax1.plot(y_clean_test[kkt,:n_plttest,kk], color='red', label='true model')
+				ax1.plot(predictions[:n_plttest,kk], ':' ,color='red', label='perturbed model')
 				ax1.set_xlabel('time')
 				ax1.set_ylabel(model_params['state_names'][kk] + '(t)', color='red')
 				ax1.tick_params(axis='y', labelcolor='red')
