@@ -375,8 +375,8 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 def extract_hidden_size_performance(my_dirs, output_fname="./hidden_size_comparisons", win=1000, many_epochs=True, hs_token='hs'):
 
 	# first, get sizes of things...max window size is 10% of whole test set.
-	d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
-	x_test = pd.DataFrame(np.loadtxt(my_dirs[0]+"/loss_vec_clean_test.txt"))
+	init_dirs = [x for x in my_dirs if 'RNN' in x.split('/')[-1]]
+	x_test = pd.DataFrame(np.loadtxt(init_dirs[0]+"/loss_vec_clean_test.txt"))
 	n_vals = len(x_test)
 
 	win = min(win,n_vals//3)

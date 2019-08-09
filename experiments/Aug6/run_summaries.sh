@@ -11,6 +11,8 @@ module load python3/3.6.4
 
 # python3 ../scripts/summarize_dt_experiments.py ~/mechRNN/experiments/Aug6/lorenz63_dT_withGP_constantTIMELENGTH_10synchs_10xNdata
 
+python3 ../scripts/summarize_hiddensize_experiments.py ~/mechRNN/experiments/Aug6/lorenz63_hiddensizes/lorenz63_hiddensizes_10synchs_TEST
+# python3 ../scripts/summarize_hiddensize_experiments.py ~/mechRNN/experiments/Aug6/lorenz63_hiddensizes/lorenz63_hiddensizes_10synchs
 
 
 python3 ../scripts/summarize_epsilon_experiments.py ~/mechRNN/experiments/Aug6/lorenz63_eps_withGP_10synchs
