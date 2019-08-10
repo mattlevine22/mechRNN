@@ -4,7 +4,6 @@ from pathlib import Path
 from summarizers import extract_hidden_size_performance
 
 def main(pathname):
-	# pathname = '/Users/matthewlevine/code_projects/mechRNN/experiments/June4/lorenz63_eps_loop_10000epochs_v2'
 	my_dirs = []
 	for x in Path(pathname).glob('**/*RNN*'):
 		x = str(x)
