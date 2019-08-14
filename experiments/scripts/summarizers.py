@@ -394,7 +394,7 @@ def extract_performance1(my_dirs, output_fname="./performance_comparisons", win=
 
 	for d in my_dirs:
 		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
-		my_feature = float(d.split("/")[-3].lstrip(my_token))
+		my_feature = float([z.strip(my_token) for z in d_label.split('_') if my_token in z][-1])
 		try:
 			if ('vanilla' not in d_label) and ('GPR' not in d_label):
 				model_loss = np.loadtxt(d+'/perfectModel_loss_vec_clean_test.txt',ndmin=1)
