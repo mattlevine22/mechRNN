@@ -371,8 +371,7 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	plt.close(fig)
 
 
-
-def extract_performance1(my_dirs, output_fname="./performance_comparisons", win=1, many_epochs=True, hs_token='hs', n_gprs=0, my_labels={'xlabel': 'Experimental Variable'}):
+def extract_performance1(my_dirs, output_fname="./performance_comparisons", win=1, many_epochs=True, my_token='hs', n_gprs=0, my_labels={'xlabel': 'Experimental Variable'}):
 	# first, get sizes of things...max window size is 10% of whole test set.
 	init_dirs = [x for x in my_dirs if 'RNN' in x.split('/')[-1]]
 	# d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
@@ -395,7 +394,7 @@ def extract_performance1(my_dirs, output_fname="./performance_comparisons", win=
 
 	for d in my_dirs:
 		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
-		my_dt = float(d.split("/")[-3].lstrip(dt_token))
+		my_feature = float(d.split("/")[-3].lstrip(my_token))
 		try:
 			if ('vanilla' not in d_label) and ('GPR' not in d_label):
 				model_loss = np.loadtxt(d+'/perfectModel_loss_vec_clean_test.txt',ndmin=1)
@@ -426,7 +425,7 @@ def extract_performance1(my_dirs, output_fname="./performance_comparisons", win=
 				x_valid_test = x_valid_test.rolling(win).mean()
 				# for kk in plot_state_indices:
 				# 	ax4.plot(x_kl_test.loc[:,kk].rolling(win).mean(), label=d_label)
-		# if my_dt is None:
+		# if my_feature is None:
 		# 	rnn_performance['mse'] += (float(np.min(x_test)),)
 		# 	if many_epochs:
 		# 		rnn_performance['t_valid'] += (float(np.max(x_valid_test)),)
@@ -441,18 +440,18 @@ def extract_performance1(my_dirs, output_fname="./performance_comparisons", win=
 
 		n_tests = x_valid_test.shape[1]
 		for kkt in range(n_tests):
-			if my_dt in dict_performance[mtype]['mse']:
-				dict_performance[mtype]['mse'][my_dt] += (float(np.min(x_test.loc[:,kkt])),)
-				dict_performance[mtype]['mse_time'][my_dt] += (float(np.nanargmin(x_test.loc[:,kkt])),)
+			if my_feature in dict_performance[mtype]['mse']:
+				dict_performance[mtype]['mse'][my_feature] += (float(np.min(x_test.loc[:,kkt])),)
+				dict_performance[mtype]['mse_time'][my_feature] += (float(np.nanargmin(x_test.loc[:,kkt])),)
 				if many_epochs:
-					dict_performance[mtype]['t_valid'][my_dt] += (float(np.max(x_valid_test.loc[:,kkt])),)
-					dict_performance[mtype]['t_valid_time'][my_dt] += (float(np.nanargmax(x_valid_test.loc[:,kkt])),)
+					dict_performance[mtype]['t_valid'][my_feature] += (float(np.max(x_valid_test.loc[:,kkt])),)
+					dict_performance[mtype]['t_valid_time'][my_feature] += (float(np.nanargmax(x_valid_test.loc[:,kkt])),)
 			else:
-				dict_performance[mtype]['mse'][my_dt] = (float(np.min(x_test.loc[:,kkt])),)
-				dict_performance[mtype]['mse_time'][my_dt] = (float(np.nanargmin(x_test.loc[:,kkt])),)
+				dict_performance[mtype]['mse'][my_feature] = (float(np.min(x_test.loc[:,kkt])),)
+				dict_performance[mtype]['mse_time'][my_feature] = (float(np.nanargmin(x_test.loc[:,kkt])),)
 				if many_epochs:
-					dict_performance[mtype]['t_valid'][my_dt] = (float(np.max(x_valid_test.loc[:,kkt])),)
-					dict_performance[mtype]['t_valid_time'][my_dt] = (float(np.nanargmax(x_valid_test.loc[:,kkt])),)
+					dict_performance[mtype]['t_valid'][my_feature] = (float(np.max(x_valid_test.loc[:,kkt])),)
+					dict_performance[mtype]['t_valid_time'][my_feature] = (float(np.nanargmax(x_valid_test.loc[:,kkt])),)
 
 	# now summarize
 	test_loss_mins = {key: np.min(dict_performance['mechRNN']['mse'][key]) for key in dict_performance['mechRNN']['mse']}
@@ -699,8 +698,6 @@ def extract_performance1(my_dirs, output_fname="./performance_comparisons", win=
 	fig.suptitle('Train-time until reaching optimal test performance')
 	fig.savefig(fname=output_fname+'_train_time')
 	plt.close(fig)
-
-
 
 
 def extract_hidden_size_performance(my_dirs, output_fname="./hidden_size_comparisons", win=1000, many_epochs=True, hs_token='hs'):
