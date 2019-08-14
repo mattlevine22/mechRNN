@@ -1,7 +1,7 @@
 import sys
 import os
 from pathlib import Path
-from summarizers import extract_hidden_size_performance
+from summarizers import extract_performance1
 
 def main(pathname):
 	my_dirs = []
