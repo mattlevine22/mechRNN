@@ -223,7 +223,7 @@ def make_RNN_data(model, tspan, sim_model_params, noise_frac=0, output_dir=".", 
 	t0 = time()
 
 	# make denser tspan
-	tspan_dense = np.linspace(tspan[0],tspan[-1],np.ceil((tspan[-1] - tspan[0])/model_params['smaller_delta_t']+1))
+	tspan_dense = np.linspace(tspan[0],tspan[-1],np.ceil((tspan[-1] - tspan[0])/sim_model_params['smaller_delta_t']+1))
 
 	# intersect tspan_dense with original tspan, then get original indices
 	tspan_solve = np.union1d(tspan_dense, tspan)
@@ -2226,3 +2226,158 @@ def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indi
 		fig.savefig(fname=output_fname+'_log'+'_win'+str(win))
 		plt.close(fig)
 
+def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
+		model, model_params, lr, output_dir, inits=None, plot_state_indices=None,
+		max_plot=None, learn_assim=False):
+
+	dtype = torch.FloatTensor
+
+	H_obs = torch.FloatTensor(H_obs)
+	# y_clean = torch.FloatTensor(y_clean)
+	# y_noisy = torch.FloatTensor(y_noisy)
+
+	if not os.path.exists(output_dir):
+		os.makedirs(output_dir)
+
+	if max_plot is None:
+		max_plot = int(np.floor(50./model_params['delta_t']))
+
+	n_plt = min(max_plot,y_clean.shape[0])
+	n_plt_start = y_clean.shape[0] - n_plt
+
+	if not plot_state_indices:
+		plot_state_indices = np.arange(y_clean.shape[1])
+
+	y_clean_OBS = np.matmul(H_obs.numpy(),y_clean.T).T
+	y_noisy_OBS = np.matmul(H_obs.numpy(),y_noisy.T).T
+
+	n_iters = y_clean.shape[0]
+	y_assim = np.zeros(y_clean.shape)
+	y_predictions = np.zeros(y_clean.shape)
+
+	G_assim_history = np.zeros((y_clean.shape[0], G_assim.shape[0]))
+
+	if inits is None:
+		inits = get_lorenz_inits(n=1).squeeze()
+		# inits = y_noisy[0,:] + np.random.randn()
+		# inits = np.array([-5, 0, 30]) + 20*np.random.randn()
+
+	tspan = [0, 0.5*delta_t, delta_t]
+	# initialize G_assim variable
+	if learn_assim:
+		G_assim = torch.zeros(y_clean.shape[1], y_clean_OBS.shape[1]).type(dtype)
+		init.normal_(G_assim, 0.0, 0.1)
+		G_assim = Variable(G_assim, requires_grad=True)
+	else:
+		G_assim = torch.FloatTensor(G_assim)
+
+	for i in range(n_iters):
+		y_out, info_dict = odeint(model, inits, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+		# if info_dict['message'] != 'Integration successful.':
+		# 	# solver failed
+		# 	print('ODE solver has failed at y0=',y0)
+		# 	solver_failed = True
+		y_pred = torch.FloatTensor(y_out[-1,:,None])
+		y_meas = torch.FloatTensor(y_noisy_OBS[i,:,None])
+
+		# foo_assim_OLD = np.matmul( (eta/(1+eta))*P_assim + Q_assim, y_pred) + (1/(1+eta))*np.matmul(y_meas,H_obs).T
+
+		#G: 3 x Meas
+		foo_assim = torch.mm( torch.eye(G_assim.shape[0]) - torch.mm(G_assim,H_obs), y_pred.detach()) + torch.mm(G_assim,y_meas)
+
+		inits = foo_assim.detach().numpy().squeeze()
+		y_assim[i,:] = inits
+		y_predictions[i,:] = y_pred.detach().numpy().squeeze()
+
+		if learn_assim:
+			G_assim_history[i,:] = G_assim.detach().numpy().squeeze()
+			# loss = (torch.mm(H_obs,y_pred).squeeze() - y_meas.squeeze()).pow(2).sum()
+			loss = (foo_assim.squeeze() - torch.FloatTensor(y_clean[i,:]).detach().squeeze()).pow(2).sum()
+			loss.backward()
+			G_assim.data -= lr * G_assim.grad.data
+			G_assim.grad.data.zero_()
+	print(G_assim)
+
+	## Done running 3DVAR, now summarize
+
+	if learn_assim:
+		# plot convergence of G_assim
+		fig, ax0 = plt.subplots(1,1)
+		for kk in range(len(plot_state_indices)):
+			t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
+			ax0.plot(t_plot, G_assim_history[:,kk],label='G_{0}'.format(kk))
+		ax0.set_xlabel('time')
+		ax0.legend()
+		fig.suptitle('3DVAR Assimilation Matrix Convergence')
+		fig.savefig(fname=output_dir+'/3DVAR_assimilation_matrix_convergence')
+
+		ax0.set_yscale('log')
+		fig.savefig(fname=output_dir+'/3DVAR_assimilation_matrix_convergence_log')
+
+		plt.close(fig)
+
+	## PLOTS
+	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+	if not isinstance(ax_list,np.ndarray):
+		ax_list = [ax_list]
+	for kk in range(len(ax_list)):
+		ax1 = ax_list[kk]
+		t_plot = np.arange(0,round(len(y_clean[n_plt_start:,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+		t_max = round(len(y_clean[:,0])*model_params['delta_t'],8)
+		t_plot = t_plot + (t_max - max(t_plot))
+		# ax1.scatter(t_plot, y_noisy[:n_plt,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+		ax1.plot(t_plot, y_clean[n_plt_start:,plot_state_indices[kk]], color='red', label='clean data')
+		ax1.plot(t_plot, y_predictions[n_plt_start:,plot_state_indices[kk]], color='black', label='3DVAR')
+		ax1.set_xlabel('time')
+		ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)')
+	ax_list[0].legend()
+	fig.suptitle('3DVAR output')
+	fig.savefig(fname=output_dir+'/3DVAR_timeseries')
+	plt.close(fig)
+
+	fig, (ax0, ax1) = plt.subplots(nrows=2,ncols=1, sharex=True)
+
+	# ax0 is for assimilation errors...Cumulative AVG and Pointwise, meas-only and all states
+	# ax1 is for prediction errors...Cumulative AVG and Pointwise, all states
+	t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
+
+	pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)
+	pw_pred_errors = np.linalg.norm(y_predictions - y_clean, axis=1, ord=2)
+	pw_pred_errors_OBS = np.linalg.norm(np.matmul(H_obs.numpy(),y_predictions.T).T - y_clean_OBS, axis=1, ord=2)
+
+
+	running_pred_errors = np.zeros(pw_pred_errors.shape)
+	running_pred_errors_OBS = np.zeros(pw_pred_errors.shape)
+	running_assim_errors = np.zeros(pw_pred_errors.shape)
+
+	for k in range(running_pred_errors.shape[0]):
+		running_pred_errors[k] = np.mean(pw_pred_errors[:(k+1)])
+		running_pred_errors_OBS[k] = np.mean(pw_pred_errors_OBS[:(k+1)])
+		running_assim_errors[k] = np.mean(pw_assim_errors[:(k+1)])
+
+	ax0.scatter(t_plot, pw_pred_errors, color='blue', label='Full-State Point-wise')
+	# ax0.scatter(t_plot, pw_pred_errors_OBS[:n_plt], color='blue', label='Observed-State Point-wise')
+	ax0.plot(t_plot, running_pred_errors, linestyle='--', color='black', label='Full-State Cumulative')
+	# ax0.plot(t_plot, running_pred_errors_OBS[:n_plt], linestyle=':', color='black', label='Observed-State Cumulative')
+	ax0.set_ylabel('Squared Error')
+	ax0.legend()
+	ax0.set_title('1-step Prediction Errors')
+
+	ax1.scatter(t_plot, pw_assim_errors, linestyle='--', color='blue', label='Full-State Point-wise')
+	ax1.plot(t_plot, running_assim_errors, linestyle='--', color='black', label='Full-State Cumulative')
+	ax1.set_ylabel('Squared Error')
+	ax1.legend()
+	ax1.set_title('Assimilation Errors')
+	ax1.set_xlabel('time')
+
+	fig.suptitle('3DVAR error convergence')
+	fig.savefig(fname=output_dir+'/3DVAR_error_convergence')
+
+	ax0.set_yscale('log')
+	ax0.set_ylabel('log Squared Error')
+	ax1.set_yscale('log')
+	ax1.set_ylabel('log Squared Error')
+	fig.savefig(fname=output_dir+'/3DVAR_error_convergence_log')
+	plt.close(fig)
+
+	return G_assim
