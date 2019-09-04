@@ -4,9 +4,9 @@ import torch
 import argparse
 
 parser = argparse.ArgumentParser(description='mechRNN')
-parser.add_argument('--lr', type=float, default=0.005, help='learning rate')
-parser.add_argument('--delta_t', type=float, default=0.1, help='time step of simulation')
-parser.add_argument('--t_end', type=float, default=100, help='length of simulation')
+parser.add_argument('--lr', type=float, default=0.0005, help='learning rate')
+parser.add_argument('--delta_t', type=float, default=0.01, help='time step of simulation')
+parser.add_argument('--t_end', type=float, default=500, help='length of simulation')
 parser.add_argument('--savedir', type=str, default='default_output', help='parent dir of output')
 parser.add_argument('--model_solver', default=lorenz63, help='ode function')
 FLAGS = parser.parse_args()
@@ -54,22 +54,22 @@ def main():
 		# torch.manual_seed(0)
 		# run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 		# 	sim_model, assimilation_model_params, lr,
-		# 	run_output_dir, learn_assim=False, inits = my_random_inits)
+		# 	run_output_dir, learn_assim=False, inits = my_random_inits, eps=eps)
 
 		# # 3D VAR with perfect model + learn the assimilation matrix
 		# run_output_dir = output_dir + '/3DVAR_perfect_model_learnAssimilation'
 		# torch.manual_seed(0)
 		# G_assim_LEARNED = run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 		# 	sim_model, assimilation_model_params, lr,
-		# 	run_output_dir, learn_assim=True, inits = my_random_inits)
+		# 	run_output_dir, learn_assim=True, inits = my_random_inits, eps=eps)
 		# run_output_dir = output_dir + '/3DVAR_perfect_model_learnAssimilationUSED'
 		# torch.manual_seed(0)
 		# run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim_LEARNED, delta_t,
 		# 	sim_model, assimilation_model_params, lr,
-		# 	run_output_dir, learn_assim=False, inits = my_random_inits)
+		# 	run_output_dir, learn_assim=False, inits = my_random_inits, eps=eps)
 
 		# ## BAD MODEL PARAMETERS NOW ##
-		for eps_badness in [0.1, 0, 0.001, 0.05]:
+		for eps_badness in [0, 0.1]:
 			assimilation_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b*(1+eps_badness), c), 'time_avg_norm':0.529, 'mxstep':0}
 
 			# 3D VAR with bad model + standard assimilation matrix
@@ -77,19 +77,19 @@ def main():
 			torch.manual_seed(0)
 			run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 				sim_model, assimilation_model_params, lr,
-				run_output_dir, learn_assim=False, inits = my_random_inits)
+				run_output_dir, learn_assim=False, inits = my_random_inits, eps=eps)
 
 			# 3D VAR with bad model + learn assimilation matrix
 			run_output_dir = output_dir + '/3DVAR_epsBadness{0}_learnAssimilation'.format(eps_badness)
 			torch.manual_seed(0)
 			G_assim_LEARNED = run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 				sim_model, assimilation_model_params, lr,
-				run_output_dir, learn_assim=True, inits = my_random_inits)
+				run_output_dir, learn_assim=True, inits = my_random_inits, eps=eps)
 			run_output_dir = output_dir + '/3DVAR_epsBadness{0}_learnAssimilationUSED'.format(eps_badness)
 			torch.manual_seed(0)
 			run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim_LEARNED, delta_t,
 				sim_model, assimilation_model_params, lr,
-				run_output_dir, learn_assim=False, inits = my_random_inits)
+				run_output_dir, learn_assim=False, inits = my_random_inits, eps=eps)
 
 
 if __name__ == '__main__':

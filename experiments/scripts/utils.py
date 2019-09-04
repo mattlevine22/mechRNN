@@ -2228,7 +2228,7 @@ def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indi
 
 def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 		model, model_params, lr, output_dir, inits=None, plot_state_indices=None,
-		max_plot=None, learn_assim=False):
+		max_plot=None, learn_assim=False, eps=None):
 
 	dtype = torch.FloatTensor
 
@@ -2240,7 +2240,7 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 		os.makedirs(output_dir)
 
 	if max_plot is None:
-		max_plot = int(np.floor(50./model_params['delta_t']))
+		max_plot = int(np.floor(100./model_params['delta_t']))
 
 	n_plt = min(max_plot,y_clean.shape[0])
 	n_plt_start = y_clean.shape[0] - n_plt
@@ -2341,9 +2341,10 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 	# ax1 is for prediction errors...Cumulative AVG and Pointwise, all states
 	t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
 
-	pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)
-	pw_pred_errors = np.linalg.norm(y_predictions - y_clean, axis=1, ord=2)
-	pw_pred_errors_OBS = np.linalg.norm(np.matmul(H_obs.numpy(),y_predictions.T).T - y_clean_OBS, axis=1, ord=2)
+	# these give the ROOT mean squared error
+	pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
+	pw_pred_errors = np.linalg.norm(y_predictions - y_clean, axis=1, ord=2)**2
+	pw_pred_errors_OBS = np.linalg.norm(np.matmul(H_obs.numpy(),y_predictions.T).T - y_clean_OBS, axis=1, ord=2)**2
 
 
 	running_pred_errors = np.zeros(pw_pred_errors.shape)
@@ -2355,17 +2356,21 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 		running_pred_errors_OBS[k] = np.mean(pw_pred_errors_OBS[:(k+1)])
 		running_assim_errors[k] = np.mean(pw_assim_errors[:(k+1)])
 
-	ax0.scatter(t_plot, pw_pred_errors, color='blue', label='Full-State Point-wise')
+	ax0.plot(t_plot, pw_pred_errors, color='blue', label='Full-State Point-wise')
+	if eps:
+		ax0.plot(t_plot, [eps for _ in range(len(t_plot))], color = 'black', linestyle='--', label = r'$\epsilon$')
 	# ax0.scatter(t_plot, pw_pred_errors_OBS[:n_plt], color='blue', label='Observed-State Point-wise')
-	ax0.plot(t_plot, running_pred_errors, linestyle='--', color='black', label='Full-State Cumulative')
+	# ax0.plot(t_plot, running_pred_errors, linestyle='--', color='black', label='Full-State Cumulative')
 	# ax0.plot(t_plot, running_pred_errors_OBS[:n_plt], linestyle=':', color='black', label='Observed-State Cumulative')
-	ax0.set_ylabel('Squared Error')
+	ax0.set_ylabel('MSE')
 	ax0.legend()
 	ax0.set_title('1-step Prediction Errors')
 
-	ax1.scatter(t_plot, pw_assim_errors, linestyle='--', color='blue', label='Full-State Point-wise')
-	ax1.plot(t_plot, running_assim_errors, linestyle='--', color='black', label='Full-State Cumulative')
-	ax1.set_ylabel('Squared Error')
+	ax1.plot(t_plot, pw_assim_errors, linestyle='--', color='blue', label='Full-State Point-wise')
+	if eps:
+		ax1.plot(t_plot, [eps for _ in range(len(t_plot))], color = 'black', linestyle='--', label = r'$\epsilon$')
+	# ax1.plot(t_plot, running_assim_errors, linestyle='--', color='black', label='Full-State Cumulative')
+	ax1.set_ylabel('MSE')
 	ax1.legend()
 	ax1.set_title('Assimilation Errors')
 	ax1.set_xlabel('time')
@@ -2374,9 +2379,9 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 	fig.savefig(fname=output_dir+'/3DVAR_error_convergence')
 
 	ax0.set_yscale('log')
-	ax0.set_ylabel('log Squared Error')
+	ax0.set_ylabel('log MSE')
 	ax1.set_yscale('log')
-	ax1.set_ylabel('log Squared Error')
+	ax1.set_ylabel('log MSE')
 	fig.savefig(fname=output_dir+'/3DVAR_error_convergence_log')
 	plt.close(fig)
 
