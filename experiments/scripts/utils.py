@@ -12,7 +12,7 @@ import math
 import numpy as np
 import numpy.matlib
 from scipy.stats import entropy
-from scipy.integrate import odeint
+from scipy.integrate import odeint, solve_ivp
 # from statsmodels.nonparametric.kde import KDEUnivariate
 from scipy.stats import gaussian_kde
 
@@ -131,6 +131,18 @@ def lorenz63(Y,t,a,b,c):
 	dYdt = [dxdt, dydt, dzdt]
 	return dYdt
 
+def lorenz63_perturbed(Y,t,a=10,b=28,c=8/3,gamma=1,delta=0):
+	(x,y,z) = Y
+	x = x + delta*(np.sin(gamma*x*y*z))
+	y = y + delta*(np.sin(gamma*x*y*z))
+	z = z + delta*(np.sin(gamma*x*y*z))
+	dxdt = -a*x + a*y
+	dydt = b*x - y - x*z
+	dzdt = -c*z + x*y
+
+	dYdt = [dxdt, dydt, dzdt]
+	return dYdt
+
 def f_normalize_ztrans(norm_dict,y):
 	y_norm = (y - norm_dict['Xmean']) / norm_dict['Xsd']
 	return y_norm
@@ -166,6 +178,12 @@ def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_d
 
 	y0 = sim_model_params['state_init']
 	y_clean = odeint(model, y0, tspan, args=my_args, mxstep=sim_model_params['mxstep'])
+
+	pdb.set_trace()
+	sol = solve_ivp(fun=lambda t, y: model(y, t, *my_args), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+	y_clean2 = sol.y
+
+
 	# CHOOSE noise size based on range of the data...if you base on mean or mean(abs),
 	# can get disproportionate SDs if one state oscillates between pos/neg, and another state is always POS.
 	y_noisy = y_clean + noise_frac*(np.max(y_clean,0) - np.min(y_clean,0))*np.random.randn(len(y_clean),y_clean.shape[1])
@@ -302,6 +320,13 @@ def make_RNN_data2(model, tspan_train, tspan_test, sim_model_params, noise_frac=
 			tspan = get_tspan(sim_model_params)
 			# tspan = [0, 0.5*sim_model_params['delta_t'], sim_model_params['delta_t']]
 			y_out = odeint(model, y0, tspan, args=sim_model_params['ode_params'], mxstep=sim_model_params['mxstep'])
+
+
+			pdb.set_trace()
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *sim_model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+			y_out2 = sol.y.T
+
+
 			init_continued = y_out[-1,:]
 			sim_model_params['state_init'] = init_continued #y_clean_train[-1,:]
 		else:
@@ -397,6 +422,11 @@ def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_in
 		y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
 		if not solver_failed:
 			y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+
+			pdb.set_trace()
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+			y_out2 = sol.y.T
+
 			if info_dict['message'] != 'Integration successful.':
 				# solver failed
 				print('ODE solver has failed at y0=',y0)
@@ -436,6 +466,10 @@ def forward_mech(input, hidden_state, w1, w2, b, c, v, normz_info, model, model_
 	driver = xmean + xsd*input.detach().numpy()
 	my_args = model_params + (driver,)
 	y_out = odeint(model, y0, tspan, args=my_args, mxstep=model_params['mxstep'])
+
+	pdb.set_trace()
+	sol = solve_ivp(fun=lambda t, y: model(y, t, *my_args), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+	y_out2 = sol.y.T
 
 	# renormalize
 	hidden_state[0] = torch.from_numpy( (y_out[-1] - ymin) / (ymax - ymin) )
@@ -512,6 +546,12 @@ def run_GP(y_clean_train, y_noisy_train,
 			y0 = f_unNormalize_minmax(normz_info, pred)
 			if not solver_failed:
 				y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+
+				pdb.set_trace()
+				sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+				y_out2 = sol.y.T
+
+
 				if info_dict['message'] != 'Integration successful.':
 					# solver failed
 					print('ODE solver has failed at y0=',y0)
@@ -604,6 +644,12 @@ def run_GP(y_clean_train, y_noisy_train,
 				y0 = f_unNormalize_minmax(normz_info, pred)
 				if not solver_failed:
 					y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+
+					pdb.set_trace()
+					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+					y_out2 = sol.y.T
+
+
 					if info_dict['message'] != 'Integration successful.':
 						# solver failed
 						print('ODE solver has failed at y0=',y0)
@@ -737,6 +783,11 @@ def run_GP(y_clean_train, y_noisy_train,
 			gp_forecast = do_resid*bad_model_pred + gpr.predict(x_input.reshape(1, -1) , return_std=False).squeeze()
 
 			y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+
+			pdb.set_trace()
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params_TRUE['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+			y_out_TRUE2 = sol.y.T
+
 			true_model_pred = f_normalize_minmax(normz_info, y_out_TRUE[-1,:])
 
 			bigX[n,:] = x_input
@@ -783,11 +834,24 @@ def run_GP(y_clean_train, y_noisy_train,
 
 					# FIRST, find the attractor (idk, run for >10 lyapunov times...)
 					y_out_INIT, info_dict = odeint(model, np.array([x,y,z]), [0, 5, 10], args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+
+					pdb.set_trace()
+					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=np.array([x,y,z]), [0, 5, 10], method='RK45', t_eval=tspan)
+					y_out_INIT2 = sol.y.T
+
+
 					y0 = y_out_INIT[-1,:]
 					y0_normalized = f_normalize_minmax(normz_info, y0)
 					# now, we assume that y0 is on the attractor
 
 					y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+
+					pdb.set_trace()
+					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+					y_out2 = sol.y.T
+
+
+
 					bad_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
 					if gp_style==1:
 						x_input = y0_normalized
@@ -801,6 +865,11 @@ def run_GP(y_clean_train, y_noisy_train,
 					gp_forecast = do_resid*bad_model_pred + gpr.predict(x_input.reshape(1, -1) , return_std=False).squeeze()
 
 					y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+
+					pdb.set_trace()
+					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params_TRUE['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+					y_out_TRUE2 = sol.y.T
+
 					true_model_pred = f_normalize_minmax(normz_info, y_out_TRUE[-1,:])
 
 					bigX[n,:] = x_input
@@ -966,8 +1035,11 @@ def train_chaosRNN(forward,
 			# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 			# unnormalize model_input so that it can go through the ODE solver
 			y0 = f_unNormalize_minmax(normz_info, output_train[j,:].numpy())
-			y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'])
-			model_pred[j,:] = f_normalize_minmax(normz_info, y_out[-1,:])
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+
+			# y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'])
+			# model_pred[j,:] = f_normalize_minmax(normz_info, y_out[-1,:])
+			model_pred[j,:] = f_normalize_minmax(normz_info, sol.y[:,-1])
 	else:
 		model_pred = [None for j in range(train_seq_length-1)]
 
@@ -2273,6 +2345,11 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 
 	for i in range(n_iters):
 		y_out, info_dict = odeint(model, inits, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+
+		pdb.set_trace()
+		sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=inits.T, method='RK45', t_eval=tspan)
+		y_out2 = sol.y.T
+
 		# if info_dict['message'] != 'Integration successful.':
 		# 	# solver failed
 		# 	print('ODE solver has failed at y0=',y0)
