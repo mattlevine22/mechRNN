@@ -177,11 +177,11 @@ def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_d
 		x = None
 
 	y0 = sim_model_params['state_init']
-	y_clean = odeint(model, y0, tspan, args=my_args, mxstep=sim_model_params['mxstep'])
+	# y_clean = odeint(model, y0, tspan, args=my_args, mxstep=sim_model_params['mxstep'])
 
-	pdb.set_trace()
-	sol = solve_ivp(fun=lambda t, y: model(y, t, *my_args), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
-	y_clean2 = sol.y
+	# pdb.set_trace()
+	sol = solve_ivp(fun=lambda t, y: model(y, t, *my_args), t_span=(tspan[0], tspan[-1]), y0=np.array(y0).T, method='RK45', t_eval=tspan)
+	y_clean = sol.y.T
 
 
 	# CHOOSE noise size based on range of the data...if you base on mean or mean(abs),
@@ -421,13 +421,12 @@ def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_in
 		# y_pred_normalized = f_normalize_minmax(normz_info, y_pred)
 		y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
 		if not solver_failed:
-			y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+			# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
 
-			pdb.set_trace()
 			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
-			y_out2 = sol.y.T
+			y_out = sol.y.T
 
-			if info_dict['message'] != 'Integration successful.':
+			if not sol.success:
 				# solver failed
 				print('ODE solver has failed at y0=',y0)
 				solver_failed = True
@@ -545,14 +544,12 @@ def run_GP(y_clean_train, y_noisy_train,
 		if do_resid:
 			y0 = f_unNormalize_minmax(normz_info, pred)
 			if not solver_failed:
-				y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+				# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
 
-				pdb.set_trace()
 				sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
-				y_out2 = sol.y.T
+				y_out = sol.y.T
 
-
-				if info_dict['message'] != 'Integration successful.':
+				if not sol.success:
 					# solver failed
 					print('ODE solver has failed at y0=',y0)
 					solver_failed = True
@@ -643,14 +640,12 @@ def run_GP(y_clean_train, y_noisy_train,
 			if do_resid:
 				y0 = f_unNormalize_minmax(normz_info, pred)
 				if not solver_failed:
-					y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+					# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
 
-					pdb.set_trace()
 					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
-					y_out2 = sol.y.T
+					y_out = sol.y.T
 
-
-					if info_dict['message'] != 'Integration successful.':
+					if not sol.success:
 						# solver failed
 						print('ODE solver has failed at y0=',y0)
 						solver_failed = True
@@ -836,7 +831,7 @@ def run_GP(y_clean_train, y_noisy_train,
 					y_out_INIT, info_dict = odeint(model, np.array([x,y,z]), [0, 5, 10], args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
 
 					pdb.set_trace()
-					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=np.array([x,y,z]), [0, 5, 10], method='RK45', t_eval=tspan)
+					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(0, 10), y0=np.array([x,y,z]).T, method='RK45', t_eval=[0, 5, 10])
 					y_out_INIT2 = sol.y.T
 
 
@@ -2344,11 +2339,11 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 		G_assim = torch.FloatTensor(G_assim)
 
 	for i in range(n_iters):
-		y_out, info_dict = odeint(model, inits, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+		# y_out, info_dict = odeint(model, inits, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
 
-		pdb.set_trace()
+		# pdb.set_trace()
 		sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=inits.T, method='RK45', t_eval=tspan)
-		y_out2 = sol.y.T
+		y_out = sol.y.T
 
 		# if info_dict['message'] != 'Integration successful.':
 		# 	# solver failed
@@ -2366,14 +2361,15 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 		y_assim[i,:] = inits
 		y_predictions[i,:] = y_pred.detach().numpy().squeeze()
 
+
+		G_assim_history[i,:] = G_assim.detach().numpy().squeeze()
 		if learn_assim:
-			G_assim_history[i,:] = G_assim.detach().numpy().squeeze()
 			# loss = (torch.mm(H_obs,y_pred).squeeze() - y_meas.squeeze()).pow(2).sum()
 			loss = (foo_assim.squeeze() - torch.FloatTensor(y_clean[i,:]).detach().squeeze()).pow(2).sum()
 			loss.backward()
 			G_assim.data -= lr * G_assim.grad.data
 			G_assim.grad.data.zero_()
-	print(G_assim)
+	# print(G_assim)
 
 	## Done running 3DVAR, now summarize
 
@@ -2418,7 +2414,7 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 	# ax1 is for prediction errors...Cumulative AVG and Pointwise, all states
 	t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
 
-	# these give the ROOT mean squared error
+	# these give the mean squared error
 	pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
 	pw_pred_errors = np.linalg.norm(y_predictions - y_clean, axis=1, ord=2)**2
 	pw_pred_errors_OBS = np.linalg.norm(np.matmul(H_obs.numpy(),y_predictions.T).T - y_clean_OBS, axis=1, ord=2)**2
@@ -2461,5 +2457,9 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 	ax1.set_ylabel('log MSE')
 	fig.savefig(fname=output_dir+'/3DVAR_error_convergence_log')
 	plt.close(fig)
+
+	np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, y_assim=y_assim, y_predictions=y_predictions,
+		pw_assim_errors=pw_assim_errors, pw_pred_errors=pw_pred_errors, pw_pred_errors_OBS=pw_pred_errors_OBS,
+		model_params=model_params, eps=eps)
 
 	return G_assim
