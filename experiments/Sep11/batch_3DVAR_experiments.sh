@@ -1,6 +1,6 @@
 #!/bin/bash
 
-python3 ../scripts/lorenz63_3dvar_generateData.py --n_trajectories 10 --output_filename TrainData.npz --t_end 50
+python3 ../scripts/lorenz63_3dvar_generateData.py --n_trajectories 10 --output_filename TrainData.npz --t_end 500
 python3 ../scripts/lorenz63_3dvar_generateData.py --n_trajectories 10 --output_filename TestData.npz --t_end 5
 
 python3 ../scripts/lorenz63_3dvar_train.py --training_data_filename TrainData.npz --testing_data_filename TestData.npz --train_input_index 0

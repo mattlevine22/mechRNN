@@ -202,14 +202,19 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 	ax0.set_ylabel('t_assim')
 	ax1.set_ylabel('t_assim')
 
-	ax2.set_ylabel('logMSE  post-assim')
-	ax3.set_ylabel('logMSE post-assim')
-	ax2.set_yscale('log')
-	ax3.set_yscale('log')
+	ax2.set_ylabel('MSE')
+	ax3.set_ylabel('MSE')
 
 	fig.suptitle('3DVAR Testing Performance')
 	fig.savefig(fname=output_dir+'/'+key_nm+'_method_comparison')
 
+	ax2.set_ylabel('logMSE')
+	ax3.set_ylabel('logMSE')
+	ax2.set_yscale('log')
+	ax3.set_yscale('log')
+
+	fig.suptitle('3DVAR Testing Performance')
+	fig.savefig(fname=output_dir+'/'+key_nm+'_method_comparison_log')
 
 
 if __name__ == '__main__':

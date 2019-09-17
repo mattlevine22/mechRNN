@@ -2323,6 +2323,7 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 	y_predictions = np.zeros(y_clean.shape)
 
 	G_assim_history = np.zeros((y_clean.shape[0], G_assim.shape[0]))
+	G_assim_history_running_mean = np.zeros((y_clean.shape[0], G_assim.shape[0]))
 
 	if inits is None:
 		inits = get_lorenz_inits(n=1).squeeze()
@@ -2363,6 +2364,7 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 
 
 		G_assim_history[i,:] = G_assim.detach().numpy().squeeze()
+		G_assim_history_running_mean[i,:] = np.mean(G_assim_history[:i,:], axis=0)
 		if learn_assim:
 			# loss = (torch.mm(H_obs,y_pred).squeeze() - y_meas.squeeze()).pow(2).sum()
 			loss = (foo_assim.squeeze() - torch.FloatTensor(y_clean[i,:]).detach().squeeze()).pow(2).sum()
@@ -2372,7 +2374,6 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 	# print(G_assim)
 
 	## Done running 3DVAR, now summarize
-
 	if learn_assim:
 		# plot convergence of G_assim
 		fig, ax0 = plt.subplots(1,1)
@@ -2382,12 +2383,28 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 		ax0.set_xlabel('time')
 		ax0.legend()
 		fig.suptitle('3DVAR Assimilation Matrix Convergence')
-		fig.savefig(fname=output_dir+'/3DVAR_assimilation_matrix_convergence')
+		fig.savefig(fname=output_dir+'/3DVAR_assimilation_matrix_sequence')
 
 		ax0.set_yscale('log')
-		fig.savefig(fname=output_dir+'/3DVAR_assimilation_matrix_convergence_log')
+		fig.savefig(fname=output_dir+'/3DVAR_assimilation_matrix_sequence_log')
 
 		plt.close(fig)
+
+		# plot running average
+		fig, ax0 = plt.subplots(1,1)
+		for kk in range(len(plot_state_indices)):
+			t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
+			ax0.plot(t_plot, G_assim_history_running_mean[:,kk],label='G_{0}'.format(kk))
+		ax0.set_xlabel('time')
+		ax0.legend()
+		fig.suptitle('3DVAR Assimilation Matrix Convergence (Running Mean)')
+		fig.savefig(fname=output_dir+'/3DVAR_assimilation_matrix_runningMean')
+
+		ax0.set_yscale('log')
+		fig.savefig(fname=output_dir+'/3DVAR_assimilation_matrix_runningMean_log')
+
+		plt.close(fig)
+
 
 	## PLOTS
 	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
@@ -2458,7 +2475,7 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 	fig.savefig(fname=output_dir+'/3DVAR_error_convergence_log')
 	plt.close(fig)
 
-	np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, y_assim=y_assim, y_predictions=y_predictions,
+	np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean, y_assim=y_assim, y_predictions=y_predictions,
 		pw_assim_errors=pw_assim_errors, pw_pred_errors=pw_pred_errors, pw_pred_errors_OBS=pw_pred_errors_OBS,
 		model_params=model_params, eps=eps)
 

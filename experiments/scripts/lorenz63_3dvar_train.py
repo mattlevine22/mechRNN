@@ -94,7 +94,7 @@ def main():
 			run_output_dir_TRAIN, learn_assim=False, inits=random_state_init_TRAIN, eps=eps)
 		# Test
 		npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
-		G_assim_LEARNED = np.mean(npzfile['G_assim_history'][-n_avg:,:,None],axis=0)
+		G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:]
 		for n_test in range(y_clean_TEST.shape[0]):
 			run_output_dir_TEST = '{0}/BadModel_eps{1}_standardAssimilation/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test)
 			run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], H_obs, eta, G_assim_LEARNED, delta_t,
@@ -109,7 +109,7 @@ def main():
 			run_output_dir_TRAIN, learn_assim=True, inits=random_state_init_TRAIN, eps=eps)
 		# Test
 		npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
-		G_assim_LEARNED = np.mean(npzfile['G_assim_history'][-n_avg:,:,None],axis=0)
+		G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:]
 		for n_test in range(y_clean_TEST.shape[0]):
 			run_output_dir_TEST = '{0}/BadModel_eps{1}_learnAssimilation/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test)
 			run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], H_obs, eta, G_assim_LEARNED, delta_t,
