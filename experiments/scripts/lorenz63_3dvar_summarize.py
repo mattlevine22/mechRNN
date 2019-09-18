@@ -53,26 +53,42 @@ def general_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 
 		## plot summaries of the learning process across training trajectories
 		G_assim_history = None
+		G_assim_history_running_mean = None
 		for n in range(n_train_trajectories):
 			fname = os.path.join(d, 'Train{0}'.format(n), 'output.npz')
 			npzfile = np.load(fname)
 			G = npzfile['G_assim_history']
 			if G_assim_history is None:
 				G_assim_history = np.zeros((n_train_trajectories,G.shape[0],G.shape[1]))
-			G_assim_history[n,:,:] = G
+				G_assim_history_running_mean = np.zeros((n_train_trajectories,G.shape[0],G.shape[1]))
+			G_assim_history[n,:,:] = npzfile['G_assim_history']
+			G_assim_history_running_mean[n,:,:] = npzfile['G_assim_history_running_mean']
 
 		delta_t = npzfile['model_params'].item().get('delta_t')
 		t_plot = np.arange(0,round(G.shape[0]*delta_t,8),delta_t)
+
 		fig, axlist = plt.subplots(nrows=G_assim_history.shape[2], ncols=1, sharex=True)
 		for k in range(len(axlist)):
 			for n in range(n_train_trajectories):
-				axlist[k].plot(t_plot, G_assim_history[n,:,k].squeeze(), color='blue')
+				axlist[k].plot(t_plot, G_assim_history[n,:,k].squeeze())
 			axlist[k].set_ylabel('G_{0}'.format(k))
-			axlist[k].set_yscale('log')
+			# axlist[k].set_yscale('log')
 		axlist[k].set_xlabel('time')
-		fig.suptitle('3DVAR Training: Assimilation Matrix Convergence')
-		fig.savefig(fname=d+'/3DVAR_assimilation_matrix_convergence')
+		fig.suptitle('3DVAR Training: Assimilation Matrix Sequence')
+		fig.savefig(fname=d+'/3DVAR_assimilation_matrix_sequence')
 		plt.close(fig)
+
+		fig, axlist = plt.subplots(nrows=G_assim_history_running_mean.shape[2], ncols=1, sharex=True)
+		for k in range(len(axlist)):
+			for n in range(n_train_trajectories):
+				axlist[k].plot(t_plot, G_assim_history_running_mean[n,:,k].squeeze())
+			axlist[k].set_ylabel('G_{0}'.format(k))
+			# axlist[k].set_yscale('log')
+		axlist[k].set_xlabel('time')
+		fig.suptitle('3DVAR Training: Assimilation Matrix Convergence (Running Mean)')
+		fig.savefig(fname=d+'/3DVAR_assimilation_matrix_runningMean')
+		plt.close(fig)
+
 
 		## plot summaries of Testing performance for a single method
 		fig, (ax0, ax1) = plt.subplots(nrows=2, ncols=1, sharex=True)

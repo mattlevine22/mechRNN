@@ -2382,7 +2382,7 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 			ax0.plot(t_plot, G_assim_history[:,kk],label='G_{0}'.format(kk))
 		ax0.set_xlabel('time')
 		ax0.legend()
-		fig.suptitle('3DVAR Assimilation Matrix Convergence')
+		fig.suptitle('3DVAR Assimilation Matrix Sequence')
 		fig.savefig(fname=output_dir+'/3DVAR_assimilation_matrix_sequence')
 
 		ax0.set_yscale('log')
