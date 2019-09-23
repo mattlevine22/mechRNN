@@ -33,6 +33,11 @@ import pdb
 
 LORENZ_DEFAULT_PARAMS = (10, 28, 8/3)
 
+def str2array(x):
+	# x = '[[1,0,0],[0,1,0],[0,0,1]]'
+	y = np.array([[float(d) for d in c] for c in [b.split(',') for b in [a.strip('[').strip(']') for a in x.split('],[')]]])
+	return y
+
 def get_lorenz_inits(model=None, params=None, n=2):
 	init_vec = np.zeros((n, 3))
 	for k in range(n):
@@ -2293,13 +2298,18 @@ def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indi
 		fig.savefig(fname=output_fname+'_log'+'_win'+str(win))
 		plt.close(fig)
 
-def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
-		model, model_params, lr, output_dir, inits=None, plot_state_indices=None,
-		max_plot=None, learn_assim=False, eps=None):
+
+def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
+		model, model_params, lr, output_dir,
+		H_obs_lowfi=None, H_obs_hifi=None, noisy_hifi=False,
+		inits=None, plot_state_indices=None,
+		max_plot=None, learn_assim=False, eps=None, cheat=False):
 
 	dtype = torch.FloatTensor
 
-	H_obs = torch.FloatTensor(H_obs)
+	H_obs_lowfi = torch.FloatTensor(H_obs_lowfi)
+	H_obs_hifi = torch.FloatTensor(H_obs_hifi)
+
 	# y_clean = torch.FloatTensor(y_clean)
 	# y_noisy = torch.FloatTensor(y_noisy)
 
@@ -2315,8 +2325,13 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 	if not plot_state_indices:
 		plot_state_indices = np.arange(y_clean.shape[1])
 
-	y_clean_OBS = np.matmul(H_obs.numpy(),y_clean.T).T
-	y_noisy_OBS = np.matmul(H_obs.numpy(),y_noisy.T).T
+	y_clean_lowfi = np.matmul(H_obs_lowfi.numpy(),y_clean.T).T
+	y_noisy_lowfi = np.matmul(H_obs_lowfi.numpy(),y_noisy.T).T
+
+	if noisy_hifi:
+		y_hifi = np.matmul(H_obs_hifi.numpy(),y_noisy.T).T
+	else:
+		y_hifi = np.matmul(H_obs_hifi.numpy(),y_clean.T).T
 
 	n_iters = y_clean.shape[0]
 	y_assim = np.zeros(y_clean.shape)
@@ -2332,12 +2347,11 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 
 	tspan = [0, 0.5*delta_t, delta_t]
 	# initialize G_assim variable
+	G_assim = torch.FloatTensor(G_assim)
 	if learn_assim:
-		G_assim = torch.zeros(y_clean.shape[1], y_clean_OBS.shape[1]).type(dtype)
-		init.normal_(G_assim, 0.0, 0.1)
+		# G_assim = torch.zeros(y_clean.shape[1], y_clean_lowfi.shape[1]).type(dtype)
+		# init.normal_(G_assim, 0.0, 0.1)
 		G_assim = Variable(G_assim, requires_grad=True)
-	else:
-		G_assim = torch.FloatTensor(G_assim)
 
 	for i in range(n_iters):
 		# y_out, info_dict = odeint(model, inits, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
@@ -2351,12 +2365,12 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 		# 	print('ODE solver has failed at y0=',y0)
 		# 	solver_failed = True
 		y_pred = torch.FloatTensor(y_out[-1,:,None])
-		y_meas = torch.FloatTensor(y_noisy_OBS[i,:,None])
+		y_meas = torch.FloatTensor(y_noisy_lowfi[i,:,None])
 
-		# foo_assim_OLD = np.matmul( (eta/(1+eta))*P_assim + Q_assim, y_pred) + (1/(1+eta))*np.matmul(y_meas,H_obs).T
+		# foo_assim_OLD = np.matmul( (eta/(1+eta))*P_assim + Q_assim, y_pred) + (1/(1+eta))*np.matmul(y_meas,H_obs_lowfi).T
 
 		#G: 3 x Meas
-		foo_assim = torch.mm( torch.eye(G_assim.shape[0]) - torch.mm(G_assim,H_obs), y_pred.detach()) + torch.mm(G_assim,y_meas)
+		foo_assim = torch.mm( torch.eye(G_assim.shape[0]) - torch.mm(G_assim,H_obs_lowfi), y_pred.detach()) + torch.mm(G_assim,y_meas)
 
 		inits = foo_assim.detach().numpy().squeeze()
 		y_assim[i,:] = inits
@@ -2366,8 +2380,8 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 		G_assim_history[i,:] = G_assim.detach().numpy().squeeze()
 		G_assim_history_running_mean[i,:] = np.mean(G_assim_history[:i,:], axis=0)
 		if learn_assim:
-			# loss = (torch.mm(H_obs,y_pred).squeeze() - y_meas.squeeze()).pow(2).sum()
-			loss = (foo_assim.squeeze() - torch.FloatTensor(y_clean[i,:]).detach().squeeze()).pow(2).sum()
+			# loss = (torch.mm(H_obs_lowfi,y_pred).squeeze() - y_meas.squeeze()).pow(2).sum()
+			loss = (torch.mm(H_obs_hifi,foo_assim).squeeze() - torch.FloatTensor(y_hifi[i,:]).detach().squeeze()).pow(2).sum()
 			loss.backward()
 			G_assim.data -= lr * G_assim.grad.data
 			G_assim.grad.data.zero_()
@@ -2434,7 +2448,7 @@ def run_3DVAR(y_clean, y_noisy, H_obs, eta, G_assim, delta_t,
 	# these give the mean squared error
 	pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
 	pw_pred_errors = np.linalg.norm(y_predictions - y_clean, axis=1, ord=2)**2
-	pw_pred_errors_OBS = np.linalg.norm(np.matmul(H_obs.numpy(),y_predictions.T).T - y_clean_OBS, axis=1, ord=2)**2
+	pw_pred_errors_OBS = np.linalg.norm(np.matmul(H_obs_lowfi.numpy(),y_predictions.T).T - y_clean_lowfi, axis=1, ord=2)**2
 
 
 	running_pred_errors = np.zeros(pw_pred_errors.shape)
