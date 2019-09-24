@@ -2303,7 +2303,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		model, model_params, lr, output_dir,
 		H_obs_lowfi=None, H_obs_hifi=None, noisy_hifi=False,
 		inits=None, plot_state_indices=None,
-		max_plot=None, learn_assim=False, eps=None, cheat=False):
+		max_plot=None, learn_assim=False, eps=None, cheat=False, h=0.0001, lr_G=0.0005):
 
 	dtype = torch.FloatTensor
 
@@ -2353,39 +2353,154 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		# init.normal_(G_assim, 0.0, 0.1)
 		G_assim = Variable(G_assim, requires_grad=True)
 
-	for i in range(n_iters):
-		# y_out, info_dict = odeint(model, inits, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
 
+	def f_mk(G, m_pred_now, meas_lowfi_now, H_obs_lowfi=H_obs_lowfi):
+		foo_assim = torch.mm( torch.eye(G.shape[0]) - torch.mm(G, H_obs_lowfi), m_pred_now.detach()) + torch.mm(G,meas_lowfi_now)
+		return foo_assim
+
+	def f_Lk_cheat(G, m_pred_now, meas_lowfi_now, meas_hifi_now, H_obs_hifi=H_obs_hifi):
+		mk = f_mk(G, m_pred_now, meas_lowfi_now)
+		Lk = ( torch.mm(H_obs_hifi, mk).squeeze() -  meas_hifi_now.squeeze() ).pow(2).sum()
+		return Lk
+
+	def f_Lk(G, m_assim_prev2, meas_prev1, meas_now, H=H_obs_lowfi):
+		sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=m_assim_prev2.T, method='RK45', t_eval=tspan)
+		m_pred_prev1 = torch.FloatTensor(sol.y.T[-1,:,None])
+		m_assim_prev1 = f_mk(G, m_pred_prev1, meas_prev1)
+
+		sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=m_assim_prev1.T, method='RK45', t_eval=tspan)
+		m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
+		Lk = ( torch.mm(H, m_pred_now) -  meas_now ).pow(2).sum()
+		return Lk
+
+	### BEGIN DEBUG SECTION ###
+	i = 0
+	meas_now = torch.FloatTensor(y_noisy_lowfi[i,:,None])
+
+	# make prediction using previous state estimate
+	# pdb.set_trace()
+	sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=inits.T, method='RK45', t_eval=tspan)
+	m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
+	y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
+
+	# Do the assimilation!
+	m_assim_now = f_mk(G_assim, m_pred_now, meas_now)
+
+	# compute loss
+	if learn_assim:
+		if cheat:
+			meas_hifi_now = torch.FloatTensor(y_hifi[i,:])
+			meas_lowfi_now = meas_now
+			loss = f_Lk_cheat(G_assim, m_pred_now, meas_lowfi_now, meas_hifi_now)
+			print(loss)
+			loss.backward()
+			print(G_assim.grad.data)
+			G_assim.grad.data.zero_()
+
+
+	### OLD VERSION ###
+	sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=inits.T, method='RK45', t_eval=tspan)
+	y_out = sol.y.T
+
+	y_pred = torch.FloatTensor(y_out[-1,:,None])
+	y_meas = torch.FloatTensor(y_noisy_lowfi[i,:,None])
+
+	#G: 3 x Meas
+	foo_assim = torch.mm( torch.eye(G_assim.shape[0]) - torch.mm(G_assim,H_obs_lowfi), y_pred.detach()) + torch.mm(G_assim,y_meas)
+
+	if learn_assim:
+		# loss = (torch.mm(H_obs_lowfi,y_pred).squeeze() - y_meas.squeeze()).pow(2).sum()
+		loss = (torch.mm(H_obs_hifi,foo_assim).squeeze() - torch.FloatTensor(y_hifi[i,:]).detach().squeeze()).pow(2).sum()
+		print(loss)
+		loss.backward()
+		print(G_assim.grad.data)
+		G_assim.grad.data.zero_()
+		pdb.set_trace()
+
+	### END DEBUG SECTION ###
+
+
+	### NEW code for updating G_assim
+	for i in range(n_iters):
+		# print(i)
+		meas_now = torch.FloatTensor(y_noisy_lowfi[i,:,None])
+
+		# make prediction using previous state estimate
 		# pdb.set_trace()
 		sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=inits.T, method='RK45', t_eval=tspan)
-		y_out = sol.y.T
+		m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
+		y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
 
-		# if info_dict['message'] != 'Integration successful.':
-		# 	# solver failed
-		# 	print('ODE solver has failed at y0=',y0)
-		# 	solver_failed = True
-		y_pred = torch.FloatTensor(y_out[-1,:,None])
-		y_meas = torch.FloatTensor(y_noisy_lowfi[i,:,None])
-
-		# foo_assim_OLD = np.matmul( (eta/(1+eta))*P_assim + Q_assim, y_pred) + (1/(1+eta))*np.matmul(y_meas,H_obs_lowfi).T
-
-		#G: 3 x Meas
-		foo_assim = torch.mm( torch.eye(G_assim.shape[0]) - torch.mm(G_assim,H_obs_lowfi), y_pred.detach()) + torch.mm(G_assim,y_meas)
-
-		inits = foo_assim.detach().numpy().squeeze()
-		y_assim[i,:] = inits
-		y_predictions[i,:] = y_pred.detach().numpy().squeeze()
-
-
+		# Do the assimilation!
+		m_assim_now = f_mk(G_assim, m_pred_now, meas_now)
 		G_assim_history[i,:] = G_assim.detach().numpy().squeeze()
 		G_assim_history_running_mean[i,:] = np.mean(G_assim_history[:i,:], axis=0)
+		inits = m_assim_now.detach().numpy().squeeze()
+		y_assim[i,:] = inits
+
+		# compute loss
 		if learn_assim:
-			# loss = (torch.mm(H_obs_lowfi,y_pred).squeeze() - y_meas.squeeze()).pow(2).sum()
-			loss = (torch.mm(H_obs_hifi,foo_assim).squeeze() - torch.FloatTensor(y_hifi[i,:]).detach().squeeze()).pow(2).sum()
-			loss.backward()
-			G_assim.data -= lr * G_assim.grad.data
-			G_assim.grad.data.zero_()
-	# print(G_assim)
+			if cheat:
+				meas_hifi_now = torch.FloatTensor(y_hifi[i,:])
+				meas_lowfi_now = meas_now
+				loss = f_Lk_cheat(G_assim, m_pred_now, meas_lowfi_now, meas_hifi_now)
+				loss.backward()
+				G_assim.data -= lr * G_assim.grad.data
+				G_assim.grad.data.zero_()
+			else:
+				if i>1:
+					# Gather historical data for propagation
+					m_assim_prev2 = y_assim[i-2,:] #basically \hat{m}_{i-2}
+					meas_prev1 = torch.FloatTensor(y_noisy_lowfi[i-1,:,None])
+
+					# sample a G-like matrix for approximating a random directional derivative
+					Q = np.random.randn(*G_assim.shape)
+					Q = torch.FloatTensor(Q/np.linalg.norm(Q,'fro'))
+					Gplus = G_assim + h*Q
+
+					# approximate directional derivative
+					LkG = f_Lk(G_assim, m_assim_prev2, meas_prev1, meas_now)
+					LkGplus = f_Lk(Gplus, m_assim_prev2, meas_prev1, meas_now)
+					dL = ( LkGplus - LkG )/h
+
+					# update G_assim by random approximate directional derivative
+					G_assim.data -= lr_G * dL
+
+
+	### OLD code for updating G_assim
+	# for i in range(n_iters):
+	# 	# y_out, info_dict = odeint(model, inits, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
+
+	# 	# pdb.set_trace()
+	# 	sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=inits.T, method='RK45', t_eval=tspan)
+	# 	y_out = sol.y.T
+
+	# 	# if info_dict['message'] != 'Integration successful.':
+	# 	# 	# solver failed
+	# 	# 	print('ODE solver has failed at y0=',y0)
+	# 	# 	solver_failed = True
+	# 	y_pred = torch.FloatTensor(y_out[-1,:,None])
+	# 	y_meas = torch.FloatTensor(y_noisy_lowfi[i,:,None])
+
+	# 	# foo_assim_OLD = np.matmul( (eta/(1+eta))*P_assim + Q_assim, y_pred) + (1/(1+eta))*np.matmul(y_meas,H_obs_lowfi).T
+
+	# 	#G: 3 x Meas
+	# 	foo_assim = torch.mm( torch.eye(G_assim.shape[0]) - torch.mm(G_assim,H_obs_lowfi), y_pred.detach()) + torch.mm(G_assim,y_meas)
+
+	# 	inits = foo_assim.detach().numpy().squeeze()
+	# 	y_assim[i,:] = inits
+	# 	y_predictions[i,:] = y_pred.detach().numpy().squeeze()
+
+
+	# 	G_assim_history[i,:] = G_assim.detach().numpy().squeeze()
+	# 	G_assim_history_running_mean[i,:] = np.mean(G_assim_history[:i,:], axis=0)
+	# 	if learn_assim:
+	# 		# loss = (torch.mm(H_obs_lowfi,y_pred).squeeze() - y_meas.squeeze()).pow(2).sum()
+	# 		loss = (torch.mm(H_obs_hifi,foo_assim).squeeze() - torch.FloatTensor(y_hifi[i,:]).detach().squeeze()).pow(2).sum()
+	# 		loss.backward()
+	# 		G_assim.data -= lr * G_assim.grad.data
+	# 		G_assim.grad.data.zero_()
+
 
 	## Done running 3DVAR, now summarize
 	if learn_assim:

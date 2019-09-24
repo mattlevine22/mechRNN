@@ -22,6 +22,11 @@ parser.add_argument('--noisy_hifi', type=str2bool, default=False, help='When che
 parser.add_argument('--cheat', type=str2bool, default=True, help='cheating means using unobserved data (aka applying H_obs_hifi). If False, H_obs_hifi is inactive.')
 FLAGS = parser.parse_args()
 
+
+if not FLAGS.cheat:
+	# if not cheating, then hifi and lowfi observations must be the same
+	FLAGS.H_obs_hifi = FLAGS.H_obs_lowfi
+
 def main():
 	np.random.seed()
 
