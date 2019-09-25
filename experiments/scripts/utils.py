@@ -2366,7 +2366,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 	def f_Lk(G, m_assim_prev2, meas_prev1, meas_now, H=H_obs_lowfi):
 		sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=m_assim_prev2.T, method='RK45', t_eval=tspan)
 		m_pred_prev1 = torch.FloatTensor(sol.y.T[-1,:,None])
-		m_assim_prev1 = f_mk(G, m_pred_prev1, meas_prev1)
+		m_assim_prev1 = f_mk(G, m_pred_prev1, meas_prev1).detach().numpy().squeeze()
 
 		sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=m_assim_prev1.T, method='RK45', t_eval=tspan)
 		m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
@@ -2375,7 +2375,6 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 
 	### NEW code for updating G_assim
 	for i in range(n_iters):
-		# print(i)
 		meas_now = torch.FloatTensor(y_noisy_lowfi[i,:,None])
 
 		# make prediction using previous state estimate
@@ -2417,7 +2416,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 					dL = ( LkGplus - LkG )/h
 
 					# update G_assim by random approximate directional derivative
-					G_assim.data -= lr_G * dL
+					G_assim.data -= lr_G * dL * Q
 
 
 	## Done running 3DVAR, now summarize
