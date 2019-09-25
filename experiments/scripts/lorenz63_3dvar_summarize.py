@@ -255,6 +255,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		ax1.set_ylabel('t_assim')
 
 		fig.suptitle(r'3DVAR Testing Performance for $\epsilon =$ {0}: Method Comparison'.format(my_eps))
+		pdb.set_trace()
 		fig.savefig(fname=output_dir+'/'+key_nm+'{0}_barChart_method_comparison'.format(my_eps))
 
 
