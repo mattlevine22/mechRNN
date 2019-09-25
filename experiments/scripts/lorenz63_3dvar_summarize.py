@@ -243,10 +243,9 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 				lrG = float(m.split('+')[2].strip('lrG'))
 				if h not in X:
 					X[h] = {}
-				X[h][lrG] = mse[method_nm][my_eps]['assim']['median']
-		pdb.set_trace()
+				X[h][lrG] = mse[m][my_eps]['assim']['median']
 		Y = np.array([[X[h][lrG] for lrG in sorted(X[h])] for h in sorted(X)])
-
+		pdb.set_trace()
 		fig, ax0 = plt.subplots(nrows=1, ncols=1)
 		ax0.imshow(Y)
 		fig.savefig(fname=output_dir+'/'+key_nm+'{0}_heatmap_method_comparison.png'.format(my_eps))
