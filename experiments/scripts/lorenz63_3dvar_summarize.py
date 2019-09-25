@@ -234,6 +234,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 
 
 	##### Compare methods
+	method_vec = mse.keys()
 	for my_eps in eps_vec:
 		X = {}
 		for m in method_vec:
