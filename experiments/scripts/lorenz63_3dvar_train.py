@@ -139,7 +139,7 @@ def main():
 				npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
 				G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
 				for n_test in range(y_clean_TEST.shape[0]):
-					run_output_dir_TEST = '{0}/BadModel_eps{1}_learnAssimilation_h{3}_lrG{4}/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test, h, lr_G)
+					run_output_dir_TEST = '{0}/BadModel_eps{1}_learnAssimilation_h{4}_lrG{5}/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test, h, lr_G)
 					run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], eta, G_assim_LEARNED, delta_t,
 						sim_model, assimilation_model_params, lr,
 						run_output_dir_TEST,
