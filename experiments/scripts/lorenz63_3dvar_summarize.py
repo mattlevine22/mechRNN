@@ -239,8 +239,8 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		X = {}
 		for m in method_vec:
 			if '+' in m:
-				h = float(m.split('+')[1])
-				lrG = float(m.split('+')[2])
+				h = float(m.split('+')[1].strip('h'))
+				lrG = float(m.split('+')[2].strip('lrG'))
 				if h not in X:
 					X[h] = {}
 				X[h][lrG] = mse[method_nm][my_eps]['assim']['median']
