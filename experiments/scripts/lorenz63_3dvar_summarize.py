@@ -237,13 +237,13 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 	method_vec = mse.keys()
 	for my_eps in eps_vec:
 		fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2)
-
+		pdb.set_trace()
 		median_vec = [mse[method_nm][my_eps]['assim']['median'] for method_nm in method_vec]
 		std_vec = [mse[method_nm][my_eps]['assim']['std'] for method_nm in method_vec]
 		ax0.bar(np.arange(len(method_vec)), median_vec, yerr=std_vec, align='center')
-		ax0.set_xticks(np.arange(len(method_vec)))
-		ax0.set_xticklabels(method_vec)
-		ax0.xticks(rotation=45)
+		ax0.set_xticks(np.arange(len(method_vec)), method_vec, rotation=45)
+		# ax0.set_xticklabels(method_vec)
+		# ax0.xticks(rotation=45)
 		ax0.set_title('Assimilation Error')
 		ax0.set_ylabel('MSE')
 
