@@ -138,7 +138,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 	for d in my_dirs:
 
 		# set up data structures
-		method_nm = d.split('_')[-1].strip('/')
+		method_nm = d.split('_')[-1].strip('/').split('+')[0]
 		eps_val = float([x for x in d.split('_') if key_nm in x][0].strip(key_nm))
 		eps_set.add(eps_val)
 		if method_nm not in t_assim:
@@ -233,19 +233,19 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 	fig.savefig(fname=output_dir+'/'+key_nm+'_method_comparison_log')
 
 
-	##### Compare methods
+	##### Compare methods ######
 	method_vec = mse.keys()
 	for my_eps in eps_vec:
 		X = {}
 		for m in method_vec:
 			if '+' in m:
-				h = float(split('+')[1])
-				lrG = float(split('+')[2])
+				h = float(m.split('+')[1])
+				lrG = float(m.split('+')[2])
 				if h not in X:
 					X[h] = {}
 				X[h][lrG] = mse[method_nm][my_eps]['assim']['median']
 		pdb.set_trace()
-		Y = np.array([[X[h][lrG] for lrG in sorted(books[h])] for h in sorted(X)])
+		Y = np.array([[X[h][lrG] for lrG in sorted(X[h])] for h in sorted(X)])
 
 		fig, ax0 = plt.subplots(nrows=1, ncols=1)
 		ax0.imshow(Y)
