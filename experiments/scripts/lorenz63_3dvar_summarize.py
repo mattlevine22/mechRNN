@@ -243,6 +243,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		ax0.bar(np.arange(len(method_vec)), median_vec, yerr=std_vec, align='center')
 		ax0.set_xticks(np.arange(len(method_vec)))
 		ax0.set_xticklabels(method_vec)
+		ax0.xticks(rotation=45)
 		ax0.set_title('Assimilation Error')
 		ax0.set_ylabel('MSE')
 
@@ -251,12 +252,12 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		ax1.bar(np.arange(len(method_vec)), median_vec, yerr=std_vec, align='center')
 		ax1.set_xticks(np.arange(len(method_vec)))
 		ax1.set_xticklabels(method_vec)
+		ax1.xticks(rotation=45)
 		ax1.set_title('Assimilation Time')
 		ax1.set_ylabel('t_assim')
 
 		fig.suptitle(r'3DVAR Testing Performance for $\epsilon =$ {0}: Method Comparison'.format(my_eps))
-		pdb.set_trace()
-		fig.savefig(fname=output_dir+'/'+key_nm+'{0}_barChart_method_comparison'.format(my_eps))
+		fig.savefig(fname=output_dir+'/'+key_nm+'{0}_barChart_method_comparison.png'.format(my_eps))
 
 
 if __name__ == '__main__':
