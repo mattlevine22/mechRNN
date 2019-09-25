@@ -233,6 +233,30 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 	fig.savefig(fname=output_dir+'/'+key_nm+'_method_comparison_log')
 
 
+	### Compare eps=0 case
+	for my_eps in eps_vec:
+		fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2)
+
+		median_vec = [mse[method_nm][my_eps]['assim']['median'] for method_nm in method_vec]
+		std_vec = [mse[method_nm][my_eps]['assim']['std'] for method_nm in method_vec]
+		ax0.bar(np.arange(len(method_vec)), median_vec, yerr=std_vec, align='center')
+		ax0.set_xticks(np.arange(len(method_vec)))
+		ax0.set_xticklabels(method_vec)
+		ax0.set_title('Assimilation Error')
+		ax0.set_ylabel('MSE')
+
+		median_vec = [t_assim[method_nm][my_eps]['assim']['median'] for method_nm in method_vec]
+		std_vec = [t_assim[method_nm][my_eps]['assim']['std'] for method_nm in method_vec]
+		ax1.bar(np.arange(len(method_vec)), median_vec, yerr=std_vec, align='center')
+		ax1.set_xticks(np.arange(len(method_vec)))
+		ax1.set_xticklabels(method_vec)
+		ax1.set_title('Assimilation Time')
+		ax1.set_ylabel('t_assim')
+
+		fig.suptitle(r'3DVAR Testing Performance for $\epsilon =$ {0}: Method Comparison'.format(my_eps))
+		fig.savefig(fname=output_dir+'/'+key_nm+'{0}_barChart_method_comparison'.format(my_eps))
+
+
 if __name__ == '__main__':
 	general_summary(my_dirs=MY_DIRS, output_dir=FLAGS.output_dir, n_train_trajectories=FLAGS.n_train_trajectories, n_test_trajectories=FLAGS.n_test_trajectories)
 	epsilon_summary(my_dirs=MY_DIRS, output_dir=FLAGS.output_dir, n_train_trajectories=FLAGS.n_train_trajectories, n_test_trajectories=FLAGS.n_test_trajectories, key_nm='eps')
