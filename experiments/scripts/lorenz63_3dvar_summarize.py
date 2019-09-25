@@ -233,31 +233,50 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 	fig.savefig(fname=output_dir+'/'+key_nm+'_method_comparison_log')
 
 
-	### Compare eps=0 case
-	method_vec = mse.keys()
+	##### Compare methods
 	for my_eps in eps_vec:
-		fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2)
+		X = {}
+		for m in method_vec:
+			if '+' in m:
+				h = float(split('+')[1])
+				lrG = float(split('+')[2])
+				if h not in X:
+					X[h] = {}
+				X[h][lrG] = mse[method_nm][my_eps]['assim']['median']
 		pdb.set_trace()
-		median_vec = [mse[method_nm][my_eps]['assim']['median'] for method_nm in method_vec]
-		std_vec = [mse[method_nm][my_eps]['assim']['std'] for method_nm in method_vec]
-		ax0.bar(np.arange(len(method_vec)), median_vec, yerr=std_vec, align='center')
-		ax0.set_xticks(np.arange(len(method_vec)), method_vec, rotation=45)
-		# ax0.set_xticklabels(method_vec)
-		# ax0.xticks(rotation=45)
-		ax0.set_title('Assimilation Error')
-		ax0.set_ylabel('MSE')
+		Y = np.array([[X[h][lrG] for lrG in sorted(books[h])] for h in sorted(X)])
 
-		median_vec = [t_assim[method_nm][my_eps]['assim']['median'] for method_nm in method_vec]
-		std_vec = [t_assim[method_nm][my_eps]['assim']['std'] for method_nm in method_vec]
-		ax1.bar(np.arange(len(method_vec)), median_vec, yerr=std_vec, align='center')
-		ax1.set_xticks(np.arange(len(method_vec)))
-		ax1.set_xticklabels(method_vec)
-		ax1.xticks(rotation=45)
-		ax1.set_title('Assimilation Time')
-		ax1.set_ylabel('t_assim')
+		fig, ax0 = plt.subplots(nrows=1, ncols=1)
+		ax0.imshow(Y)
+		fig.savefig(fname=output_dir+'/'+key_nm+'{0}_heatmap_method_comparison.png'.format(my_eps))
 
-		fig.suptitle(r'3DVAR Testing Performance for $\epsilon =$ {0}: Method Comparison'.format(my_eps))
-		fig.savefig(fname=output_dir+'/'+key_nm+'{0}_barChart_method_comparison.png'.format(my_eps))
+
+
+	### Compare eps=0 case
+	# method_vec = mse.keys()
+	# for my_eps in eps_vec:
+	# 	fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2)
+	# 	pdb.set_trace()
+	# 	median_vec = [mse[method_nm][my_eps]['assim']['median'] for method_nm in method_vec]
+	# 	std_vec = [mse[method_nm][my_eps]['assim']['std'] for method_nm in method_vec]
+	# 	ax0.bar(np.arange(len(method_vec)), median_vec, yerr=std_vec, align='center')
+	# 	ax0.set_xticks(np.arange(len(method_vec)))
+	# 	ax0.set_xticklabels(method_vec)
+	# 	ax0.tick_params(axis='x', labelrotation=45)
+	# 	ax0.set_title('Assimilation Error')
+	# 	ax0.set_ylabel('MSE')
+
+	# 	median_vec = [t_assim[method_nm][my_eps]['assim']['median'] for method_nm in method_vec]
+	# 	std_vec = [t_assim[method_nm][my_eps]['assim']['std'] for method_nm in method_vec]
+	# 	ax1.bar(np.arange(len(method_vec)), median_vec, yerr=std_vec, align='center')
+	# 	ax1.set_xticks(np.arange(len(method_vec)))
+	# 	ax1.set_xticklabels(method_vec)
+	# 	ax1.xticks(rotation=45)
+	# 	ax1.set_title('Assimilation Time')
+	# 	ax1.set_ylabel('t_assim')
+
+	# 	fig.suptitle(r'3DVAR Testing Performance for $\epsilon =$ {0}: Method Comparison'.format(my_eps))
+	# 	fig.savefig(fname=output_dir+'/'+key_nm+'{0}_barChart_method_comparison.png'.format(my_eps))
 
 
 if __name__ == '__main__':
