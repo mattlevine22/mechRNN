@@ -138,7 +138,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 	for d in my_dirs:
 
 		# set up data structures
-		method_nm = d.split('_')[-1].strip('/').split('+')[0]
+		method_nm = d.split('_')[-1].strip('/')#.split('+')[0]
 		eps_val = float([x for x in d.split('_') if key_nm in x][0].strip(key_nm))
 		eps_set.add(eps_val)
 		if method_nm not in t_assim:
