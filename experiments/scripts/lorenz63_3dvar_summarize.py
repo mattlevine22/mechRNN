@@ -234,6 +234,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 
 
 	### Compare eps=0 case
+	method_vec = mse.keys()
 	for my_eps in eps_vec:
 		fig, (ax0, ax1) = plt.subplots(nrows=1, ncols=2)
 
