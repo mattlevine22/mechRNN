@@ -2424,7 +2424,6 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 
 	## Done running 3DVAR, now summarize
 	if learn_assim:
-		pdb.set_trace()
 		fig, (ax0,ax1,ax2) = plt.subplots(3,1)
 
 		# plot running average of G_assim
