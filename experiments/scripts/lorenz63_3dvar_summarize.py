@@ -251,7 +251,8 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		Ymse = np.array([[Xmse[h][lrG] for lrG in sorted(Xmse[h])] for h in sorted(Xmse)])
 		Yt = np.array([[Xt[h][lrG] for lrG in sorted(Xt[h])] for h in sorted(Xt)])
 
-		fig, (ax0,ax1) = plt.subplots(nrows=1, ncols=2)
+		# fig, (ax0,ax1) = plt.subplots(nrows=1, ncols=2)
+		fig, (ax0) = plt.subplots(nrows=1, ncols=1)
 
 		im = ax0.imshow(Ymse, interpolation='none')
 		ax0.set_xlabel('h')
@@ -260,21 +261,20 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		ax0.set_ylabel('lrG')
 		ax0.set_yticks(np.arange(Ymse.shape[1]))
 		ax0.set_yticklabels(sorted(Xmse[Xmse.keys()[0]]))
-		ax0.set_title('Assimilation Error (MSE): Standard = {0} \pm {1}'.format(mse['standardAssimilation'][my_eps]['assim']['median'], mse['standardAssimilation'][my_eps]['assim']['std'] ))
+		ax0.set_title(r'Assimilation Error (MSE): Standard = {0} \pm {1}'.format(mse['standardAssimilation'][my_eps]['assim']['median'], mse['standardAssimilation'][my_eps]['assim']['std'] ))
 		fig.colorbar(im, ax=ax0, extend='both')
 
-		im = ax1.imshow(Yt, interpolation='none')
-		ax1.set_xlabel('h')
-		ax1.set_xticks(np.arange(Yt.shape[0]))
-		ax1.set_xticklabels(sorted(Xt))
-		ax1.set_ylabel('lrG')
-		ax1.set_yticks(np.arange(Yt.shape[1]))
-		ax1.set_yticklabels(sorted(Xt[Xt.keys()[0]]))
-		ax1.set_title('Assimilation Time: Standard = {0} \pm {1}'.format(t_assim['standardAssimilation'][my_eps]['assim']['median'], t_assim['standardAssimilation'][my_eps]['assim']['std'] ))
-		fig.colorbar(im, ax=ax1, extend='both')
+		# im = ax1.imshow(Yt, interpolation='none')
+		# ax1.set_xlabel('h')
+		# ax1.set_xticks(np.arange(Yt.shape[0]))
+		# ax1.set_xticklabels(sorted(Xt))
+		# ax1.set_ylabel('lrG')
+		# ax1.set_yticks(np.arange(Yt.shape[1]))
+		# ax1.set_yticklabels(sorted(Xt[Xt.keys()[0]]))
+		# ax1.set_title(r'Assimilation Time: Standard = {0} \pm {1}'.format(t_assim['standardAssimilation'][my_eps]['assim']['median'], t_assim['standardAssimilation'][my_eps]['assim']['std'] ))
+		# fig.colorbar(im, ax=ax1, extend='both')
 
 		fig.savefig(fname=output_dir+'/'+key_nm+'{0}_heatmap_method_comparison.png'.format(my_eps))
-
 
 	### Compare eps=0 case
 	# method_vec = mse.keys()
