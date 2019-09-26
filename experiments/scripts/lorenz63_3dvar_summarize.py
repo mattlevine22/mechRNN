@@ -27,16 +27,21 @@ def general_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		for ntest in range(n_test_trajectories):
 			for ntrain in range(n_train_trajectories):
 				fname = os.path.join(d, 'Train{0}'.format(ntrain), 'Test{0}'.format(ntest), 'output.npz')
-				npzfile = np.load(fname)
-				delta_t = npzfile['model_params'].item().get('delta_t')
+				try:
+					npzfile = np.load(fname)
+					delta_t = npzfile['model_params'].item().get('delta_t')
 
-				foo_t_index_assim = np.argmax(npzfile['pw_assim_errors'] < npzfile['eps'])
-				foo_t_index_pred = np.argmax(npzfile['pw_pred_errors'] < npzfile['eps'])
-				t_assim[d]['assim']['all'] += (foo_t_index_assim*delta_t,)
-				t_assim[d]['pred']['all'] += (foo_t_index_pred*delta_t,)
-				mse[d]['assim']['all'] += (np.mean(npzfile['pw_assim_errors'][foo_t_index_assim:]),)
-				mse[d]['pred']['all'] += (np.mean(npzfile['pw_pred_errors'][foo_t_index_pred:]),)
-
+					foo_t_index_assim = np.argmax(npzfile['pw_assim_errors'] < npzfile['eps'])
+					foo_t_index_pred = np.argmax(npzfile['pw_pred_errors'] < npzfile['eps'])
+					t_assim[d]['assim']['all'] += (foo_t_index_assim*delta_t,)
+					t_assim[d]['pred']['all'] += (foo_t_index_pred*delta_t,)
+					mse[d]['assim']['all'] += (np.mean(npzfile['pw_assim_errors'][foo_t_index_assim:]),)
+					mse[d]['pred']['all'] += (np.mean(npzfile['pw_pred_errors'][foo_t_index_pred:]),)
+				except:
+					# Train/Test combination not available
+					pass
+		if d not in t_assim:
+			continue
 		t_assim[d]['assim']['mean'] = np.mean(t_assim[d]['assim']['all'])
 		t_assim[d]['assim']['median'] = np.median(t_assim[d]['assim']['all'])
 		t_assim[d]['assim']['std'] = np.std(t_assim[d]['assim']['all'])
@@ -52,24 +57,29 @@ def general_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		mse[d]['pred']['std'] = np.std(mse[d]['pred']['all'])
 
 		## plot summaries of the learning process across training trajectories
+		train_vec = []
 		G_assim_history = None
 		G_assim_history_running_mean = None
 		for n in range(n_train_trajectories):
 			fname = os.path.join(d, 'Train{0}'.format(n), 'output.npz')
-			npzfile = np.load(fname)
-			G = npzfile['G_assim_history']
-			if G_assim_history is None:
-				G_assim_history = np.zeros((n_train_trajectories,G.shape[0],G.shape[1]))
-				G_assim_history_running_mean = np.zeros((n_train_trajectories,G.shape[0],G.shape[1]))
-			G_assim_history[n,:,:] = npzfile['G_assim_history']
-			G_assim_history_running_mean[n,:,:] = npzfile['G_assim_history_running_mean']
-
+			try:
+				npzfile = np.load(fname)
+				G = npzfile['G_assim_history']
+				if G_assim_history is None:
+					G_assim_history = np.zeros((n_train_trajectories,G.shape[0],G.shape[1]))
+					G_assim_history_running_mean = np.zeros((n_train_trajectories,G.shape[0],G.shape[1]))
+				G_assim_history[n,:,:] = npzfile['G_assim_history']
+				G_assim_history_running_mean[n,:,:] = npzfile['G_assim_history_running_mean']
+				train_vec += [n]
+			except:
+				# Train not available
+				pass
 		delta_t = npzfile['model_params'].item().get('delta_t')
 		t_plot = np.arange(0,round(G.shape[0]*delta_t,8),delta_t)
 
 		fig, axlist = plt.subplots(nrows=G_assim_history.shape[2], ncols=1, sharex=True)
 		for k in range(len(axlist)):
-			for n in range(n_train_trajectories):
+			for n in train_vec:
 				axlist[k].plot(t_plot, G_assim_history[n,:,k].squeeze())
 			axlist[k].set_ylabel('G_{0}'.format(k))
 			# axlist[k].set_yscale('log')
@@ -80,7 +90,7 @@ def general_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 
 		fig, axlist = plt.subplots(nrows=G_assim_history_running_mean.shape[2], ncols=1, sharex=True)
 		for k in range(len(axlist)):
-			for n in range(n_train_trajectories):
+			for n in train_vec:
 				axlist[k].plot(t_plot, G_assim_history_running_mean[n,:,k].squeeze())
 			axlist[k].set_ylabel('G_{0}'.format(k))
 			# axlist[k].set_yscale('log')
@@ -93,7 +103,7 @@ def general_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		## plot summaries of Testing performance for a single method
 		fig, (ax0, ax1) = plt.subplots(nrows=2, ncols=1, sharex=True)
 		for ntest in range(n_test_trajectories):
-			for ntrain in range(n_train_trajectories):
+			for ntrain in train_vec:
 				fname = os.path.join(d, 'Train{0}'.format(ntrain), 'Test{0}'.format(ntest), 'output.npz')
 				npzfile = np.load(fname)
 				eps = 1
@@ -152,19 +162,26 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		for ntest in range(n_test_trajectories):
 			for ntrain in range(n_train_trajectories):
 				fname = os.path.join(d, 'Train{0}'.format(ntrain), 'Test{0}'.format(ntest), 'output.npz')
-				npzfile = np.load(fname)
-				delta_t = npzfile['model_params'].item().get('delta_t')
+				try:
+					npzfile = np.load(fname)
+					delta_t = npzfile['model_params'].item().get('delta_t')
 
-				foo_t_index_assim = np.argmax(npzfile['pw_assim_errors'] < npzfile['eps'])
-				foo_t_index_pred = np.argmax(npzfile['pw_pred_errors'] < npzfile['eps'])
-				if foo_t_index_assim==0:
-					foo_t_index_assim = np.Inf
-				if foo_t_index_pred==0:
-					foo_t_index_pred = np.Inf
-				t_assim[method_nm][eps_val]['assim']['all'] += (foo_t_index_assim*delta_t,)
-				t_assim[method_nm][eps_val]['pred']['all'] += (foo_t_index_pred*delta_t,)
-				mse[method_nm][eps_val]['assim']['all'] += (np.mean(npzfile['pw_assim_errors']),)
-				mse[method_nm][eps_val]['pred']['all'] += (np.mean(npzfile['pw_pred_errors']),)
+					foo_t_index_assim = np.argmax(npzfile['pw_assim_errors'] < npzfile['eps'])
+					foo_t_index_pred = np.argmax(npzfile['pw_pred_errors'] < npzfile['eps'])
+					if foo_t_index_assim==0:
+						foo_t_index_assim = np.Inf
+					if foo_t_index_pred==0:
+						foo_t_index_pred = np.Inf
+					t_assim[method_nm][eps_val]['assim']['all'] += (foo_t_index_assim*delta_t,)
+					t_assim[method_nm][eps_val]['pred']['all'] += (foo_t_index_pred*delta_t,)
+					mse[method_nm][eps_val]['assim']['all'] += (np.mean(npzfile['pw_assim_errors']),)
+					mse[method_nm][eps_val]['pred']['all'] += (np.mean(npzfile['pw_pred_errors']),)
+				except:
+					# Train/Test does not exist
+					pass
+
+		if method_nm not in t_assim:
+			continue
 
 		t_assim[method_nm][eps_val]['assim']['mean'] = np.mean(t_assim[method_nm][eps_val]['assim']['all'])
 		t_assim[method_nm][eps_val]['assim']['median'] = np.median(t_assim[method_nm][eps_val]['assim']['all'])
