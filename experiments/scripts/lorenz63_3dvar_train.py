@@ -108,21 +108,22 @@ def main():
 		#### 3D VAR with eps-bad model + standard assimilation matrix
 		# Train
 		run_output_dir_TRAIN = '{0}/BadModel_eps{1}_standardAssimilation/Train{2}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index)
-		run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_standard, delta_t,
-			sim_model, assimilation_model_params, lr,
-			run_output_dir_TRAIN,
-			H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-			learn_assim=False, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat)
-		# Test
-		npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
-		# G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
-		for n_test in range(y_clean_TEST.shape[0]):
-			run_output_dir_TEST = '{0}/BadModel_eps{1}_standardAssimilation/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test)
-			run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], eta, G_assim_standard, delta_t,
+		if not os.path.exists(run_output_dir_TRAIN):
+			run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_standard, delta_t,
 				sim_model, assimilation_model_params, lr,
-				run_output_dir_TEST,
+				run_output_dir_TRAIN,
 				H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-				learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat)
+				learn_assim=False, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat)
+			# Test
+			npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
+			# G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
+			for n_test in range(y_clean_TEST.shape[0]):
+				run_output_dir_TEST = '{0}/BadModel_eps{1}_standardAssimilation/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test)
+				run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], eta, G_assim_standard, delta_t,
+					sim_model, assimilation_model_params, lr,
+					run_output_dir_TEST,
+					H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+					learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat)
 
 		#### 3D VAR with eps-bad model + learned assimilation matrix
 		h_list = [1e-6, 1e-4, 1e-2]
