@@ -125,8 +125,8 @@ def main():
 				learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat)
 
 		#### 3D VAR with eps-bad model + learned assimilation matrix
-		for h in [1e-6, 1e-5, 1e-4]:
-			for lr_G in [5e-6, 5e-5, 5e-4]:
+		for h in [1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2]:
+			for lr_G in [1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2]:
 				# Train
 				run_output_dir_TRAIN = '{0}/BadModel_eps{1}_learnAssimilation+h{3}+lrG{4}/Train{2}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, h, lr_G)
 				run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_init, delta_t,
