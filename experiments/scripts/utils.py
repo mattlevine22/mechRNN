@@ -2437,18 +2437,17 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 
 		ax0.legend()
 		ax1.legend()
+		ax0.set_xticklabels([])
+		ax1.set_xticklabels([])
 
 		ax0.set_title('3DVAR Assimilation Matrix Convergence (Running Mean)')
 		ax1.set_title('3DVAR Assimilation Matrix Sequence')
-		ax2.set_title('3DVAR Assimilation Matrix Loss Sequence')
+		ax2.set_title('Loss Sequence')
 
+
+		ax2.set_yscale('log')
 		fig.savefig(fname=output_dir+'/3DVAR_assimilation_matrix_learning_convergence')
 
-		# ax0.set_yscale('log')
-		# ax1.set_yscale('log')
-		# ax2.set_yscale('log')
-
-		# fig.savefig(fname=output_dir+'/3DVAR_assimilation_matrix_learning_convergence_log')
 		plt.close(fig)
 
 
