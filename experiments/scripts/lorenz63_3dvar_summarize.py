@@ -242,7 +242,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 			if '+' in m:
 				h = float(m.split('+')[1].strip('h'))
 				lrG = float(m.split('+')[2].strip('lrG'))
-				if h not in X:
+				if h not in Xmse:
 					Xmse[h] = {}
 					Xt[h] = {}
 				Xmse[h][lrG] = mse[m][my_eps]['assim']['median']
