@@ -105,15 +105,18 @@ def general_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		for ntest in range(n_test_trajectories):
 			for ntrain in train_vec:
 				fname = os.path.join(d, 'Train{0}'.format(ntrain), 'Test{0}'.format(ntest), 'output.npz')
-				npzfile = np.load(fname)
-				eps = 1
-				# eps = npzfile['eps']
-				t_plot = np.arange(0,round(npzfile['pw_assim_errors'].shape[0]*delta_t,8),delta_t)
-				if npzfile['pw_pred_errors'][0] < 10:
-					print('ntest:',ntest, 'ntrain:', ntrain)
-				ax0.plot(t_plot, npzfile['pw_pred_errors'], color='blue')
-				ax1.plot(t_plot, npzfile['pw_assim_errors'], color='blue')
-
+				try:
+					npzfile = np.load(fname)
+					eps = 1
+					# eps = npzfile['eps']
+					t_plot = np.arange(0,round(npzfile['pw_assim_errors'].shape[0]*delta_t,8),delta_t)
+					if npzfile['pw_pred_errors'][0] < 10:
+						print('ntest:',ntest, 'ntrain:', ntrain)
+					ax0.plot(t_plot, npzfile['pw_pred_errors'], color='blue')
+					ax1.plot(t_plot, npzfile['pw_assim_errors'], color='blue')
+				except:
+					# Train/Test combo not available yet
+					pass
 		if eps:
 			ax0.plot(t_plot, [eps for _ in range(len(t_plot))], color = 'black', linestyle='--', label = r'$\epsilon$')
 			ax1.plot(t_plot, [eps for _ in range(len(t_plot))], color = 'black', linestyle='--', label = r'$\epsilon$')
