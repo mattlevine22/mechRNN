@@ -275,7 +275,9 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		# fig, (ax0,ax1) = plt.subplots(nrows=1, ncols=2)
 		fig, (ax0) = plt.subplots(nrows=1, ncols=1)
 
-		im = ax0.imshow(Ymse, interpolation='none')
+		pdb.set_trace()
+		vmin = np.min(np.min(Ymse),mse['standardAssimilation'][my_eps]['assim']['median'])
+		im = ax0.imshow(Ymse, interpolation='none', vmin=vmin)
 		ax0.set_ylabel('h')
 		ax0.set_yticks(np.arange(Ymse.shape[0]))
 		ax0.set_yticklabels(sorted(Xmse))
