@@ -231,6 +231,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 
 	fig.suptitle('3DVAR Testing Performance')
 	fig.savefig(fname=output_dir+'/'+key_nm+'_method_comparison_log')
+	plt.close(fig)
 
 
 	##### Compare methods ######
@@ -274,6 +275,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		# fig.colorbar(im, ax=ax1, extend='both')
 
 		fig.savefig(fname=output_dir+'/'+key_nm+'{0}_heatmap_method_comparison.png'.format(my_eps))
+		plt.close(fig)
 
 	### Compare eps=0 case
 	# method_vec = mse.keys()
