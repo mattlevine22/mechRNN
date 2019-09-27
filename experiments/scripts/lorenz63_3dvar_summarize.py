@@ -64,6 +64,7 @@ def general_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 			fname = os.path.join(d, 'Train{0}'.format(n), 'output.npz')
 			try:
 				npzfile = np.load(fname)
+				delta_t = npzfile['model_params'].item().get('delta_t')
 				G = npzfile['G_assim_history']
 				if G_assim_history is None:
 					G_assim_history = np.zeros((n_train_trajectories,G.shape[0],G.shape[1]))
@@ -74,7 +75,6 @@ def general_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 			except:
 				# Train not available
 				pass
-		delta_t = npzfile['model_params'].item().get('delta_t')
 		t_plot = np.arange(0,round(G.shape[0]*delta_t,8),delta_t)
 
 		fig, axlist = plt.subplots(nrows=G_assim_history.shape[2], ncols=1, sharex=True)
