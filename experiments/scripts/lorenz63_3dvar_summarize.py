@@ -76,6 +76,9 @@ def general_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 				# Train not available
 				pass
 
+		if len(train_vec)==0:
+			continue
+
 		t_plot = np.arange(0,round(G.shape[0]*delta_t,8),delta_t)
 
 		fig, axlist = plt.subplots(nrows=G_assim_history.shape[2], ncols=1, sharex=True)
