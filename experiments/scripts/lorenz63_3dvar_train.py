@@ -18,6 +18,7 @@ parser.add_argument('--testing_data_filename', type=str, default='training_data'
 parser.add_argument('--train_input_index', type=int, default=0, help='training trajectory index')
 parser.add_argument('--H_obs_lowfi', type=str2array, default=np.array([[1,0,0]]), help='low-fidelity observation operator')
 parser.add_argument('--H_obs_hifi', type=str2array, default=np.array([[1,0,0],[0,1,0],[0,0,1]]), help='hi-fidelity observation operator')
+parser.add_argument('--G_init_sd', type=float, default=0.1, help='standard deviation for random initialization of assimilation matrix')
 parser.add_argument('--noisy_hifi', type=str2bool, default=False, help='When cheating, noisy_hifi optionally adds measurement noise to the hi-fi observations provided by H_obs_hifi.')
 parser.add_argument('--cheat', type=str2bool, default=True, help='cheating means using unobserved data (aka applying H_obs_hifi). If False, H_obs_hifi is inactive.')
 FLAGS = parser.parse_args()
@@ -60,7 +61,7 @@ def main():
 	if os.path.exists(G_assim_init_fname):
 		G_assim_init = np.load(G_assim_init_fname)
 	else:
-		G_assim_init = np.random.multivariate_normal(mean=[0,0,0], cov=[[0.01, 0, 0], [0, 0.01, 0], [0, 0, 0.01]]).T[:,None]
+		G_assim_init = np.random.multivariate_normal(mean=[0,0,0], cov=(FLAGS.G_init_sd**2)*np.eye(3)).T[:,None]
 		## Store G_assim_init in main directory so that it is the same random initial conditions across all runs of the same TrainX:
 		np.save(G_assim_init_fname, G_assim_init)
 
