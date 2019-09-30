@@ -56,11 +56,18 @@ def main():
 	G_assim_standard = np.array([[1,0,0]]).T/(1+eta)
 	H_obs_lowfi = FLAGS.H_obs_lowfi
 	H_obs_hifi = FLAGS.H_obs_hifi
-	G_assim_init = np.random.multivariate_normal(mean=[0,0,0], cov=[[0.01, 0, 0], [0, 0.01, 0], [0, 0, 0.01]]).T[:,None]
+	G_assim_init_fname = '{0}/G_assim_init_Train{1}.npy'.format(FLAGS.output_dir, FLAGS.train_input_index)
+	if os.path.exists(G_assim_init_fname):
+		G_assim_init = np.load(G_assim_init_fname)
+	else:
+		G_assim_init = np.random.multivariate_normal(mean=[0,0,0], cov=[[0.01, 0, 0], [0, 0.01, 0], [0, 0, 0.01]]).T[:,None]
+		## Store G_assim_init in main directory so that it is the same random initial conditions across all runs of the same TrainX:
+		np.save(G_assim_init_fname, G_assim_init)
 
 	(a,b,c) = [10, 28, 8/3]
 
 	assimilation_model_params = {'state_names': ['x','y','z'], 'state_init':random_state_init_TRAIN, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'mxstep':0}
+
 
 	# #### 3DVAR with perfect model
 
