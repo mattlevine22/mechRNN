@@ -2338,6 +2338,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 	y_predictions = np.zeros(y_clean.shape)
 
 	loss_history = np.zeros(n_iters)
+	dL_history = np.zeros(n_iters)
 	G_assim_history = np.zeros((y_clean.shape[0], G_assim.shape[0]))
 	G_assim_history_running_mean = np.zeros((y_clean.shape[0], G_assim.shape[0]))
 
@@ -2420,11 +2421,11 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 					# update G_assim by random approximate directional derivative
 					G_assim.data -= lr_G * dL * Q
 					loss_history[i] = LkG
-
+					dL_history[i] = dL
 
 	## Done running 3DVAR, now summarize
 	if learn_assim:
-		fig, (ax0,ax1,ax2) = plt.subplots(3,1)
+		fig, (ax0,ax1,ax2,ax3) = plt.subplots(4,1)
 
 		# plot running average of G_assim
 		for kk in range(len(plot_state_indices)):
@@ -2432,7 +2433,8 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 			ax0.plot(t_plot, G_assim_history_running_mean[:,kk],label='G_{0}'.format(kk))
 			ax1.plot(t_plot, G_assim_history[:,kk],label='G_{0}'.format(kk))
 		ax2.plot(t_plot, loss_history)
-		ax2.set_xlabel('time')
+		ax3.plot(t_plot, dL_history)
+		ax3.set_xlabel('time')
 
 		ax0.legend()
 		ax1.legend()
@@ -2442,6 +2444,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		ax0.set_title('3DVAR Assimilation Matrix Convergence (Running Mean)')
 		ax1.set_title('3DVAR Assimilation Matrix Sequence')
 		ax2.set_title('Loss Sequence')
+		ax3.set_ylabel('dL')
 
 
 		ax2.set_yscale('log')
@@ -2522,6 +2525,6 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 
 	np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean, y_assim=y_assim, y_predictions=y_predictions,
 		pw_assim_errors=pw_assim_errors, pw_pred_errors=pw_pred_errors, pw_pred_errors_OBS=pw_pred_errors_OBS,
-		model_params=model_params, eps=eps, loss_history=loss_history, h=h, lr_G=lr_G)
+		model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G)
 
 	return G_assim
