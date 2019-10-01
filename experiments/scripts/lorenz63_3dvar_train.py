@@ -69,7 +69,7 @@ def main():
 
 	assimilation_model_params = {'state_names': ['x','y','z'], 'state_init':random_state_init_TRAIN, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'mxstep':0}
 
-	G_assim_magical = np.array([0.08603118, 0.12466607, 0.00351079]).T
+	G_assim_magical = np.array([[0.08603118, 0.12466607, 0.00351079]]).T
 	# I GET G_assim_magical with the following code:
 	# G_all = np.zeros((10,3))
 	# for n in range(10):
