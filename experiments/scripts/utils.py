@@ -2303,7 +2303,8 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		model, model_params, lr, output_dir,
 		H_obs_lowfi=None, H_obs_hifi=None, noisy_hifi=False,
 		inits=None, plot_state_indices=None,
-		max_plot=None, learn_assim=False, eps=None, cheat=False, h=0.0001, lr_G=0.0005):
+		max_plot=None, learn_assim=False, eps=None, cheat=False, h=0.0001, lr_G=0.0005,
+		G_update_interval=10):
 
 	dtype = torch.FloatTensor
 
@@ -2419,10 +2420,14 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 					dL = ( LkGplus - LkG )/h
 
 					# update G_assim by random approximate directional derivative
-					G_assim.data -= lr_G * dL * Q
+					Gdiff += lr_G * dL * Q
+					if (i %% G_update_interval)==0:
+						G_assim.data -= Gdiff
+						Gdiff = 0*G_assim.data
 					loss_history[i] = LkG
 					dL_history[i] = dL
-
+				else:
+					Gdiff = 0*G_assim.data
 			# save intermittently during training
 			if (i % 1) == 0:
 				np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean, y_assim=y_assim, y_predictions=y_predictions,
