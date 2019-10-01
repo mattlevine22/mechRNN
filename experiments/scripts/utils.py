@@ -2421,7 +2421,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 
 					# update G_assim by random approximate directional derivative
 					Gdiff += lr_G * dL * Q
-					if (i %% G_update_interval)==0:
+					if (i % G_update_interval)==0:
 						G_assim.data -= Gdiff
 						Gdiff = 0*G_assim.data
 					loss_history[i] = LkG
