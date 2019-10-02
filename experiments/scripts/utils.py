@@ -2304,7 +2304,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		H_obs_lowfi=None, H_obs_hifi=None, noisy_hifi=False,
 		inits=None, plot_state_indices=None,
 		max_plot=None, learn_assim=False, eps=None, cheat=False, h=0.0001, lr_G=0.0005,
-		G_update_interval=1, N_q_tries=1):
+		G_update_interval=1, N_q_tries=1, n_epochs=1):
 
 	dtype = torch.FloatTensor
 
@@ -2377,66 +2377,68 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		return Lk
 
 	### NEW code for updating G_assim
-	for i in range(n_iters):
-		meas_now = torch.FloatTensor(y_noisy_lowfi[i,:,None])
+	for kk in range(n_epochs):
+		use_inits = inits
+		for i in range(n_iters):
+			meas_now = torch.FloatTensor(y_noisy_lowfi[i,:,None])
 
-		# make prediction using previous state estimate
-		# pdb.set_trace()
-		sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=inits.T, method='RK45', t_eval=tspan)
-		m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
-		y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
+			# make prediction using previous state estimate
+			# pdb.set_trace()
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method='RK45', t_eval=tspan)
+			m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
+			y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
 
-		# Do the assimilation!
-		m_assim_now = f_mk(G_assim, m_pred_now, meas_now)
-		G_assim_history[i,:] = G_assim.detach().numpy().squeeze()
-		G_assim_history_running_mean[i,:] = np.mean(G_assim_history[:i,:], axis=0)
-		inits = m_assim_now.detach().numpy().squeeze()
-		y_assim[i,:] = inits
+			# Do the assimilation!
+			m_assim_now = f_mk(G_assim, m_pred_now, meas_now)
+			G_assim_history[i,:] = G_assim.detach().numpy().squeeze()
+			G_assim_history_running_mean[i,:] = np.mean(G_assim_history[:i,:], axis=0)
+			use_inits = m_assim_now.detach().numpy().squeeze()
+			y_assim[i,:] = use_inits
 
-		# compute loss
-		if learn_assim:
-			if cheat:
-				meas_hifi_now = torch.FloatTensor(y_hifi[i,:])
-				meas_lowfi_now = meas_now
-				loss = f_Lk_cheat(G_assim, m_pred_now, meas_lowfi_now, meas_hifi_now)
-				loss.backward()
-				G_assim.data -= lr * G_assim.grad.data
-				G_assim.grad.data.zero_()
-				loss_history[i] = loss
-			else:
-				if i>1:
-					# Gather historical data for propagation
-					m_assim_prev2 = y_assim[i-2,:] #basically \hat{m}_{i-2}
-					meas_prev1 = torch.FloatTensor(y_noisy_lowfi[i-1,:,None])
-
-					LkG = f_Lk(G_assim, m_assim_prev2, meas_prev1, meas_now)
-					for iq in range(N_q_tries):
-						# sample a G-like matrix for approximating a random directional derivative
-						Q = np.random.randn(*G_assim.shape)
-						Q = torch.FloatTensor(Q/np.linalg.norm(Q,'fro'))
-						Gplus = G_assim + h*Q
-
-						# approximate directional derivative
-						LkGplus = f_Lk(Gplus, m_assim_prev2, meas_prev1, meas_now)
-						if iq==0 or (LkGplus > LkGplus_best):
-							LkGplus_best = LkGplus
-							Q_best = Q
-
-
-					# update G_assim by random approximate directional derivative
-					dL = ( LkGplus_best - LkG )/h
-					Gdiff += lr_G * dL * Q_best
-					if (i % G_update_interval)==0:
-						G_assim.data -= Gdiff
-						Gdiff = 0*G_assim.data
-					loss_history[i] = LkG
-					dL_history[i] = dL
+			# compute loss
+			if learn_assim:
+				if cheat:
+					meas_hifi_now = torch.FloatTensor(y_hifi[i,:])
+					meas_lowfi_now = meas_now
+					loss = f_Lk_cheat(G_assim, m_pred_now, meas_lowfi_now, meas_hifi_now)
+					loss.backward()
+					G_assim.data -= lr * G_assim.grad.data
+					G_assim.grad.data.zero_()
+					loss_history[i] = loss
 				else:
-					Gdiff = 0*G_assim.data
-			# save intermittently during training
-			if (i % 100) == 0:
-				np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean, y_assim=y_assim, y_predictions=y_predictions,
-					model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G, i=i)
+					if i>1:
+						# Gather historical data for propagation
+						m_assim_prev2 = y_assim[i-2,:] #basically \hat{m}_{i-2}
+						meas_prev1 = torch.FloatTensor(y_noisy_lowfi[i-1,:,None])
+
+						LkG = f_Lk(G_assim, m_assim_prev2, meas_prev1, meas_now)
+						for iq in range(N_q_tries):
+							# sample a G-like matrix for approximating a random directional derivative
+							Q = np.random.randn(*G_assim.shape)
+							Q = torch.FloatTensor(Q/np.linalg.norm(Q,'fro'))
+							Gplus = G_assim + h*Q
+
+							# approximate directional derivative
+							LkGplus = f_Lk(Gplus, m_assim_prev2, meas_prev1, meas_now)
+							if iq==0 or (LkGplus > LkGplus_best):
+								LkGplus_best = LkGplus
+								Q_best = Q
+
+
+						# update G_assim by random approximate directional derivative
+						dL = ( LkGplus_best - LkG )/h
+						Gdiff += lr_G * dL * Q_best
+						if (i % G_update_interval)==0:
+							G_assim.data -= Gdiff
+							Gdiff = 0*G_assim.data
+						loss_history[i] = LkG
+						dL_history[i] = dL
+					else:
+						Gdiff = 0*G_assim.data
+				# save intermittently during training
+				if (i % 100) == 0:
+					np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean, y_assim=y_assim, y_predictions=y_predictions,
+						model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G, i=i)
 
 
 	## Done running 3DVAR, now summarize
