@@ -2438,7 +2438,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 				# save intermittently during training
 				if (i % 100) == 0:
 					np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean, y_assim=y_assim, y_predictions=y_predictions,
-						model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G, i=i)
+						model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G, i=i, kk=kk)
 
 
 	## Done running 3DVAR, now summarize
