@@ -175,8 +175,7 @@ def main():
 				sim_model, assimilation_model_params, lr,
 				run_output_dir_TRAIN,
 				H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-				learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat, new_cheat=FLAGS.new_cheat, n_epochs=FLAGS.n_epochs,
-				h=h, lr_G=lr_G)
+				learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat, new_cheat=FLAGS.new_cheat, n_epochs=FLAGS.n_epochs)
 			# Test
 			npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
 			G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
@@ -186,8 +185,7 @@ def main():
 					sim_model, assimilation_model_params, lr,
 					run_output_dir_TEST,
 					H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-					learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat, new_cheat=FLAGS.new_cheat, n_epochs=FLAGS.n_epochs,
-					h=h, lr_G=lr_G)
+					learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat, new_cheat=FLAGS.new_cheat, n_epochs=FLAGS.n_epochs)
 
 		# INITIALIZE AT KNOWN MAGICAL G AND DO TRAIN/TEST
 		# Train
@@ -197,8 +195,7 @@ def main():
 				sim_model, assimilation_model_params, lr,
 				run_output_dir_TRAIN,
 				H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-				learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat, new_cheat=FLAGS.new_cheat, n_epochs=FLAGS.n_epochs,
-				h=h, lr_G=lr_G)
+				learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat, new_cheat=FLAGS.new_cheat, n_epochs=FLAGS.n_epochs)
 			# Test
 			npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
 			G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
@@ -208,8 +205,7 @@ def main():
 					sim_model, assimilation_model_params, lr,
 					run_output_dir_TEST,
 					H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-					learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat, new_cheat=FLAGS.new_cheat, n_epochs=FLAGS.n_epochs,
-					h=h, lr_G=lr_G)
+					learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat, new_cheat=FLAGS.new_cheat, n_epochs=FLAGS.n_epochs)
 
 		# Train
 		run_output_dir_TRAIN = '{0}/BadModel_eps{1}_learnAssimilationRANDOMinit/Train{2}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index)
