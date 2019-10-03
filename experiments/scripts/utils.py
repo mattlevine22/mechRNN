@@ -2426,7 +2426,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 
 							# approximate directional derivative
 							LkGplus = f_Lk(Gplus, m_assim_prev2, meas_prev1, meas_now, H=H)
-							if iq==0 or (LkGplus < LkGplus_best):
+							if iq==0 or (LkGplus > LkGplus_best):
 								LkGplus_best = LkGplus
 								Q_best = Q
 
@@ -2435,7 +2435,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 						dL = ( LkGplus_best - LkG )/h
 						Gdiff += lr_G * dL * Q_best
 						if (i % G_update_interval)==0:
-							G_assim.data += Gdiff
+							G_assim.data -= Gdiff
 							Gdiff = 0*G_assim.data
 						loss_history[i] = LkG
 						dL_history[i] = dL

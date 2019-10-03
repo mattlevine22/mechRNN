@@ -23,6 +23,7 @@ parser.add_argument('--noisy_hifi', type=str2bool, default=False, help='When che
 parser.add_argument('--cheat', type=str2bool, default=False, help='cheating means using unobserved data (aka applying H_obs_hifi). If False, H_obs_hifi is inactive.')
 parser.add_argument('--new_cheat', type=str2bool, default=False, help='cheating means using unobserved data (aka applying H_obs_hifi). If False, H_obs_hifi is inactive.')
 parser.add_argument('--n_epochs', type=int, default=1, help='Number of 3DVAR training epochs')
+parser.add_argument('--N_q_tries', type=int, default=1, help='Number of samples of random directional derivative')
 FLAGS = parser.parse_args()
 
 
@@ -218,7 +219,7 @@ def main():
 				sim_model, assimilation_model_params, lr,
 				run_output_dir_TRAIN,
 				H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-				learn_assim=True, inits=random_state_init_TRAIN, eps=eps, new_cheat=FLAGS.new_cheat, cheat=FLAGS.cheat, n_epochs=FLAGS.n_epochs)
+				learn_assim=True, inits=random_state_init_TRAIN, eps=eps, new_cheat=FLAGS.new_cheat, cheat=FLAGS.cheat, n_epochs=FLAGS.n_epochs, N_q_tries=FLAGS.N_q_tries)
 			# Test
 			npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
 			G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
@@ -228,7 +229,7 @@ def main():
 					sim_model, assimilation_model_params, lr,
 					run_output_dir_TEST,
 					H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-					learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, new_cheat=FLAGS.new_cheat, cheat=FLAGS.cheat, n_epochs=FLAGS.n_epochs)
+					learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, new_cheat=FLAGS.new_cheat, cheat=FLAGS.cheat, n_epochs=FLAGS.n_epochs, N_q_tries=FLAGS.N_q_tries)
 
 
 if __name__ == '__main__':
