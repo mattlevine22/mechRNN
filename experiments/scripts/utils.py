@@ -2418,18 +2418,21 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 						meas_prev1 = torch.FloatTensor(y_noisy_lowfi[i-1,:,None])
 
 						LkG = f_Lk(G_assim, m_assim_prev2, meas_prev1, meas_now, H=H)
-						for iq in range(N_q_tries):
-							# sample a G-like matrix for approximating a random directional derivative
-							Q = np.random.randn(*G_assim.shape)
-							Q = torch.FloatTensor(Q/np.linalg.norm(Q,'fro'))
-							Gplus = G_assim + h*Q
+						# for iq in range(N_q_tries):
+						# sample a G-like matrix for approximating a random directional derivative
+						Q = np.random.randn(*G_assim.shape)
+						Q = torch.FloatTensor(Q/np.linalg.norm(Q,'fro'))
+						Gplus = G_assim + h*Q
 
-							# approximate directional derivative
-							LkGplus = f_Lk(Gplus, m_assim_prev2, meas_prev1, meas_now, H=H)
-							if (iq==0 and i==2) or (LkGplus < LkGplus_best):
-								LkGplus_best = LkGplus
-								Q_best = Q
-								Gplus_best = Gplus
+						# approximate directional derivative
+						LkGplus = f_Lk(Gplus, m_assim_prev2, meas_prev1, meas_now, H=H)
+						if (iq==0 and i==2) or (LkGplus < LkGplus_best):
+							LkGplus_best = LkGplus
+							# Q_best = Q
+							Gplus_best = Gplus
+						elif np.random.randn < LkGplus_best/LkGplus:
+							LkGplus_best = LkGplus
+							Gplus_best = Gplus
 
 						G_assim.data = Gplus_best
 						# update G_assim by random approximate directional derivative
