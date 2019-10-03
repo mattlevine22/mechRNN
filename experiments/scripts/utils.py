@@ -2429,8 +2429,9 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 							if (iq==0 and i==2) or (LkGplus < LkGplus_best):
 								LkGplus_best = LkGplus
 								Q_best = Q
+								Gplus_best = Gplus
 
-						G_assim.data = LkGplus_best
+						G_assim.data = Gplus_best
 						# update G_assim by random approximate directional derivative
 						# dL = ( LkGplus_best - LkG )/h
 						# Gdiff += lr_G * dL * Q_best
