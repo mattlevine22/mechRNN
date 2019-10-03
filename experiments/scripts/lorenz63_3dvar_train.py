@@ -20,7 +20,7 @@ parser.add_argument('--H_obs_lowfi', type=str2array, default=np.array([[1,0,0]])
 parser.add_argument('--H_obs_hifi', type=str2array, default=np.array([[1,0,0],[0,1,0],[0,0,1]]), help='hi-fidelity observation operator')
 parser.add_argument('--G_init_sd', type=float, default=0.1, help='standard deviation for random initialization of assimilation matrix')
 parser.add_argument('--noisy_hifi', type=str2bool, default=False, help='When cheating, noisy_hifi optionally adds measurement noise to the hi-fi observations provided by H_obs_hifi.')
-parser.add_argument('--cheat', type=str2bool, default=True, help='cheating means using unobserved data (aka applying H_obs_hifi). If False, H_obs_hifi is inactive.')
+parser.add_argument('--cheat', type=str2bool, default=False, help='cheating means using unobserved data (aka applying H_obs_hifi). If False, H_obs_hifi is inactive.')
 FLAGS = parser.parse_args()
 
 

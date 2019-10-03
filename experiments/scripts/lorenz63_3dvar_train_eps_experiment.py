@@ -20,7 +20,8 @@ parser.add_argument('--H_obs_lowfi', type=str2array, default=np.array([[1,0,0]])
 parser.add_argument('--H_obs_hifi', type=str2array, default=np.eye(3), help='hi-fidelity observation operator')
 parser.add_argument('--G_init_sd', type=float, default=0.1, help='standard deviation for random initialization of assimilation matrix')
 parser.add_argument('--noisy_hifi', type=str2bool, default=False, help='When cheating, noisy_hifi optionally adds measurement noise to the hi-fi observations provided by H_obs_hifi.')
-parser.add_argument('--cheat', type=str2bool, default=True, help='cheating means using unobserved data (aka applying H_obs_hifi). If False, H_obs_hifi is inactive.')
+parser.add_argument('--cheat', type=str2bool, default=False, help='cheating means using unobserved data (aka applying H_obs_hifi). If False, H_obs_hifi is inactive.')
+parser.add_argument('--new_cheat', type=str2bool, default=False, help='cheating means using unobserved data (aka applying H_obs_hifi). If False, H_obs_hifi is inactive.')
 parser.add_argument('--n_epochs', type=int, default=1, help='Number of 3DVAR training epochs')
 FLAGS = parser.parse_args()
 
@@ -132,7 +133,7 @@ def main():
 				sim_model, assimilation_model_params, lr,
 				run_output_dir_TRAIN,
 				H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-				learn_assim=False, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat)
+				learn_assim=False, inits=random_state_init_TRAIN, eps=eps, new_cheat=FLAGS.new_cheat, cheat=FLAGS.cheat)
 			# Test
 			npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
 			# G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
@@ -142,7 +143,7 @@ def main():
 					sim_model, assimilation_model_params, lr,
 					run_output_dir_TEST,
 					H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-					learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat)
+					learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, new_cheat=FLAGS.new_cheat, cheat=FLAGS.cheat)
 
 		#### 3D VAR with eps-bad model + magical assimilation matrix
 		# Train
@@ -217,7 +218,7 @@ def main():
 				sim_model, assimilation_model_params, lr,
 				run_output_dir_TRAIN,
 				H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-				learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat, n_epochs=FLAGS.n_epochs)
+				learn_assim=True, inits=random_state_init_TRAIN, eps=eps, new_cheat=FLAGS.new_cheat, cheat=FLAGS.cheat, n_epochs=FLAGS.n_epochs)
 			# Test
 			npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
 			G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
@@ -227,7 +228,7 @@ def main():
 					sim_model, assimilation_model_params, lr,
 					run_output_dir_TEST,
 					H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-					learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat, n_epochs=FLAGS.n_epochs)
+					learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, new_cheat=FLAGS.new_cheat, cheat=FLAGS.cheat, n_epochs=FLAGS.n_epochs)
 
 
 if __name__ == '__main__':
