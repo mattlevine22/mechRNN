@@ -168,7 +168,7 @@ def main():
 
 		### 3D VAR with eps-bad model + learned assimilation matrix
 		# INITIALIZE AT STANDARD G AND DO TRAIN/TEST
-		Train
+		# Train
 		run_output_dir_TRAIN = '{0}/BadModel_eps{1}_learnAssimilationSTANDARDinit+h{3}+lrG{4}/Train{2}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, h, lr_G)
 		if not os.path.exists(run_output_dir_TRAIN):
 			run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_standard, delta_t,
