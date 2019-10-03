@@ -2430,7 +2430,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 							LkGplus_best = LkGplus
 							# Q_best = Q
 							Gplus_best = Gplus
-						elif np.random.randn < LkGplus_best/LkGplus:
+						elif np.random.rand() < LkGplus_best/LkGplus:
 							LkGplus_best = LkGplus
 							Gplus_best = Gplus
 
