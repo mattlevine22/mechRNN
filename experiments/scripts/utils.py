@@ -2427,6 +2427,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 							# approximate directional derivative
 							LkGplus = f_Lk(Gplus, m_assim_prev2, meas_prev1, meas_now, H=H)
 							if iq==0 or (LkGplus < LkGplus_best):
+								pdb.set_trace()
 								LkGplus_best = LkGplus
 								Q_best = Q
 
