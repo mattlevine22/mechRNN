@@ -2407,6 +2407,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 					loss_history[i] = loss
 				else:
 					if new_cheat:
+						pdb.set_trace()
 						H = H_obs_hifi
 						meas_now = torch.FloatTensor(y_hifi[i,:])
 					else:
