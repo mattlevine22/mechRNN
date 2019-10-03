@@ -2303,7 +2303,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		model, model_params, lr, output_dir,
 		H_obs_lowfi=None, H_obs_hifi=None, noisy_hifi=False,
 		inits=None, plot_state_indices=None,
-		max_plot=None, learn_assim=False, eps=None, cheat=False, new_cheat=False, h=1e-6, lr_G=0.0005,
+		max_plot=None, learn_assim=False, eps=None, cheat=False, new_cheat=False, h=1e-3, lr_G=0.0005,
 		G_update_interval=1, N_q_tries=1, n_epochs=1):
 
 	dtype = torch.FloatTensor
