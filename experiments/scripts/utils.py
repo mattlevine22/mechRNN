@@ -2426,11 +2426,11 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 
 							# approximate directional derivative
 							LkGplus = f_Lk(Gplus, m_assim_prev2, meas_prev1, meas_now, H=H)
-							if iq==0 or (LkGplus < LkGplus_best):
+							if (iq==0 and i==0) or (LkGplus < LkGplus_best):
 								LkGplus_best = LkGplus
 								Q_best = Q
 
-						G_assim.data = Gplus
+						G_assim.data = LkGplus_best
 						# update G_assim by random approximate directional derivative
 						# dL = ( LkGplus_best - LkG )/h
 						# Gdiff += lr_G * dL * Q_best
