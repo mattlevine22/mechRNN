@@ -24,7 +24,7 @@ parser.add_argument('--cheat', type=str2bool, default=False, help='cheating mean
 FLAGS = parser.parse_args()
 
 
-if not FLAGS.cheat:
+if not FLAGS.cheat and not FLAGS.new_cheat:
 	# if not cheating, then hifi and lowfi observations must be the same
 	FLAGS.H_obs_hifi = FLAGS.H_obs_lowfi
 
