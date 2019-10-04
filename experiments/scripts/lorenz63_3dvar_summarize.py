@@ -301,6 +301,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		# fig, (ax0,ax1) = plt.subplots(nrows=1, ncols=2)
 		fig, (ax0) = plt.subplots(nrows=1, ncols=1)
 
+		pdb.set_trace()
 		vmin = min(np.min(Ymse),mse['standardAssimilation'][my_eps]['assim']['median'])
 		vmax = max(np.max(Ymse),mse['standardAssimilation'][my_eps]['assim']['median'])
 		im = ax0.imshow(Ymse, interpolation='none', vmin=vmin, vmax=vmax)
