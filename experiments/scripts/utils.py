@@ -2457,7 +2457,8 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 
 	## Done running 3DVAR, now summarize
 	if learn_assim:
-		fig, (axlist) = plt.subplots(3+len(plot_state_indices),1)
+		fig, (axlist) = plt.subplots(nrows=3+len(plot_state_indices), ncols=1,
+							sharex=True, figsize = [10, 15])
 
 		# plot running average of G_assim
 		for kk in range(len(plot_state_indices)):
@@ -2481,7 +2482,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		# axlist[2].set_yscale('log')
 
 		for kk in range(len(plot_state_indices)):
-			ax = axlist[kk+2]
+			ax = axlist[kk+3]
 			t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
 			ax.plot(t_plot, y_clean[:,plot_state_indices[kk]], color='red', label='clean data')
 			ax.plot(t_plot, y_predictions[:,plot_state_indices[kk]], color='black', label='3DVAR')
