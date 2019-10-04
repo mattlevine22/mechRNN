@@ -334,7 +334,6 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 	m = -1
 	for method_nm in G_all:
 		m += 1
-		pdb.set_trace()
 		for kk in range(G.shape[1]):
 			mean_vec = [G_all[method_nm][eps_val]['mean'][kk] for eps_val in eps_vec]
 			std_vec = [G_all[method_nm][eps_val]['std'][kk] for eps_val in eps_vec]
