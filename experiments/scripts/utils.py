@@ -2457,8 +2457,8 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 
 	## Done running 3DVAR, now summarize
 	if learn_assim:
-		fig, (axlist) = plt.subplots(nrows=3+len(plot_state_indices), ncols=1,
-							sharex=True, figsize = [10, 15])
+		fig, (axlist) = plt.subplots(nrows=2+len(plot_state_indices), ncols=1,
+							figsize = [10, 12])
 
 		# plot running average of G_assim
 		for kk in range(len(plot_state_indices)):
@@ -2466,28 +2466,28 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 			axlist[0].plot(t_plot, G_assim_history_running_mean[:,kk],label='G_{0}'.format(kk))
 			axlist[1].plot(t_plot, G_assim_history[:,kk],label='G_{0}'.format(kk))
 		# axlist[2].plot(t_plot, loss_history)
-		axlist[2].plot(t_plot, dL_history)
-		axlist[2].set_xlabel('time')
+		# axlist[2].plot(t_plot, dL_history)
 
 		axlist[0].legend()
 		axlist[1].legend()
 		axlist[0].set_xticklabels([])
-		axlist[1].set_xticklabels([])
+		# axlist[1].set_xticklabels([])
 
 		axlist[0].set_title('3DVAR Assimilation Matrix Convergence (Running Mean)')
 		axlist[1].set_title('3DVAR Assimilation Matrix Sequence')
 		# axlist[2].set_title('Loss Sequence')
-		axlist[2].set_ylabel('dL')
+		# axlist[2].set_ylabel('dL')
 
 		# axlist[2].set_yscale('log')
 
 		for kk in range(len(plot_state_indices)):
-			ax = axlist[kk+3]
+			ax = axlist[kk+2]
 			t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
 			ax.plot(t_plot, y_clean[:,plot_state_indices[kk]], color='red', label='clean data')
 			ax.plot(t_plot, y_predictions[:,plot_state_indices[kk]], color='black', label='3DVAR')
 			ax.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)')
 
+		ax.set_xlabel('time')
 		fig.savefig(fname=output_dir+'/3DVAR_assimilation_matrix_learning_convergence')
 		plt.close(fig)
 
