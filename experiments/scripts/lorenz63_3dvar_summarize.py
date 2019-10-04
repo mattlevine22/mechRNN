@@ -163,6 +163,8 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 			t_assim[method_nm] = {}
 		if method_nm not in mse:
 			mse[method_nm] = {}
+		if method_nm not in G_all:
+			G_all[method_nm] = {}
 		t_assim[method_nm][eps_val] = {'assim':{'mean':None, 'median':None, 'std':None, 'all':()}, 'pred':{'mean':None, 'median':None, 'std':None, 'all':()} }
 		mse[method_nm][eps_val] = {'assim':{'mean':None, 'median':None, 'std':None, 'all':()}, 'pred':{'mean':None, 'median':None, 'std':None, 'all':()} }
 		G_all[method_nm][eps_val] = {'mean':None, 'median':None, 'std':None}
