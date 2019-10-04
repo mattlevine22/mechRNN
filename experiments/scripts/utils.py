@@ -2304,7 +2304,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		H_obs_lowfi=None, H_obs_hifi=None, noisy_hifi=False,
 		inits=None, plot_state_indices=None,
 		max_plot=None, learn_assim=False, eps=None, cheat=False, new_cheat=False, h=1e-3, lr_G=0.0005,
-		G_update_interval=1, N_q_tries=1, n_epochs=1, eps_hifi=None):
+		G_update_interval=1, N_q_tries=1, n_epochs=1, eps_hifi=None, decouple_noise=True):
 
 	dtype = torch.FloatTensor
 
@@ -2332,12 +2332,13 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 
 	y_hifi = np.matmul(H_obs_hifi.numpy(),y_clean.T).T
 	if noisy_hifi:
-		pdb.set_trace()
-		if eps_hifi is None:
-			eps_hifi = eps
-		# add decoupled noise of size epsilon to hifi measurements
-		y_hifi = y_hifi + eps_hifi*np.random.randn(y_hifi.shape[0],y_hifi.shape[1])
-
+		if decouple_noise:
+			if eps_hifi is None:
+				eps_hifi = eps
+			# add decoupled noise of size epsilon to hifi measurements
+			y_hifi = y_hifi + eps_hifi*np.random.randn(y_hifi.shape[0],y_hifi.shape[1])
+		else:
+			y_hifi = np.matmul(H_obs_hifi.numpy(),y_noisy.T).T
 	# if noisy_hifi:
 	# 	y_hifi = np.matmul(H_obs_hifi.numpy(),y_noisy.T).T
 	# else:
