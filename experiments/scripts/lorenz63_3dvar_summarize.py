@@ -199,11 +199,13 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 				npzfile = np.load(fname)
 				G = npzfile['G_assim_history_running_mean']
 				if G_trained is None:
-					G_trained = np.zeros((n_train_trajectories,G.shape[0]))
-				G_trained[ntrain,:,:] = G[:,-1]
+					G_trained = np.zeros((n_train_trajectories,G.shape[1]))
+				G_trained[ntrain,:] = G[-1,:]
 			except:
 				# Train/Test does not exist
 				pass
+
+		pdb.set_trace()
 
 		G_all[method_nm][eps_val]['mean'] = np.mean(G_trained, axis=0)
 		G_all[method_nm][eps_val]['std'] = np.mean(G_trained, axis=0)
@@ -327,6 +329,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		plt.close(fig)
 
 	### Plot G's across epsilon values
+	pdb.set_trace()
 	fig, (axlist) = plt.subplots(nrows=1, ncols=len(G_all))
 	m = -1
 	for method_nm in G_all:
