@@ -192,7 +192,6 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 					pass
 
 		G_trained = None
-		pdb.set_trace()
 		for ntrain in range(n_train_trajectories):
 			fname = os.path.join(d, 'Train{0}'.format(ntrain), 'Test{0}'.format(ntest), 'output.npz')
 			try:
@@ -205,10 +204,8 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 				# Train/Test does not exist
 				pass
 
-		pdb.set_trace()
-
 		G_all[method_nm][eps_val]['mean'] = np.mean(G_trained, axis=0)
-		G_all[method_nm][eps_val]['std'] = np.mean(G_trained, axis=0)
+		G_all[method_nm][eps_val]['std'] = np.std(G_trained, axis=0)
 
 
 		if method_nm not in t_assim:
