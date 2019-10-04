@@ -2332,6 +2332,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 
 	y_hifi = np.matmul(H_obs_hifi.numpy(),y_clean.T).T
 	if noisy_hifi:
+		pdb.set_trace()
 		if eps_hifi is None:
 			eps_hifi = eps
 		# add decoupled noise of size epsilon to hifi measurements
