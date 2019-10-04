@@ -330,7 +330,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		plt.close(fig)
 
 	### Plot G's across epsilon values
-	fig, (axlist) = plt.subplots(nrows=1, ncols=len(G_all))
+	fig, (axlist) = plt.subplots(nrows=1, ncols=len(G_all), figsize=[15,10], sharey=True)
 	m = -1
 	for method_nm in G_all:
 		m += 1
@@ -341,7 +341,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 			axlist[m].set_title(method_nm)
 
 	fig.suptitle('3DVAR Gain Learning')
-	fig.savefig(fname=output_dir+'/'+key_nm+'{0}_learned_gains.png'.format(my_eps))
+	fig.savefig(fname=output_dir+'/'+key_nm+'_learned_gains.png')
 	plt.close(fig)
 
 	### Compare eps=0 case
