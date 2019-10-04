@@ -152,6 +152,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 	eps_set = set()
 	t_assim = {}
 	mse = {}
+	G_all = {}
 	for d in my_dirs:
 
 		# set up data structures
@@ -164,6 +165,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 			mse[method_nm] = {}
 		t_assim[method_nm][eps_val] = {'assim':{'mean':None, 'median':None, 'std':None, 'all':()}, 'pred':{'mean':None, 'median':None, 'std':None, 'all':()} }
 		mse[method_nm][eps_val] = {'assim':{'mean':None, 'median':None, 'std':None, 'all':()}, 'pred':{'mean':None, 'median':None, 'std':None, 'all':()} }
+		G_all[method_nm][eps_val] = {'mean':None, 'median':None, 'std':None}
 
 		# store performance statistics
 		for ntest in range(n_test_trajectories):
@@ -187,6 +189,24 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 					# Train/Test does not exist
 					pass
 
+		G_trained = None
+		pdb.set_trace()
+		for ntrain in range(n_train_trajectories):
+			fname = os.path.join(d, 'Train{0}'.format(ntrain), 'Test{0}'.format(ntest), 'output.npz')
+			try:
+				npzfile = np.load(fname)
+				G = npzfile['G_assim_history_running_mean']
+				if G_trained is None:
+					G_trained = np.zeros((n_train_trajectories,G.shape[0]))
+				G_trained[ntrain,:,:] = G[:,-1]
+			except:
+				# Train/Test does not exist
+				pass
+
+		G_all[method_nm][eps_val]['mean'] = np.mean(G_trained, axis=0)
+		G_all[method_nm][eps_val]['std'] = np.mean(G_trained, axis=0)
+
+
 		if method_nm not in t_assim:
 			continue
 
@@ -203,6 +223,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		mse[method_nm][eps_val]['pred']['mean'] = np.mean(mse[method_nm][eps_val]['pred']['all'])
 		mse[method_nm][eps_val]['pred']['median'] = np.median(mse[method_nm][eps_val]['pred']['all'])
 		mse[method_nm][eps_val]['pred']['std'] = np.std(mse[method_nm][eps_val]['pred']['all'])
+
 
 	### NOW initialize plot
 	fig, axlist = plt.subplots(nrows=2, ncols=2,
@@ -302,6 +323,21 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 
 		fig.savefig(fname=output_dir+'/'+key_nm+'{0}_heatmap_method_comparison.png'.format(my_eps))
 		plt.close(fig)
+
+	### Plot G's across epsilon values
+	fig, (axlist) = plt.subplots(nrows=1, ncols=len(G_all))
+	m = -1
+	for method_nm in G_all:
+		m += 1
+		for kk in range(G.shape[0])
+			mean_vec = [G_all[method_nm][eps_val]['mean'][kk] for eps_val in eps_vec]
+			std_vec = [G_all[method_nm][eps_val]['std'][kk] for eps_val in eps_vec]
+			axlist[m].errorbar(x=eps_vec, y=mean_vec, yerr=std_vec, label='G_{0}'.format(kk))
+			axlist[m].set_title(method_nm)
+
+	fig.suptitle('3DVAR Gain Learning')
+	fig.savefig(fname=output_dir+'/'+key_nm+'{0}_learned_gains.png'.format(my_eps))
+	plt.close(fig)
 
 	### Compare eps=0 case
 	# method_vec = mse.keys()
