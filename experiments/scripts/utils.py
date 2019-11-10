@@ -2516,7 +2516,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		G_assim_history_running_mean = np.zeros((n_epochs, G_assim.shape[0]))
 		if optimization is 'NelderMead':
 			evalG = lambda G: f_Loss_Sum(G, use_inits=inits)
-			nm_epochs = 3
+			nm_epochs = 5
 			fmin = np.inf
 			# G0 = np.array([1,1,1])
 			# opt = scipy.optimize.fmin(func=evalG, x0=G0, full_output=True)

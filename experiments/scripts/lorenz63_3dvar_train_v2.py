@@ -125,7 +125,8 @@ def main():
 
 	## BAD MODEL PARAMETERS NOW ##
 	# pdb.set_trace()
-	for eps_badness in [0.0]:#np.arange(0,0.04,0.02):
+	# for eps_badness in [0.0]:
+	for eps_badness in np.arange(0,0.04,0.02):
 		assimilation_model_params['ode_params'] = (a, b*(1+eps_badness), c)
 
 
