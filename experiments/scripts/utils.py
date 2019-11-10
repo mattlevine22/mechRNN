@@ -15,6 +15,7 @@ from scipy.stats import entropy
 from scipy.integrate import odeint, solve_ivp
 # from statsmodels.nonparametric.kde import KDEUnivariate
 from scipy.stats import gaussian_kde
+import scipy.optimize
 
 from sklearn.gaussian_process import GaussianProcessRegressor
 
@@ -2304,7 +2305,8 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		H_obs_lowfi=None, H_obs_hifi=None, noisy_hifi=False,
 		inits=None, plot_state_indices=None,
 		max_plot=None, learn_assim=False, eps=None, cheat=False, new_cheat=False, h=1e-3, lr_G=0.0005,
-		G_update_interval=1, N_q_tries=1, n_epochs=1, eps_hifi=None):
+		G_update_interval=1, N_q_tries=1, n_epochs=1, eps_hifi=None,
+		full_sequence=False, optimization=None):
 
 	dtype = torch.FloatTensor
 
@@ -2346,10 +2348,6 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 	y_assim = np.zeros(y_clean.shape)
 	y_predictions = np.zeros(y_clean.shape)
 
-	loss_history = np.zeros(n_iters)
-	dL_history = np.zeros(n_iters)
-	G_assim_history = np.zeros((y_clean.shape[0], G_assim.shape[0]))
-	G_assim_history_running_mean = np.zeros((y_clean.shape[0], G_assim.shape[0]))
 
 	if inits is None:
 		inits = get_lorenz_inits(n=1).squeeze()
@@ -2359,7 +2357,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 	tspan = [0, 0.5*delta_t, delta_t]
 	# initialize G_assim variable
 	G_assim = torch.FloatTensor(G_assim)
-	if learn_assim:
+	if learn_assim and not full_sequence:
 		# G_assim = torch.zeros(y_clean.shape[1], y_clean_lowfi.shape[1]).type(dtype)
 		# init.normal_(G_assim, 0.0, 0.1)
 		G_assim = Variable(G_assim, requires_grad=True)
@@ -2384,114 +2382,337 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		Lk = ( torch.mm(H, m_pred_now) -  meas_now ).pow(2).sum()
 		return Lk
 
-	### NEW code for updating G_assim
-	for kk in range(n_epochs):
-		use_inits = inits
+	def f_Loss_Sum_OLD(G_input, n_iters=n_iters, use_inits=inits):
+		loss = 0
+		loss_cheat = 0
+		y_assim = np.zeros(y_clean.shape)
 		for i in range(n_iters):
 			meas_now = torch.FloatTensor(y_noisy_lowfi[i,:,None])
 
 			# make prediction using previous state estimate
-			# pdb.set_trace()
 			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method='RK45', t_eval=tspan)
 			m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
 			y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
 
 			# Do the assimilation!
-			m_assim_now = f_mk(G_assim, m_pred_now, meas_now)
-			G_assim_history[i,:] = G_assim.detach().numpy().squeeze()
-			G_assim_history_running_mean[i,:] = np.mean(G_assim_history[:i,:], axis=0)
+			m_assim_now = f_mk(G_input, m_pred_now, meas_now)
+			# compute loss
+			if i > 200:
+				loss += ( torch.mm(H_obs_lowfi, m_pred_now).squeeze() -  meas_now.squeeze() ).pow(2).sum()
+				loss_cheat += ( m_pred_now.squeeze() -  torch.FloatTensor(y_clean[i,:]).squeeze() ).pow(2).sum()
+				# loss += ( torch.mm(H_obs_lowfi, m_assim_now).squeeze() -  meas_now.squeeze() ).pow(2).sum()
+				# loss_cheat += ( m_assim_now.squeeze() -  torch.FloatTensor(y_clean[i,:]).squeeze() ).pow(2).sum()
+			# loss += ( torch.mm(H_obs_lowfi, m_pred_now).squeeze() -  meas_now.squeeze() ).pow(2).sum()
+
+			# set inits
 			use_inits = m_assim_now.detach().numpy().squeeze()
+
 			y_assim[i,:] = use_inits
 
+		# pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
+		return loss/n_iters
+
+	def f_Loss_Sum(G_input, n_iters=n_iters, use_inits=inits):
+		print('G=',G_input)
+		if type(G_input) is not torch.Tensor:
+			G_input = torch.FloatTensor(G_input[:,None])
+
+		in_stationary = False
+		total_loss = 0
+		stationary_loss = np.inf
+		y_assim = np.zeros(y_clean.shape)
+		for i in range(n_iters):
+			meas_now = torch.FloatTensor(y_noisy_lowfi[i,:,None])
+
+			# make prediction using previous state estimate
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method='RK45', t_eval=tspan)
+			m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
+			y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
+
+			# Do the assimilation!
+			m_assim_now = f_mk(G_input, m_pred_now, meas_now)
+
+			# set inits
+			use_inits = m_assim_now.detach().numpy().squeeze()
+
 			# compute loss
-			if learn_assim:
-				if cheat:
-					meas_hifi_now = torch.FloatTensor(y_hifi[i,:])
-					meas_lowfi_now = meas_now
-					loss = f_Lk_cheat(G_assim, m_pred_now, meas_lowfi_now, meas_hifi_now)
-					loss.backward()
-					G_assim.data -= lr * G_assim.grad.data
-					G_assim.grad.data.zero_()
-					loss_history[i] = loss
-				else:
-					if new_cheat:
-						H = H_obs_hifi
-						meas_now = torch.FloatTensor(y_hifi[i,:])
+			tmp_loss = ( torch.mm(H_obs_lowfi, m_pred_now).squeeze() -  meas_now.squeeze() ).pow(2).sum()
+			total_loss += tmp_loss
+
+			if not in_stationary and (tmp_loss<=eps):
+				in_stationary = True
+				stationary_loss = 0
+
+			if in_stationary:
+				stationary_loss += tmp_loss
+
+			y_assim[i,:] = use_inits
+
+			if any(abs(m_assim_now) > 1000):
+				print('Model is blowing up! Abort!')
+				print(m_assim_now)
+				n_iters = i
+				break
+
+		# pdb.set_trace()
+		if in_stationary:
+			loss = stationary_loss
+		else:
+			loss = total_loss
+
+		print('Loss=',loss/n_iters)
+		# pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
+		return loss/n_iters
+
+	print('G_assim:', G_assim)
+	print('Total Loss for G:', f_Loss_Sum(G_assim))
+	# xgrid = np.linspace(-0.1,0.3,50)
+	# ygrid = np.linspace(-0.1,0.3,50)
+	# L_grid = np.zeros((len(xgrid),len(ygrid)))
+	# G_grid = np.zeros((len(xgrid),len(ygrid),3))
+	# i = -1
+	# for x in xgrid:
+	# 	i += 1
+	# 	j = -1
+	# 	for y in ygrid:
+	# 		j += 1
+	# 		print('Solving for (x,y)=',x,y)
+	# 		G = torch.FloatTensor(np.array([[x,y,0.00351079]]).T)
+	# 		L_grid[i,j] = f_Loss_Sum(G)
+	# 		G_grid[i,j,:] = G.numpy().squeeze()
+
+	# np.save(output_dir+'/L_grid',L_grid)
+	# np.save(output_dir+'/G_grid',G_grid)
+
+	# L_grid_new = np.copy(L_grid)
+	# L_grid_new[L_grid_new>5] = 5
+
+	# fig, (ax0) = plt.subplots(nrows=1, ncols=1)
+	# im = ax0.imshow(L_grid_new, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
+	# ax0.set_xlabel('G_1')
+	# ax0.set_ylabel('G_0')
+	# ax0.set_title('Loss Surface')
+	# fig.colorbar(im, ax=ax0)
+	# fig.savefig(fname=output_dir+'/global_loss_surface')
+	# plt.close(fig)
+
+
+	# fig, (ax0) = plt.subplots(nrows=1, ncols=1)
+	# im = ax0.imshow(np.log(L_grid), interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
+	# ax0.set_xlabel('G_1')
+	# ax0.set_ylabel('G_0')
+	# ax0.set_title('Log-Loss Surface')
+	# fig.colorbar(im, ax=ax0)
+	# fig.savefig(fname=output_dir+'/global_loss_surface_log')
+	# plt.close(fig)
+	# return
+
+	### optimize G over entire sequence
+	if full_sequence:
+		# initialize storage variables
+		loss_history = np.zeros(n_epochs)
+		dL_history = np.zeros(n_epochs)
+		G_assim_history = np.zeros((n_epochs, G_assim.shape[0]))
+		G_assim_history_running_mean = np.zeros((n_epochs, G_assim.shape[0]))
+		if optimization is 'NelderMead':
+			evalG = lambda G: f_Loss_Sum(G, use_inits=inits)
+			nm_epochs = 3
+			fmin = np.inf
+			# G0 = np.array([1,1,1])
+			# opt = scipy.optimize.fmin(func=evalG, x0=G0, full_output=True)
+			# if opt[1] <= fmin:
+			# 	fmin = opt[1]
+			# 	Gbest = opt[0]
+			for i_nm in range(nm_epochs):
+				G0 = np.random.multivariate_normal(mean=[0,0,0], cov=(0.1**2)*np.eye(3)).T[:,None]
+				print('NM Init=',G0)
+				# pdb.set_trace()
+				opt = scipy.optimize.fmin(func=evalG, x0=G0, full_output=True, disp=True)
+				print('NM solution=', opt[0])
+				if opt[1] <= fmin:
+					fmin = opt[1]
+					Gbest = opt[0]
+			G_assim_history[:,:] = Gbest
+			G_assim_history_running_mean[:,:] = Gbest
+		else:
+			for kk in range(n_epochs):
+				print('Iter',kk,'G_assim Pre:', G_assim)
+				use_inits = inits #get_lorenz_inits(n=1).squeeze()
+				LkG = f_Loss_Sum(G_assim, use_inits=use_inits)
+				# perturb
+				Q = np.random.randn(*G_assim.shape)
+				Q = torch.FloatTensor(Q/np.linalg.norm(Q,'fro'))
+				Gplus = G_assim + h*Q
+				Gminus = G_assim - h*Q
+
+				# if any(abs(Gplus)>1):
+				# 	print('Gplus is violating constraint. Mapping to constraint boundary.')
+				# Gplus[Gplus>1] = 1
+				# Gplus[Gplus<-1] = -1
+
+				LkPlus = np.log(f_Loss_Sum(Gplus, use_inits=use_inits))
+				LkMinus = np.log(f_Loss_Sum(Gminus, use_inits=use_inits))
+
+				# dL = ( LkPlus - LkG )/h
+				dL = ( LkPlus - LkMinus )/(2*h)
+
+				G_assim -= lr_G * dL * Q
+
+				# if any(abs(G_assim)>1):
+				# 	print('G_assim is violating constraint. Mapping to constraint boundary.')
+				# G_assim[G_assim>1] = 1
+				# G_assim[G_assim<-1] = -1
+
+				print('LkMinus:', LkMinus)
+				print('LkPlus:', LkPlus)
+				print('dL:', dL)
+				print('G_assim Post:', G_assim)
+
+				# store progress
+				dL_history[kk] = dL
+				loss_history[kk] = LkG
+				G_assim_history[kk,:] = G_assim.detach().numpy().squeeze()
+				G_assim_history_running_mean[kk,:] = np.mean(G_assim_history[:kk,:], axis=0)
+
+			np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean,
+				model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G)
+	else:
+		# initialize storage variables
+		loss_history = np.zeros(n_iters)
+		dL_history = np.zeros(n_iters)
+		G_assim_history = np.zeros((y_clean.shape[0], G_assim.shape[0]))
+		G_assim_history_running_mean = np.zeros((y_clean.shape[0], G_assim.shape[0]))
+		### NEW code for updating G_assim
+		for kk in range(n_epochs):
+			use_inits = inits
+			for i in range(n_iters):
+				meas_now = torch.FloatTensor(y_noisy_lowfi[i,:,None])
+
+				# make prediction using previous state estimate
+				# pdb.set_trace()
+				sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method='RK45', t_eval=tspan)
+				m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
+				y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
+
+				# Do the assimilation!
+				m_assim_now = f_mk(G_assim, m_pred_now, meas_now)
+				G_assim_history[i,:] = G_assim.detach().numpy().squeeze()
+				G_assim_history_running_mean[i,:] = np.mean(G_assim_history[:i,:], axis=0)
+				use_inits = m_assim_now.detach().numpy().squeeze()
+				y_assim[i,:] = use_inits
+
+				# compute loss
+				if learn_assim:
+					if cheat:
+						meas_hifi_now = torch.FloatTensor(y_hifi[i,:])
+						meas_lowfi_now = meas_now
+						loss = f_Lk_cheat(G_assim, m_pred_now, meas_lowfi_now, meas_hifi_now)
+						loss.backward()
+						G_assim.data -= lr * G_assim.grad.data
+						G_assim.grad.data.zero_()
+						loss_history[i] = loss
 					else:
-						H = H_obs_lowfi
+						if new_cheat:
+							H = H_obs_hifi
+							meas_now = torch.FloatTensor(y_hifi[i,:])
+						else:
+							H = H_obs_lowfi
 
-					if i>1:
-						# Gather historical data for propagation
-						m_assim_prev2 = y_assim[i-2,:] #basically \hat{m}_{i-2}
-						meas_prev1 = torch.FloatTensor(y_noisy_lowfi[i-1,:,None])
+						if i>1:
+							# Gather historical data for propagation
+							m_assim_prev2 = y_assim[i-2,:] #basically \hat{m}_{i-2}
+							meas_prev1 = torch.FloatTensor(y_noisy_lowfi[i-1,:,None])
 
-						LkG = f_Lk(G_assim, m_assim_prev2, meas_prev1, meas_now, H=H)
-						for iq in range(N_q_tries):
-							# sample a G-like matrix for approximating a random directional derivative
-							Q = np.random.randn(*G_assim.shape)
-							Q = torch.FloatTensor(Q/np.linalg.norm(Q,'fro'))
-							Gplus = G_assim + h*Q
+							LkG = f_Lk(G_assim, m_assim_prev2, meas_prev1, meas_now, H=H)
+							for iq in range(N_q_tries):
+								# sample a G-like matrix for approximating a random directional derivative
+								Q = np.random.randn(*G_assim.shape)
+								Q = torch.FloatTensor(Q/np.linalg.norm(Q,'fro'))
+								Gplus = G_assim + h*Q
 
-							# approximate directional derivative
-							LkGplus = f_Lk(Gplus, m_assim_prev2, meas_prev1, meas_now, H=H)
-							if iq==0 or (LkGplus < LkGplus_best):
-								LkGplus_best = LkGplus
-								Q_best = Q
+								# approximate directional derivative
+								LkGplus = f_Lk(Gplus, m_assim_prev2, meas_prev1, meas_now, H=H)
+								if iq==0 or (LkGplus < LkGplus_best):
+									LkGplus_best = LkGplus
+									Q_best = Q
 
 
-						# update G_assim by random approximate directional derivative
-						dL = ( LkGplus_best - LkG )/h
-						Gdiff += lr_G * dL * Q_best
-						if (i % G_update_interval)==0:
-							G_assim.data += Gdiff
+							# update G_assim by random approximate directional derivative
+							dL = ( LkGplus_best - LkG )/h
+							Gdiff += lr_G * dL * Q_best
+							if (i % G_update_interval)==0:
+								G_assim.data -= Gdiff
+								Gdiff = 0*G_assim.data
+							loss_history[i] = LkG
+							dL_history[i] = dL
+						else:
 							Gdiff = 0*G_assim.data
-						loss_history[i] = LkG
-						dL_history[i] = dL
-					else:
-						Gdiff = 0*G_assim.data
-				# save intermittently during training
-				if (i % 50) == 0:
-					np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean, y_assim=y_assim, y_predictions=y_predictions,
-						model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G, i=i, kk=kk)
+					# save intermittently during training
+					if (i % 50) == 0:
+						np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean, y_assim=y_assim, y_predictions=y_predictions,
+							model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G, i=i, kk=kk)
 
 
 	## Done running 3DVAR, now summarize
 	if learn_assim:
-		fig, (axlist) = plt.subplots(nrows=2+len(plot_state_indices), ncols=1,
-							figsize = [10, 12])
+		if full_sequence:
+			fig, (axlist) = plt.subplots(nrows=3, ncols=1)
 
-		# plot running average of G_assim
-		for kk in range(len(plot_state_indices)):
-			t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
-			axlist[0].plot(t_plot, G_assim_history_running_mean[:,kk],label='G_{0}'.format(kk))
-			axlist[1].plot(t_plot, G_assim_history[:,kk],label='G_{0}'.format(kk))
-		# axlist[2].plot(t_plot, loss_history)
-		# axlist[2].plot(t_plot, dL_history)
+			# plot running average of G_assim
+			for kk in range(len(plot_state_indices)):
+				axlist[0].plot(G_assim_history_running_mean[:,plot_state_indices[kk]],label='G_{0}'.format(plot_state_indices[kk]))
+				axlist[1].plot(G_assim_history[:,plot_state_indices[kk]],label='G_{0}'.format(plot_state_indices[kk]))
+			axlist[0].legend()
+			axlist[1].legend()
+			axlist[0].set_title('3DVAR Assimilation Matrix Convergence (Running Mean)')
+			axlist[1].set_title('3DVAR Assimilation Matrix Sequence')
 
-		axlist[0].legend()
-		axlist[1].legend()
-		axlist[0].set_xticklabels([])
-		# axlist[1].set_xticklabels([])
+			axlist[2].plot(loss_history/n_iters, label='MSE')
+			# axlist[2].plot([eps for _ in range(len(loss_history))], color = 'black', linestyle='--', label = r'$\epsilon$')
+			axlist[2].set_title('Assimilation MSE')
+			axlist[2].set_xlabel('time')
+			axlist[2].set_yscale('log')
+		else:
+			fig, (axlist) = plt.subplots(nrows=2+len(plot_state_indices), ncols=1,
+								figsize = [10, 12])
 
-		axlist[0].set_title('3DVAR Assimilation Matrix Convergence (Running Mean)')
-		axlist[1].set_title('3DVAR Assimilation Matrix Sequence')
-		# axlist[2].set_title('Loss Sequence')
-		# axlist[2].set_ylabel('dL')
+			# plot running average of G_assim
+			for kk in range(len(plot_state_indices)):
+				t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
+				axlist[0].plot(t_plot, G_assim_history_running_mean[:,plot_state_indices[kk]],label='G_{0}'.format(plot_state_indices[kk]))
+				axlist[1].plot(t_plot, G_assim_history[:,plot_state_indices[kk]],label='G_{0}'.format(plot_state_indices[kk]))
+			# axlist[2].plot(t_plot, loss_history)
+			# axlist[2].plot(t_plot, dL_history)
 
-		# axlist[2].set_yscale('log')
+			axlist[0].legend()
+			axlist[1].legend()
+			axlist[0].set_xticklabels([])
+			# axlist[1].set_xticklabels([])
 
-		for kk in range(len(plot_state_indices)):
-			ax = axlist[kk+2]
-			t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
-			ax.plot(t_plot, y_clean[:,plot_state_indices[kk]], color='red', label='clean data')
-			ax.plot(t_plot, y_predictions[:,plot_state_indices[kk]], color='black', label='3DVAR')
-			ax.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)')
+			axlist[0].set_title('3DVAR Assimilation Matrix Convergence (Running Mean)')
+			axlist[1].set_title('3DVAR Assimilation Matrix Sequence')
+			# axlist[2].set_title('Loss Sequence')
+			# axlist[2].set_ylabel('dL')
 
-		ax.set_xlabel('time')
+			# axlist[2].set_yscale('log')
+
+			for kk in range(len(plot_state_indices)):
+				ax = axlist[kk+2]
+				t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
+				ax.plot(t_plot, y_clean[:,plot_state_indices[kk]], color='red', label='clean data')
+				ax.plot(t_plot, y_predictions[:,plot_state_indices[kk]], color='black', label='3DVAR')
+				ax.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)')
+
+			ax.set_xlabel('time')
+
 		fig.savefig(fname=output_dir+'/3DVAR_assimilation_matrix_learning_convergence')
 		plt.close(fig)
 
 
+	if full_sequence:
+		np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean,
+		model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G)
+		return G_assim_history_running_mean[-1,:]
 
 	## PLOTS
 	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
@@ -2520,18 +2741,22 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 
 	# these give the mean squared error
 	pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
+	pw_assim_errors_OBS = np.linalg.norm(np.matmul(H_obs_lowfi.numpy(),y_assim.T).T - y_clean_lowfi, axis=1, ord=2)**2
 	pw_pred_errors = np.linalg.norm(y_predictions - y_clean, axis=1, ord=2)**2
 	pw_pred_errors_OBS = np.linalg.norm(np.matmul(H_obs_lowfi.numpy(),y_predictions.T).T - y_clean_lowfi, axis=1, ord=2)**2
 
+	print('Mean(pw_assim_errors) = ', np.mean(pw_assim_errors))
 
 	running_pred_errors = np.zeros(pw_pred_errors.shape)
 	running_pred_errors_OBS = np.zeros(pw_pred_errors.shape)
 	running_assim_errors = np.zeros(pw_pred_errors.shape)
+	running_assim_errors_OBS = np.zeros(pw_pred_errors.shape)
 
 	for k in range(running_pred_errors.shape[0]):
 		running_pred_errors[k] = np.mean(pw_pred_errors[:(k+1)])
 		running_pred_errors_OBS[k] = np.mean(pw_pred_errors_OBS[:(k+1)])
 		running_assim_errors[k] = np.mean(pw_assim_errors[:(k+1)])
+		running_assim_errors_OBS[k] = np.mean(pw_assim_errors_OBS[:(k+1)])
 
 	ax0.plot(t_plot, pw_pred_errors, color='blue', label='Full-State Point-wise')
 	if eps:
@@ -2563,7 +2788,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 	plt.close(fig)
 
 	np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean, y_assim=y_assim, y_predictions=y_predictions,
-		pw_assim_errors=pw_assim_errors, pw_pred_errors=pw_pred_errors, pw_pred_errors_OBS=pw_pred_errors_OBS,
+		pw_assim_errors=pw_assim_errors, pw_assim_errors_OBS=pw_assim_errors_OBS, pw_pred_errors=pw_pred_errors, pw_pred_errors_OBS=pw_pred_errors_OBS,
 		model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G)
 
 	return G_assim

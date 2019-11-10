@@ -21,6 +21,7 @@ parser.add_argument('--H_obs_hifi', type=str2array, default=np.array([[1,0,0],[0
 parser.add_argument('--G_init_sd', type=float, default=0.1, help='standard deviation for random initialization of assimilation matrix')
 parser.add_argument('--noisy_hifi', type=str2bool, default=False, help='When cheating, noisy_hifi optionally adds measurement noise to the hi-fi observations provided by H_obs_hifi.')
 parser.add_argument('--cheat', type=str2bool, default=False, help='cheating means using unobserved data (aka applying H_obs_hifi). If False, H_obs_hifi is inactive.')
+parser.add_argument('--new_cheat', type=str2bool, default=False, help='cheating means using unobserved data (aka applying H_obs_hifi). If False, H_obs_hifi is inactive.')
 FLAGS = parser.parse_args()
 
 
@@ -70,6 +71,9 @@ def main():
 	assimilation_model_params = {'state_names': ['x','y','z'], 'state_init':random_state_init_TRAIN, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'mxstep':0}
 
 	G_assim_magical = np.array([[0.08603118, 0.12466607, 0.00351079]]).T
+	# G_assim_magical_NEW = np.array([[0.42105263, 1.        , 0.00351079]]).T
+	G_assim_magical_NEW = np.array([[0.52631581, 1.        , 0.00351079]]).T
+
 	# I GET G_assim_magical with the following code:
 	# G_all = np.zeros((10,3))
 	# for n in range(10):
@@ -120,20 +124,47 @@ def main():
 
 
 	## BAD MODEL PARAMETERS NOW ##
+	# pdb.set_trace()
 	for eps_badness in [0.0]:#np.arange(0,0.04,0.02):
 		assimilation_model_params['ode_params'] = (a, b*(1+eps_badness), c)
+
+
+		#### 3D VAR with eps-bad model + magical assimilation matrix
+		# Train
+		#
+		run_output_dir_TRAIN = '{0}/BadModel_eps{1}_NEWmagicalAssimilation/Train{2}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index)
+		if not os.path.exists(run_output_dir_TRAIN):
+			# run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_magical, delta_t,
+			# 	sim_model, assimilation_model_params, lr,
+			# 	run_output_dir_TRAIN,
+			# 	H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+			# 	learn_assim=False, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat)
+			# # Test
+			# npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
+			# G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
+			for n_test in range(y_clean_TEST.shape[0]):
+				run_output_dir_TEST = '{0}/BadModel_eps{1}_NEWmagicalAssimilation/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test)
+				run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], eta, G_assim_magical_NEW, delta_t,
+					sim_model, assimilation_model_params, lr,
+					run_output_dir_TEST,
+					H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+					learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat)
+
+
+
+
 
 		#### 3D VAR with eps-bad model + standard assimilation matrix
 		# Train
 		run_output_dir_TRAIN = '{0}/BadModel_eps{1}_standardAssimilation/Train{2}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index)
 		if not os.path.exists(run_output_dir_TRAIN):
-			run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_standard, delta_t,
-				sim_model, assimilation_model_params, lr,
-				run_output_dir_TRAIN,
-				H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-				learn_assim=False, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat)
+			# run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_standard, delta_t,
+			# 	sim_model, assimilation_model_params, lr,
+			# 	run_output_dir_TRAIN,
+			# 	H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+			# 	learn_assim=False, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat)
 			# Test
-			npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
+			# npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
 			# G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
 			for n_test in range(y_clean_TEST.shape[0]):
 				run_output_dir_TEST = '{0}/BadModel_eps{1}_standardAssimilation/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test)
@@ -147,13 +178,13 @@ def main():
 		# Train
 		run_output_dir_TRAIN = '{0}/BadModel_eps{1}_magicalAssimilation/Train{2}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index)
 		if not os.path.exists(run_output_dir_TRAIN):
-			run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_magical, delta_t,
-				sim_model, assimilation_model_params, lr,
-				run_output_dir_TRAIN,
-				H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-				learn_assim=False, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat)
+			# run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_magical, delta_t,
+			# 	sim_model, assimilation_model_params, lr,
+			# 	run_output_dir_TRAIN,
+			# 	H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+				# learn_assim=False, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat)
 			# Test
-			npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
+			# npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
 			# G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
 			for n_test in range(y_clean_TEST.shape[0]):
 				run_output_dir_TEST = '{0}/BadModel_eps{1}_magicalAssimilation/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test)
@@ -164,82 +195,177 @@ def main():
 					learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat)
 
 
+		###### 3DVAR training using Nelder-Mead #######
+		# Train
+		run_output_dir_TRAIN = '{0}/BadModel_eps{1}_GLOBALlearnAssimilationRANDOMinit_NelderMead/Train{2}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index)
+		if not os.path.exists(run_output_dir_TRAIN):
+			G_assim_init = np.random.multivariate_normal(mean=[0,0,0], cov=(0.1*FLAGS.G_init_sd**2)*np.eye(3)).T[:,None]
+			print('Init=',G_assim_init)
+			run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_init, delta_t,
+				sim_model, assimilation_model_params, lr,
+				run_output_dir_TRAIN,
+				H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+				learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat,
+				full_sequence=True, optimization='NelderMead')
+			# Test
+			npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
+			G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
+			for n_test in range(y_clean_TEST.shape[0]):
+				run_output_dir_TEST = '{0}/BadModel_eps{1}_GLOBALlearnAssimilationRANDOMinit_NelderMead/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test)
+				run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], eta, G_assim_LEARNED, delta_t,
+					sim_model, assimilation_model_params, lr,
+					run_output_dir_TEST,
+					H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+					learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat)
+
+
 		#### 3D VAR with eps-bad model + learned assimilation matrix
 		# h_list = [1e-6, 1e-4, 1e-2]
 		# lr_G_list = [1e-3, 1e-2, 5e-2]
-		h_list = [1e-6]
-		lr_G_list = [1e-3]
+		h_list = [1e-7]
+		lr_G_list = [5e-4]
 
 		np.random.shuffle(h_list)
 		np.random.shuffle(lr_G_list)
 
-		for N_q_tries in [1,100]:
+		for N_q_tries in [1]:
 			for h in h_list:
 				for lr_G in lr_G_list:
-					# Train
-					run_output_dir_TRAIN = '{0}/BadModel_eps{1}_learnAssimilationRANDOMinit+h{3}+lrG{4}+NQtries{5}/Train{2}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, h, lr_G, N_q_tries)
-					if not os.path.exists(run_output_dir_TRAIN):
-						run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_init, delta_t,
-							sim_model, assimilation_model_params, lr,
-							run_output_dir_TRAIN,
-							H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-							learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat,
-							h=h, lr_G=lr_G, N_q_tries=N_q_tries)
-						# Test
-						npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
-						G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
-						for n_test in range(y_clean_TEST.shape[0]):
-							run_output_dir_TEST = '{0}/BadModel_eps{1}_learnAssimilationRANDOMinit+h{4}+lrG{5}+NQtries{6}/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test, h, lr_G, N_q_tries)
-							run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], eta, G_assim_LEARNED, delta_t,
-								sim_model, assimilation_model_params, lr,
-								run_output_dir_TEST,
-								H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-								learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat,
-								h=h, lr_G=lr_G, N_q_tries=N_q_tries)
 
-					## INITIALIZE AT STANDARD G AND DO TRAIN/TEST
-					# Train
-					run_output_dir_TRAIN = '{0}/BadModel_eps{1}_learnAssimilationSTANDARDinit+h{3}+lrG{4}+NQtries{5}/Train{2}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, h, lr_G, N_q_tries)
-					if not os.path.exists(run_output_dir_TRAIN):
-						run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_standard, delta_t,
-							sim_model, assimilation_model_params, lr,
-							run_output_dir_TRAIN,
-							H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-							learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat,
-							h=h, lr_G=lr_G, N_q_tries=N_q_tries)
-						# Test
-						npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
-						G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
-						for n_test in range(y_clean_TEST.shape[0]):
-							run_output_dir_TEST = '{0}/BadModel_eps{1}_learnAssimilationSTANDARDinit+h{4}+lrG{5}+NQtries{6}/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test, h, lr_G, N_q_tries)
-							run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], eta, G_assim_LEARNED, delta_t,
+					for t in np.arange(1,3):
+						G_assim_init = np.random.multivariate_normal(mean=[0,0,0], cov=(0.1*FLAGS.G_init_sd**2)*np.eye(3)).T[:,None]
+						print('Init=',G_assim_init)
+						# Train
+						run_output_dir_TRAIN = '{0}/BadModel_eps{1}_GLOBALlearnAssimilationRANDOMinit+h{3}+lrG{4}+NQtries{5}/Train{2}_{6}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, h, lr_G, N_q_tries, t)
+						if not os.path.exists(run_output_dir_TRAIN):
+							run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_init, delta_t,
 								sim_model, assimilation_model_params, lr,
-								run_output_dir_TEST,
+								run_output_dir_TRAIN,
 								H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-								learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat,
-								h=h, lr_G=lr_G, N_q_tries=N_q_tries)
+								learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat,
+								h=h, lr_G=lr_G, N_q_tries=N_q_tries, full_sequence=True, n_epochs=100)
+							# Test
+							npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
+							G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
+							for n_test in range(y_clean_TEST.shape[0]):
+								run_output_dir_TEST = '{0}/BadModel_eps{1}_GLOBALlearnAssimilationRANDOMinit+h{4}+lrG{5}+NQtries{6}/Train{2}_{7}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test, h, lr_G, N_q_tries, t)
+								run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], eta, G_assim_LEARNED, delta_t,
+									sim_model, assimilation_model_params, lr,
+									run_output_dir_TEST,
+									H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+									learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat,
+									h=h, lr_G=lr_G, N_q_tries=N_q_tries)
 
-					## INITIALIZE AT KNOWN MAGICAL G AND DO TRAIN/TEST
-					# Train
-					run_output_dir_TRAIN = '{0}/BadModel_eps{1}_learnAssimilationMAGICALinit+h{3}+lrG{4}+NQtries{5}/Train{2}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, h, lr_G, N_q_tries)
-					if not os.path.exists(run_output_dir_TRAIN):
-						run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_magical, delta_t,
-							sim_model, assimilation_model_params, lr,
-							run_output_dir_TRAIN,
-							H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-							learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat,
-							h=h, lr_G=lr_G, N_q_tries=N_q_tries)
-						# Test
-						npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
-						G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
-						for n_test in range(y_clean_TEST.shape[0]):
-							run_output_dir_TEST = '{0}/BadModel_eps{1}_learnAssimilationMAGICALinit+h{4}+lrG{5}+NQtries{6}/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test, h, lr_G, N_q_tries)
-							run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], eta, G_assim_LEARNED, delta_t,
-								sim_model, assimilation_model_params, lr,
-								run_output_dir_TEST,
-								H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-								learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat,
-								h=h, lr_G=lr_G, N_q_tries=N_q_tries)
+
+					# # Train
+					# run_output_dir_TRAIN = '{0}/BadModel_eps{1}_GLOBALlearnAssimilationSTANDARDinit+h{3}+lrG{4}+NQtries{5}/Train{2}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, h, lr_G, N_q_tries)
+					# if not os.path.exists(run_output_dir_TRAIN):
+					# 	run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_standard, delta_t,
+					# 		sim_model, assimilation_model_params, lr,
+					# 		run_output_dir_TRAIN,
+					# 		H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+					# 		learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat,
+					# 		h=h, lr_G=lr_G, N_q_tries=N_q_tries, full_sequence=True, n_epochs=100)
+					# 	# Test
+					# 	npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
+					# 	G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
+					# 	for n_test in range(y_clean_TEST.shape[0]):
+					# 		run_output_dir_TEST = '{0}/BadModel_eps{1}_GLOBALlearnAssimilationSTANDARDinit+h{4}+lrG{5}+NQtries{6}/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test, h, lr_G, N_q_tries)
+					# 		run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], eta, G_assim_LEARNED, delta_t,
+					# 			sim_model, assimilation_model_params, lr,
+					# 			run_output_dir_TEST,
+					# 			H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+					# 			learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat,
+					# 			h=h, lr_G=lr_G, N_q_tries=N_q_tries)
+
+
+					# # Train
+					# run_output_dir_TRAIN = '{0}/BadModel_eps{1}_GLOBALlearnAssimilationMAGICALinit+h{3}+lrG{4}+NQtries{5}/Train{2}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, h, lr_G, N_q_tries)
+					# if not os.path.exists(run_output_dir_TRAIN):
+					# 	run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_magical, delta_t,
+					# 		sim_model, assimilation_model_params, lr,
+					# 		run_output_dir_TRAIN,
+					# 		H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+					# 		learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat,
+					# 		h=h, lr_G=lr_G, N_q_tries=N_q_tries, full_sequence=True, n_epochs=100)
+					# 	# Test
+					# 	npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
+					# 	G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
+					# 	for n_test in range(y_clean_TEST.shape[0]):
+					# 		run_output_dir_TEST = '{0}/BadModel_eps{1}_GLOBALlearnAssimilationMAGICALinit+h{4}+lrG{5}+NQtries{6}/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test, h, lr_G, N_q_tries)
+					# 		run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], eta, G_assim_LEARNED, delta_t,
+					# 			sim_model, assimilation_model_params, lr,
+					# 			run_output_dir_TEST,
+					# 			H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+					# 			learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat,
+					# 			h=h, lr_G=lr_G, N_q_tries=N_q_tries)
+
+
+
+					# # Train
+					# run_output_dir_TRAIN = '{0}/BadModel_eps{1}_learnAssimilationRANDOMinit+h{3}+lrG{4}+NQtries{5}/Train{2}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, h, lr_G, N_q_tries)
+					# if not os.path.exists(run_output_dir_TRAIN):
+					# 	run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_init, delta_t,
+					# 		sim_model, assimilation_model_params, lr,
+					# 		run_output_dir_TRAIN,
+					# 		H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+					# 		learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat,
+					# 		h=h, lr_G=lr_G, N_q_tries=N_q_tries)
+					# 	# Test
+					# 	npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
+					# 	G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
+					# 	for n_test in range(y_clean_TEST.shape[0]):
+					# 		run_output_dir_TEST = '{0}/BadModel_eps{1}_learnAssimilationRANDOMinit+h{4}+lrG{5}+NQtries{6}/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test, h, lr_G, N_q_tries)
+					# 		run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], eta, G_assim_LEARNED, delta_t,
+					# 			sim_model, assimilation_model_params, lr,
+					# 			run_output_dir_TEST,
+					# 			H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+					# 			learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat,
+					# 			h=h, lr_G=lr_G, N_q_tries=N_q_tries)
+
+					# ## INITIALIZE AT STANDARD G AND DO TRAIN/TEST
+					# # Train
+					# run_output_dir_TRAIN = '{0}/BadModel_eps{1}_learnAssimilationSTANDARDinit+h{3}+lrG{4}+NQtries{5}/Train{2}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, h, lr_G, N_q_tries)
+					# if not os.path.exists(run_output_dir_TRAIN):
+					# 	run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_standard, delta_t,
+					# 		sim_model, assimilation_model_params, lr,
+					# 		run_output_dir_TRAIN,
+					# 		H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+					# 		learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat,
+					# 		h=h, lr_G=lr_G, N_q_tries=N_q_tries)
+					# 	# Test
+					# 	npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
+					# 	G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
+					# 	for n_test in range(y_clean_TEST.shape[0]):
+					# 		run_output_dir_TEST = '{0}/BadModel_eps{1}_learnAssimilationSTANDARDinit+h{4}+lrG{5}+NQtries{6}/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test, h, lr_G, N_q_tries)
+					# 		run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], eta, G_assim_LEARNED, delta_t,
+					# 			sim_model, assimilation_model_params, lr,
+					# 			run_output_dir_TEST,
+					# 			H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+					# 			learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat,
+					# 			h=h, lr_G=lr_G, N_q_tries=N_q_tries)
+
+					# ## INITIALIZE AT KNOWN MAGICAL G AND DO TRAIN/TEST
+					# # Train
+					# run_output_dir_TRAIN = '{0}/BadModel_eps{1}_learnAssimilationMAGICALinit+h{3}+lrG{4}+NQtries{5}/Train{2}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, h, lr_G, N_q_tries)
+					# if not os.path.exists(run_output_dir_TRAIN):
+					# 	run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_magical, delta_t,
+					# 		sim_model, assimilation_model_params, lr,
+					# 		run_output_dir_TRAIN,
+					# 		H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+					# 		learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat,
+					# 		h=h, lr_G=lr_G, N_q_tries=N_q_tries)
+					# 	# Test
+					# 	npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
+					# 	G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
+					# 	for n_test in range(y_clean_TEST.shape[0]):
+					# 		run_output_dir_TEST = '{0}/BadModel_eps{1}_learnAssimilationMAGICALinit+h{4}+lrG{5}+NQtries{6}/Train{2}/Test{3}'.format(FLAGS.output_dir, eps_badness, FLAGS.train_input_index, n_test, h, lr_G, N_q_tries)
+					# 		run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], eta, G_assim_LEARNED, delta_t,
+					# 			sim_model, assimilation_model_params, lr,
+					# 			run_output_dir_TEST,
+					# 			H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+					# 			learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat,
+					# 			h=h, lr_G=lr_G, N_q_tries=N_q_tries)
 
 
 if __name__ == '__main__':
