@@ -167,6 +167,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 			G_all[method_nm] = {}
 		t_assim[method_nm][eps_val] = {'assim':{'mean':None, 'median':None, 'std':None, 'all':()}, 'pred':{'mean':None, 'median':None, 'std':None, 'all':()} }
 		mse[method_nm][eps_val] = {'assim':{'mean':None, 'median':None, 'std':None, 'all':()}, 'pred':{'mean':None, 'median':None, 'std':None, 'all':()} }
+		mse_stationary[method_nm][eps_val] = {'assim':{'mean':None, 'median':None, 'std':None, 'all':()}, 'pred':{'mean':None, 'median':None, 'std':None, 'all':()} }
 		G_all[method_nm][eps_val] = {'mean':None, 'median':None, 'std':None}
 
 		# store performance statistics
@@ -175,7 +176,6 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 				fname = os.path.join(d, 'Train{0}'.format(ntrain), 'Test{0}'.format(ntest), 'output.npz')
 				try:
 					npzfile = np.load(fname)
-					pdb.set_trace()
 					delta_t = npzfile['model_params'].item().get('delta_t')
 
 					foo_t_index_assim = np.argmax(npzfile['pw_assim_errors'] < npzfile['eps'])
@@ -186,7 +186,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 						foo_t_index_pred = np.Inf
 					t_assim[method_nm][eps_val]['assim']['all'] += (foo_t_index_assim*delta_t,)
 					t_assim[method_nm][eps_val]['pred']['all'] += (foo_t_index_pred*delta_t,)
-					pdb.set_trace()
+
 					mse[method_nm][eps_val]['assim']['all'] += (np.mean(npzfile['pw_assim_errors']),)
 					mse[method_nm][eps_val]['pred']['all'] += (np.mean(npzfile['pw_pred_errors']),)
 					mse_stationary[method_nm][eps_val]['assim']['all'] += (np.mean(npzfile['pw_assim_errors'][foo_t_index_assim:]),)
