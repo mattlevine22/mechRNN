@@ -2532,9 +2532,9 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 				print('NM Init=',G0)
 				# pdb.set_trace()
 				opt = scipy.optimize.fmin(func=evalG, x0=G0, full_output=True, disp=True)
-				G_opt['inits'][i_nm,:] = G0
-				G_opt['final'][i_nm,:] = opt[0]
-				G_opt['optval'][i_nm,:] = opt[1]
+				G_opt['inits'][i_nm,:] = G0.squeeze()
+				G_opt['final'][i_nm,:] = opt[0].squeeze()
+				G_opt['optval'][i_nm,:] = opt[1].squeeze()
 				print('NM solution=', opt[0])
 				if opt[1] <= fmin:
 					fmin = opt[1]
