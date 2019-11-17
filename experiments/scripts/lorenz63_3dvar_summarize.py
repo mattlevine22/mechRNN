@@ -152,6 +152,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 	eps_set = set()
 	t_assim = {}
 	mse = {}
+	mse_stationary = {}
 	G_all = {}
 	for d in my_dirs:
 
