@@ -2508,6 +2508,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 	# return
 
 	### optimize G over entire sequence
+	G_opt = {}
 	if full_sequence:
 		# initialize storage variables
 		loss_history = np.zeros(n_epochs)
@@ -2516,18 +2517,24 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		G_assim_history_running_mean = np.zeros((n_epochs, G_assim.shape[0]))
 		if optimization is 'NelderMead':
 			evalG = lambda G: f_Loss_Sum(G, use_inits=inits)
-			nm_epochs = 5
+			nm_epochs_neldermead = 5
 			fmin = np.inf
 			# G0 = np.array([1,1,1])
 			# opt = scipy.optimize.fmin(func=evalG, x0=G0, full_output=True)
 			# if opt[1] <= fmin:
 			# 	fmin = opt[1]
 			# 	Gbest = opt[0]
-			for i_nm in range(nm_epochs):
+			G_opt['inits'] = np.zeros((nm_epochs_neldermead,G_assim.shape[0]))
+			G_opt['final'] = np.zeros((nm_epochs_neldermead,G_assim.shape[0]))
+			G_opt['optval'] = np.zeros((nm_epochs_neldermead,G_assim.shape[0]))
+			for i_nm in range(nm_epochs_neldermead):
 				G0 = np.random.multivariate_normal(mean=[0,0,0], cov=(0.1**2)*np.eye(3)).T[:,None]
 				print('NM Init=',G0)
 				# pdb.set_trace()
 				opt = scipy.optimize.fmin(func=evalG, x0=G0, full_output=True, disp=True)
+				G_opt['inits'][i_nm] = G0
+				G_opt['final'][i_nm] = opt[0]
+				G_opt['optval'][i_nm] = opt[1]
 				print('NM solution=', opt[0])
 				if opt[1] <= fmin:
 					fmin = opt[1]
@@ -2711,7 +2718,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 
 	if full_sequence:
 		np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean,
-		model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G)
+		model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G, G_opt=G_opt)
 		return G_assim_history_running_mean[-1,:]
 
 	## PLOTS
