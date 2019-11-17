@@ -298,6 +298,11 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 	fig.suptitle('3DVAR Testing Performance')
 	fig.savefig(fname=output_dir+'/'+key_nm+'_method_comparison')
 
+	ax2.set_yscale('log')
+	ax3.set_yscale('log')
+	ax4.set_yscale('log')
+	ax5.set_yscale('log')
+
 	fig.suptitle('3DVAR Testing Performance')
 	fig.savefig(fname=output_dir+'/'+key_nm+'_method_comparison_log')
 	plt.close(fig)
