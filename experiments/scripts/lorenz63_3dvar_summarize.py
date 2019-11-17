@@ -175,6 +175,7 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 				fname = os.path.join(d, 'Train{0}'.format(ntrain), 'Test{0}'.format(ntest), 'output.npz')
 				try:
 					npzfile = np.load(fname)
+					pdb.set_trace()
 					delta_t = npzfile['model_params'].item().get('delta_t')
 
 					foo_t_index_assim = np.argmax(npzfile['pw_assim_errors'] < npzfile['eps'])
@@ -185,8 +186,11 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 						foo_t_index_pred = np.Inf
 					t_assim[method_nm][eps_val]['assim']['all'] += (foo_t_index_assim*delta_t,)
 					t_assim[method_nm][eps_val]['pred']['all'] += (foo_t_index_pred*delta_t,)
+					pdb.set_trace()
 					mse[method_nm][eps_val]['assim']['all'] += (np.mean(npzfile['pw_assim_errors']),)
 					mse[method_nm][eps_val]['pred']['all'] += (np.mean(npzfile['pw_pred_errors']),)
+					mse_stationary[method_nm][eps_val]['assim']['all'] += (np.mean(npzfile['pw_assim_errors'][foo_t_index_assim:]),)
+					mse_stationary[method_nm][eps_val]['pred']['all'] += (np.mean(npzfile['pw_pred_errors'][foo_t_index_pred:]),)
 				except:
 					# Train/Test does not exist
 					pass
@@ -225,15 +229,25 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		mse[method_nm][eps_val]['pred']['median'] = np.median(mse[method_nm][eps_val]['pred']['all'])
 		mse[method_nm][eps_val]['pred']['std'] = np.std(mse[method_nm][eps_val]['pred']['all'])
 
+		mse_stationary[method_nm][eps_val]['assim']['mean'] = np.mean(mse_stationary[method_nm][eps_val]['assim']['all'])
+		mse_stationary[method_nm][eps_val]['assim']['median'] = np.median(mse_stationary[method_nm][eps_val]['assim']['all'])
+		mse_stationary[method_nm][eps_val]['assim']['std'] = np.std(mse_stationary[method_nm][eps_val]['assim']['all'])
+		mse_stationary[method_nm][eps_val]['pred']['mean'] = np.mean(mse_stationary[method_nm][eps_val]['pred']['all'])
+		mse_stationary[method_nm][eps_val]['pred']['median'] = np.median(mse_stationary[method_nm][eps_val]['pred']['all'])
+		mse_stationary[method_nm][eps_val]['pred']['std'] = np.std(mse_stationary[method_nm][eps_val]['pred']['all'])
+
 
 	### NOW initialize plot
-	fig, axlist = plt.subplots(nrows=2, ncols=2,
+	fig, axlist = plt.subplots(nrows=3, ncols=2,
 		figsize = [10, 10],
 		sharey=False, sharex=False)
 	ax0 = axlist[0,0]
 	ax1 = axlist[0,1]
 	ax2 = axlist[1,0]
 	ax3 = axlist[1,1]
+	ax4 = axlist[2,0]
+	ax5 = axlist[2,1]
+
 	eps_vec = sorted(eps_set)
 
 
@@ -246,34 +260,41 @@ def epsilon_summary(my_dirs=None, output_dir='default_output', n_train_trajector
 		std_vec = [t_assim[method_nm][eps_val]['pred']['std'] for eps_val in eps_vec]
 		ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=method_nm)
 
+		median_vec = [mse_stationary[method_nm][eps_val]['assim']['median'] for eps_val in eps_vec]
+		std_vec = [mse_stationary[method_nm][eps_val]['assim']['std'] for eps_val in eps_vec]
+		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=method_nm)
+
+		median_vec = [mse_stationary[method_nm][eps_val]['pred']['median'] for eps_val in eps_vec]
+		std_vec = [mse_stationary[method_nm][eps_val]['pred']['std'] for eps_val in eps_vec]
+		ax3.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=method_nm)
+
 		median_vec = [mse[method_nm][eps_val]['assim']['median'] for eps_val in eps_vec]
 		std_vec = [mse[method_nm][eps_val]['assim']['std'] for eps_val in eps_vec]
-		ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=method_nm)
+		ax4.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=method_nm)
 
 		median_vec = [mse[method_nm][eps_val]['pred']['median'] for eps_val in eps_vec]
 		std_vec = [mse[method_nm][eps_val]['pred']['std'] for eps_val in eps_vec]
-		ax3.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=method_nm)
+		ax5.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=method_nm)
 
 	ax1.legend()
 
 	ax2.set_xlabel(r'$\epsilon$ model error')
 	ax3.set_xlabel(r'$\epsilon$ model error')
+	ax4.set_xlabel(r'$\epsilon$ model error')
+	ax5.set_xlabel(r'$\epsilon$ model error')
 
 	ax0.set_title('Assimilation Error')
 	ax1.set_title('1-step Prediction Error')
 	ax0.set_ylabel('t_assim')
 	ax1.set_ylabel('t_assim')
 
-	ax2.set_ylabel('MSE')
-	ax3.set_ylabel('MSE')
+	ax2.set_ylabel('MSE stationary')
+	ax3.set_ylabel('MSE stationary')
+	ax4.set_ylabel('MSE total')
+	ax5.set_ylabel('MSE total')
 
 	fig.suptitle('3DVAR Testing Performance')
 	fig.savefig(fname=output_dir+'/'+key_nm+'_method_comparison')
-
-	ax2.set_ylabel('logMSE')
-	ax3.set_ylabel('logMSE')
-	ax2.set_yscale('log')
-	ax3.set_yscale('log')
 
 	fig.suptitle('3DVAR Testing Performance')
 	fig.savefig(fname=output_dir+'/'+key_nm+'_method_comparison_log')
