@@ -2575,13 +2575,13 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 	print('G_assim:', G_assim)
 	# print('Total Loss for G:', f_Loss_Sum(G_assim))
 	if opt_surfaces_only:
-		tvec = [10,50,500]
+		tvec = [10,50]
 		tvec_dict = {t: np.int(t/model_params['delta_t']) for t in tvec}
 		xgrid = np.linspace(-0.1,0.3,50)
 		ygrid = np.linspace(-0.1,0.3,50)
 		tmax = max(tvec)
 		t_span_opt = np.arange(0, tmax, model_params['delta_t'])
-		N_trajs = 3
+		N_trajs = 1
 		for n_traj in range(N_trajs):
 			L_grid_PartialState = np.zeros((len(tvec),len(xgrid),len(ygrid)))
 			L_grid_FullState = np.zeros((len(tvec),len(xgrid),len(ygrid)))
