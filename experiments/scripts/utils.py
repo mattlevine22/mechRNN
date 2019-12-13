@@ -2306,12 +2306,12 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		inits=None, plot_state_indices=None,
 		max_plot=None, learn_assim=False, eps=None, cheat=False, new_cheat=False, h=1e-3, lr_G=0.0005,
 		G_update_interval=1, N_q_tries=1, n_epochs=1, eps_hifi=None,
-		full_sequence=False, optimization=None):
+		full_sequence=False, optimization=None, opt_surfaces_only=False):
 
 	dtype = torch.FloatTensor
 
 	H_obs_lowfi = torch.FloatTensor(H_obs_lowfi)
-	H_obs_hifi = torch.FloatTensor(H_obs_hifi)
+	# H_obs_hifi = torch.FloatTensor(H_obs_hifi)
 
 	# y_clean = torch.FloatTensor(y_clean)
 	# y_noisy = torch.FloatTensor(y_noisy)
@@ -2332,12 +2332,12 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 	y_noisy_lowfi = np.matmul(H_obs_lowfi.numpy(),y_noisy.T).T
 
 
-	y_hifi = np.matmul(H_obs_hifi.numpy(),y_clean.T).T
-	if noisy_hifi:
-		if eps_hifi is None:
-			eps_hifi = eps
-		# add decoupled noise of size epsilon to hifi measurements
-		y_hifi = y_hifi + eps_hifi*np.random.randn(y_hifi.shape[0],y_hifi.shape[1])
+	# y_hifi = np.matmul(H_obs_hifi.numpy(),y_clean.T).T
+	# if noisy_hifi:
+	# 	if eps_hifi is None:
+	# 		eps_hifi = eps
+	# 	# add decoupled noise of size epsilon to hifi measurements
+	# 	y_hifi = y_hifi + eps_hifi*np.random.randn(y_hifi.shape[0],y_hifi.shape[1])
 
 	# if noisy_hifi:
 	# 	y_hifi = np.matmul(H_obs_hifi.numpy(),y_noisy.T).T
@@ -2367,9 +2367,9 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		foo_assim = torch.mm( torch.eye(G.shape[0]) - torch.mm(G, H_obs_lowfi), m_pred_now.detach()) + torch.mm(G,meas_lowfi_now)
 		return foo_assim
 
-	def f_Lk_cheat(G, m_pred_now, meas_lowfi_now, meas_hifi_now, H_obs_hifi=H_obs_hifi):
+	def f_Lk_cheat(G, m_pred_now, meas_lowfi_now, meas_hifi_now, H_obs_lowfi=H_obs_lowfi):
 		mk = f_mk(G, m_pred_now, meas_lowfi_now)
-		Lk = ( torch.mm(H_obs_hifi, mk).squeeze() -  meas_hifi_now.squeeze() ).pow(2).sum()
+		Lk = ( torch.mm(H_obs_lowfi, mk).squeeze() -  meas_hifi_now.squeeze() ).pow(2).sum()
 		return Lk
 
 	def f_Lk(G, m_assim_prev2, meas_prev1, meas_now, H=H_obs_lowfi):
@@ -2464,48 +2464,180 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		# pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
 		return loss/n_iters
 
+
+	def f_Loss_PartialState(G_input, partial_traj, n_max, use_inits=inits):
+		print('G=',G_input)
+		if type(G_input) is not torch.Tensor:
+			G_input = torch.FloatTensor(G_input[:,None])
+
+		in_stationary = False
+		total_loss = 0
+		stationary_loss = np.inf
+		y_assim = np.zeros(y_clean.shape)
+		for i in range(n_max):
+			meas_now = torch.FloatTensor(partial_traj[i,:,None])
+
+			# make prediction using previous state estimate
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method='RK45', t_eval=tspan)
+			m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
+			# y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
+
+			# Do the assimilation!
+			m_assim_now = f_mk(G_input, m_pred_now, meas_now)
+
+			# set inits
+			use_inits = m_assim_now.detach().numpy().squeeze()
+
+			# compute loss
+			tmp_loss = ( torch.mm(H_obs_lowfi, m_pred_now).squeeze() -  meas_now.squeeze() ).pow(2).sum()
+			total_loss += tmp_loss
+
+			if not in_stationary and (tmp_loss<=eps):
+				in_stationary = True
+				stationary_loss = 0
+
+			if in_stationary:
+				stationary_loss += tmp_loss
+
+			# y_assim[i,:] = use_inits
+
+			if any(abs(m_assim_now) > 1000):
+				print('Model is blowing up! Abort!')
+				print(m_assim_now)
+				# n_iters = i
+				break
+
+		# pdb.set_trace()
+		if in_stationary:
+			loss = stationary_loss
+		else:
+			loss = total_loss
+
+		print('Loss=',loss/i)
+		# pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
+		return loss/i
+
+
+	def f_Loss_FullState(G_input, partial_traj, full_traj, n_max, use_inits=inits):
+		print('G=',G_input)
+		if type(G_input) is not torch.Tensor:
+			G_input = torch.FloatTensor(G_input[:,None])
+
+		in_stationary = False
+		total_loss = 0
+		stationary_loss = np.inf
+		y_assim = np.zeros(y_clean.shape)
+		for i in range(n_max):
+			true_now = torch.FloatTensor(full_traj[i,:,None])
+			meas_now = torch.FloatTensor(partial_traj[i,:,None])
+
+			# make prediction using previous state estimate
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method='RK45', t_eval=tspan)
+			m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
+			# y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
+
+			# Do the assimilation!
+			m_assim_now = f_mk(G_input, m_pred_now, meas_now)
+
+			# set inits
+			use_inits = m_assim_now.detach().numpy().squeeze()
+
+			# compute loss
+			tmp_loss = ( m_assim_now.squeeze() -  true_now.squeeze() ).pow(2).sum()
+			total_loss += tmp_loss
+
+			if not in_stationary and (tmp_loss<=eps):
+				in_stationary = True
+				stationary_loss = 0
+
+			if in_stationary:
+				stationary_loss += tmp_loss
+
+			# y_assim[i,:] = use_inits
+
+			if any(abs(m_assim_now) > 1000):
+				print('Model is blowing up! Abort!')
+				print(m_assim_now)
+				# n_iters = i
+				break
+
+		# pdb.set_trace()
+		if in_stationary:
+			loss = stationary_loss
+		else:
+			loss = total_loss
+
+		print('Loss=',loss/i)
+		# pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
+		return loss/i
+
+
 	print('G_assim:', G_assim)
-	print('Total Loss for G:', f_Loss_Sum(G_assim))
-	# xgrid = np.linspace(-0.1,0.3,50)
-	# ygrid = np.linspace(-0.1,0.3,50)
-	# L_grid = np.zeros((len(xgrid),len(ygrid)))
-	# G_grid = np.zeros((len(xgrid),len(ygrid),3))
-	# i = -1
-	# for x in xgrid:
-	# 	i += 1
-	# 	j = -1
-	# 	for y in ygrid:
-	# 		j += 1
-	# 		print('Solving for (x,y)=',x,y)
-	# 		G = torch.FloatTensor(np.array([[x,y,0.00351079]]).T)
-	# 		L_grid[i,j] = f_Loss_Sum(G)
-	# 		G_grid[i,j,:] = G.numpy().squeeze()
+	# print('Total Loss for G:', f_Loss_Sum(G_assim))
+	if opt_surfaces_only:
+		tvec = [10,50,500]
+		tvec_dict = {t: np.int(t/model_params['delta_t']) for t in tvec}
+		xgrid = np.linspace(-0.1,0.3,50)
+		ygrid = np.linspace(-0.1,0.3,50)
+		tmax = max(tvec)
+		t_span_opt = np.arange(0, tmax, model_params['delta_t'])
+		N_trajs = 3
+		for n_traj in range(N_trajs):
+			L_grid_PartialState = np.zeros((len(tvec),len(xgrid),len(ygrid)))
+			L_grid_FullState = np.zeros((len(tvec),len(xgrid),len(ygrid)))
+			G_grid = np.zeros((len(tvec),len(xgrid),len(ygrid),3))
+			v0 = get_lorenz_inits(n=1).squeeze()
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(t_span_opt[0],t_span_opt[-1]), y0=v0, method='RK45', t_eval=t_span_opt)
+			true_traj = torch.FloatTensor(sol.y.T)
+			true_partial = torch.mm(true_traj,H_obs_lowfi.t())
+			noisy_partial_traj = true_partial + eps*torch.FloatTensor(np.random.randn(true_partial.shape[0],true_partial.shape[1]))
+			i = -1
+			for x in xgrid:
+				i += 1
+				j = -1
+				for y in ygrid:
+					j += 1
+					print('Solving for (x,y)=',x,y)
+					# G = torch.FloatTensor(np.array([[x,y,0.00351079]]).T)
+					G = torch.FloatTensor(np.array([[x,y,0.]]).T)
+					tc = -1
+					for t in tvec_dict:
+						tc += 1
+						n_max = tvec_dict[t]
+						L_grid_PartialState[tc,i,j] = f_Loss_PartialState(G, noisy_partial_traj, n_max=n_max, use_inits=v0)
+						L_grid_FullState[tc,i,j] = f_Loss_FullState(G, noisy_partial_traj, true_traj, n_max=n_max, use_inits=v0)
+						# L_grid[tc,i,j] = f_Loss_Sum(G)
+						G_grid[tc,i,j,:] = G.numpy().squeeze()
 
-	# np.save(output_dir+'/L_grid',L_grid)
-	# np.save(output_dir+'/G_grid',G_grid)
+			np.save(output_dir+'/L_grid_PartialState_'+str(n_traj), L_grid_PartialState)
+			np.save(output_dir+'/L_grid_FullState_'+str(n_traj), L_grid_FullState)
+			np.save(output_dir+'/G_grid', G_grid)
 
-	# L_grid_new = np.copy(L_grid)
-	# L_grid_new[L_grid_new>5] = 5
+			# L_grid_new = np.copy(L_grid)
+			# L_grid_new[L_grid_new>5] = 5
+			tc = -1
+			for my_t in tvec_dict:
+				tc += 1
+				fig, axlist = plt.subplots(nrows=1, ncols=2)
+				ax0 = axlist[0]
+				im0 = ax0.imshow(L_grid_FullState[tc,:,:].squeeze(), interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
+				ax0.set_xlabel('K_2')
+				ax0.set_ylabel('K_1')
+				ax0.set_title('Full-State Loss Surface')
+				# ax0.colorbar(im0)
 
-	# fig, (ax0) = plt.subplots(nrows=1, ncols=1)
-	# im = ax0.imshow(L_grid_new, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
-	# ax0.set_xlabel('G_1')
-	# ax0.set_ylabel('G_0')
-	# ax0.set_title('Loss Surface')
-	# fig.colorbar(im, ax=ax0)
-	# fig.savefig(fname=output_dir+'/global_loss_surface')
-	# plt.close(fig)
+				ax1 = axlist[1]
+				im1 = ax1.imshow(L_grid_PartialState[tc,:,:].squeeze(), interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
+				ax1.set_xlabel('K_2')
+				ax1.set_ylabel('K_1')
+				ax1.set_title('Partial-State Loss Surface')
+				# fig.colorbar(im1, ax=ax1)
 
+				fig.suptitle('Trajectory {0}, Length {1}'.format(n_traj, my_t))
+				fig.savefig(fname=output_dir+'/global_loss_surface'+str(n_traj)+'_length'+str(my_t))
+				plt.close(fig)
+		return
 
-	# fig, (ax0) = plt.subplots(nrows=1, ncols=1)
-	# im = ax0.imshow(np.log(L_grid), interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
-	# ax0.set_xlabel('G_1')
-	# ax0.set_ylabel('G_0')
-	# ax0.set_title('Log-Loss Surface')
-	# fig.colorbar(im, ax=ax0)
-	# fig.savefig(fname=output_dir+'/global_loss_surface_log')
-	# plt.close(fig)
-	# return
 
 	### optimize G over entire sequence
 	G_opt = {}
