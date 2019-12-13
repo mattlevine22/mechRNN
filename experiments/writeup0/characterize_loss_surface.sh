@@ -13,7 +13,7 @@ module purge
 module load cuda/9.0
 module load python/2.7.15-tf
 
-srun --exclusive -N 1 -n 1 python ../scripts/l63_3dvar_characterize_loss_functions.py.py --savedir /groups/astuart/mlevine/writeup0/l63/3dvar/loss_surface_characterization/n0 &
-srun --exclusive -N 1 -n 1 python ../scripts/l63_3dvar_characterize_loss_functions.py.py --savedir /groups/astuart/mlevine/writeup0/l63/3dvar/loss_surface_characterization/n1 &
-srun --exclusive -N 1 -n 1 python ../scripts/l63_3dvar_characterize_loss_functions.py.py --savedir /groups/astuart/mlevine/writeup0/l63/3dvar/loss_surface_characterization/n2 &
+srun --exclusive -N 1 -n 1 python ../scripts/l63_3dvar_characterize_loss_functions.py --savedir /groups/astuart/mlevine/writeup0/l63/3dvar/loss_surface_characterization/n0 &
+srun --exclusive -N 1 -n 1 python ../scripts/l63_3dvar_characterize_loss_functions.py --savedir /groups/astuart/mlevine/writeup0/l63/3dvar/loss_surface_characterization/n1 &
+srun --exclusive -N 1 -n 1 python ../scripts/l63_3dvar_characterize_loss_functions.py --savedir /groups/astuart/mlevine/writeup0/l63/3dvar/loss_surface_characterization/n2 &
 wait
