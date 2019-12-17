@@ -2575,7 +2575,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 	print('G_assim:', G_assim)
 	# print('Total Loss for G:', f_Loss_Sum(G_assim))
 	if opt_surfaces_only:
-		tvec = [10,50]
+		tvec = [10,50,100]
 		tvec_dict = {t: np.int(t/model_params['delta_t']) for t in tvec}
 		xgrid = np.linspace(-0.1,0.3,50)
 		ygrid = np.linspace(-0.1,0.3,50)
@@ -2619,66 +2619,75 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 			np.save(output_dir+'/G_grid', G_grid)
 
 			# stationary loss
-			L_grid_FullState[L_grid_FullState>1.5] = 1.5
-			L_grid_PartialState[L_grid_PartialState>1.5] = 1.5
-			tc = -1
-			cmap = 'gist_ncar_r'
-			for my_t in tvec_dict:
-				tc += 1
-				fig, axlist = plt.subplots(nrows=1, ncols=2, figsize=(12,6))
-				ax0 = axlist[0]
-				im0 = ax0.imshow(L_grid_FullState[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
-				ax0.set_xlabel('K_2')
-				ax0.set_ylabel('K_1')
-				min_val = np.min(L_grid_FullState[tc,:,:].squeeze())
-				my_min = np.squeeze(G_grid[tc,:].squeeze()[np.where(L_grid_FullState[tc,:,:].squeeze()==min_val)])
-				ax0.set_title('Full-State \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
-				fig.colorbar(im0, ax=ax0)
+			def f_make_plots(outputname, Lpartial, Lfull, Lthresh=1.5, cmap='gist_ncar_r'):
+				Lfull = np.copy(Lfull)
+				Lpartial = np.copy(Lpartial)
+				Lfull[Lfull>Lthresh] = Lthresh
+				Lpartial[Lpartial>Lthresh] = Lthresh
+				tc = -1
+				for my_t in tvec_dict:
+					tc += 1
+					fig, axlist = plt.subplots(nrows=1, ncols=2, figsize=(12,6))
+					ax0 = axlist[0]
+					im0 = ax0.imshow(Lfull[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
+					ax0.set_xlabel('K_2')
+					ax0.set_ylabel('K_1')
+					min_val = np.min(Lfull[tc,:,:].squeeze())
+					my_min = np.squeeze(G_grid[tc,:].squeeze()[np.where(Lfull[tc,:,:].squeeze()==min_val)])
+					ax0.set_title('Full-State \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
+					fig.colorbar(im0, ax=ax0)
 
-				ax1 = axlist[1]
-				im1 = ax1.imshow(L_grid_PartialState[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
-				ax1.set_xlabel('K_2')
-				ax1.set_ylabel('K_1')
-				min_val = np.min(L_grid_PartialState[tc,:,:].squeeze())
-				my_min = np.squeeze(G_grid[tc,:].squeeze()[np.where(L_grid_PartialState[tc,:,:].squeeze()==min_val)])
-				ax1.set_title('Partial-State \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
-				fig.colorbar(im1, ax=ax1)
+					ax1 = axlist[1]
+					im1 = ax1.imshow(Lpartial[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
+					ax1.set_xlabel('K_2')
+					ax1.set_ylabel('K_1')
+					min_val = np.min(Lpartial[tc,:,:].squeeze())
+					my_min = np.squeeze(G_grid[tc,:].squeeze()[np.where(Lpartial[tc,:,:].squeeze()==min_val)])
+					ax1.set_title('Partial-State \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
+					fig.colorbar(im1, ax=ax1)
 
-				fig.suptitle('Trajectory {0}, Length {1}, Stationary-Loss Surface'.format(n_traj, my_t))
-				fig.savefig(fname=output_dir+'/global_StationaryLoss_surface'+str(n_traj)+'_length'+str(my_t))
-				plt.close(fig)
+					fig.suptitle('Trajectory {0}, Length {1}, Stationary-Loss Surface'.format(n_traj, my_t))
+					fig.savefig(fname=output_dir+outputname+str(n_traj)+'_length'+str(my_t))
+					plt.close(fig)
+				return
+
+			f_make_plots('/global_StationaryLoss_surface', L_grid_PartialState, L_grid_FullState, Lthresh=1.5)
+			f_make_plots('/global_TotalLoss_surface', L_grid_PartialState_total, L_grid_FullState_total, Lthresh=12)
+			f_make_plots('/global_StationaryLoss_surface_noThresh', L_grid_PartialState, L_grid_FullState, Lthresh=np.inf)
+			f_make_plots('/global_TotalLoss_surface_noThresh', L_grid_PartialState_total, L_grid_FullState_total, Lthresh=np.inf)
+
 
 			# now show total loss
-			L_grid_FullState_total[L_grid_FullState_total>1.5] = 1.5
-			L_grid_PartialState_total[L_grid_PartialState_total>1.5] = 1.5
-			tc = -1
-			cmap = 'gist_ncar_r'
-			for my_t in tvec_dict:
-				tc += 1
-				fig, axlist = plt.subplots(nrows=1, ncols=2, figsize=(12,6))
-				ax0 = axlist[0]
-				im0 = ax0.imshow(L_grid_FullState_total[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
-				ax0.set_xlabel('K_2')
-				ax0.set_ylabel('K_1')
-				min_val = np.min(L_grid_FullState_total[tc,:,:].squeeze())
-				my_min = np.squeeze(G_grid[tc,:].squeeze()[np.where(L_grid_FullState_total[tc,:,:].squeeze()==min_val)])
-				ax0.set_title('Full-State \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
-				fig.colorbar(im0, ax=ax0)
+			# L_grid_FullState_total[L_grid_FullState_total>12] = 12
+			# L_grid_PartialState_total[L_grid_PartialState_total>12] = 12
+			# tc = -1
+			# cmap = 'gist_ncar_r'
+			# for my_t in tvec_dict:
+			# 	tc += 1
+			# 	fig, axlist = plt.subplots(nrows=1, ncols=2, figsize=(12,6))
+			# 	ax0 = axlist[0]
+			# 	im0 = ax0.imshow(L_grid_FullState_total[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
+			# 	ax0.set_xlabel('K_2')
+			# 	ax0.set_ylabel('K_1')
+			# 	min_val = np.min(L_grid_FullState_total[tc,:,:].squeeze())
+			# 	my_min = np.squeeze(G_grid[tc,:].squeeze()[np.where(L_grid_FullState_total[tc,:,:].squeeze()==min_val)])
+			# 	ax0.set_title('Full-State \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
+			# 	fig.colorbar(im0, ax=ax0)
 
-				ax1 = axlist[1]
-				im1 = ax1.imshow(L_grid_PartialState_total[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
-				ax1.set_xlabel('K_2')
-				ax1.set_ylabel('K_1')
-				min_val = np.min(L_grid_PartialState_total[tc,:,:].squeeze())
-				my_min = np.squeeze(G_grid[tc,:].squeeze()[np.where(L_grid_PartialState_total[tc,:,:].squeeze()==min_val)])
-				ax1.set_title('Partial-State \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
-				fig.colorbar(im1, ax=ax1)
+			# 	ax1 = axlist[1]
+			# 	im1 = ax1.imshow(L_grid_PartialState_total[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
+			# 	ax1.set_xlabel('K_2')
+			# 	ax1.set_ylabel('K_1')
+			# 	min_val = np.min(L_grid_PartialState_total[tc,:,:].squeeze())
+			# 	my_min = np.squeeze(G_grid[tc,:].squeeze()[np.where(L_grid_PartialState_total[tc,:,:].squeeze()==min_val)])
+			# 	ax1.set_title('Partial-State \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
+			# 	fig.colorbar(im1, ax=ax1)
 
-				fig.suptitle('Trajectory {0}, Length {1}, Total-Loss Surface'.format(n_traj, my_t))
-				fig.savefig(fname=output_dir+'/global_TotalLoss_surface'+str(n_traj)+'_length'+str(my_t))
-				plt.close(fig)
+			# 	fig.suptitle('Trajectory {0}, Length {1}, Total-Loss Surface'.format(n_traj, my_t))
+			# 	fig.savefig(fname=output_dir+'/global_TotalLoss_surface'+str(n_traj)+'_length'+str(my_t))
+			# 	plt.close(fig)
 
-			return
+			# return
 
 
 	### optimize G over entire sequence
