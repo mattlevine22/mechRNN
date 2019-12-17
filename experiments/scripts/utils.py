@@ -2613,30 +2613,35 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 			np.save(output_dir+'/L_grid_FullState_'+str(n_traj), L_grid_FullState)
 			np.save(output_dir+'/G_grid', G_grid)
 
-			# L_grid_new = np.copy(L_grid)
-			# L_grid_new[L_grid_new>5] = 5
+			L_grid_FullState[L_grid_FullState>1.5] = 1.5
+			L_grid_PartialState[L_grid_PartialState>1.5] = 1.5
 			tc = -1
+			cmap = 'gist_ncar_r'
 			for my_t in tvec_dict:
 				tc += 1
-				fig, axlist = plt.subplots(nrows=1, ncols=2)
+				fig, axlist = plt.subplots(nrows=1, ncols=2, figsize=(12,5))
 				ax0 = axlist[0]
-				im0 = ax0.imshow(L_grid_FullState[tc,:,:].squeeze(), interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
+				im0 = ax0.imshow(L_grid_FullState[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
 				ax0.set_xlabel('K_2')
 				ax0.set_ylabel('K_1')
-				ax0.set_title('Full-State Loss Surface')
-				# ax0.colorbar(im0)
+				min_val = np.min(L_grid_FullState[tc,:,:].squeeze())
+				my_min = np.squeeze(Ggrid[tc,:].squeeze()[np.where(L_grid_FullState[tc,:,:].squeeze()==min_val)])
+				ax0.set_title('Full-State Loss Surface \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
+				fig.colorbar(im0, ax=ax0)
 
 				ax1 = axlist[1]
-				im1 = ax1.imshow(L_grid_PartialState[tc,:,:].squeeze(), interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
+				im1 = ax1.imshow(L_grid_PartialState[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
 				ax1.set_xlabel('K_2')
 				ax1.set_ylabel('K_1')
-				ax1.set_title('Partial-State Loss Surface')
-				# fig.colorbar(im1, ax=ax1)
+				min_val = np.min(L_grid_PartialState[tc,:,:].squeeze())
+				my_min = np.squeeze(Ggrid[tc,:].squeeze()[np.where(L_grid_PartialState[tc,:,:].squeeze()==min_val)])
+				ax1.set_title('Partial-State Loss Surface \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
+				fig.colorbar(im1, ax=ax1)
 
 				fig.suptitle('Trajectory {0}, Length {1}'.format(n_traj, my_t))
-				fig.savefig(fname=output_dir+'/global_loss_surface'+str(n_traj)+'_length'+str(my_t))
+				fig.savefig(fname=output_dir+'/global_loss_surfaceV2'+str(n_traj)+'_length'+str(my_t))
 				plt.close(fig)
-		return
+			return
 
 
 	### optimize G over entire sequence
