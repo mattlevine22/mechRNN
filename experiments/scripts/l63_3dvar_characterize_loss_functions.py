@@ -80,16 +80,16 @@ def main():
 				run_output_dir, H_obs_lowfi=H_obs, learn_assim=False, inits = my_random_inits, eps=eps, opt_surfaces_only=True)
 
 			# 3D VAR with bad model + learn assimilation matrix
-			run_output_dir = output_dir + '/3DVAR_epsBadness{0}_learnAssimilation'.format(eps_badness)
-			torch.manual_seed(0)
-			G_assim_LEARNED = run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
-				sim_model, assimilation_model_params, lr,
-				run_output_dir, H_obs_lowfi=H_obs, learn_assim=True, inits = my_random_inits, eps=eps, opt_surfaces_only=True)
-			run_output_dir = output_dir + '/3DVAR_epsBadness{0}_learnAssimilationUSED'.format(eps_badness)
-			torch.manual_seed(0)
-			run_3DVAR(y_clean, y_noisy, eta, G_assim_LEARNED, delta_t,
-				sim_model, assimilation_model_params, lr,
-				run_output_dir, H_obs_lowfi=H_obs, learn_assim=False, inits = my_random_inits, eps=eps, opt_surfaces_only=True)
+			# run_output_dir = output_dir + '/3DVAR_epsBadness{0}_learnAssimilation'.format(eps_badness)
+			# torch.manual_seed(0)
+			# G_assim_LEARNED = run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
+			# 	sim_model, assimilation_model_params, lr,
+			# 	run_output_dir, H_obs_lowfi=H_obs, learn_assim=True, inits = my_random_inits, eps=eps, opt_surfaces_only=True)
+			# run_output_dir = output_dir + '/3DVAR_epsBadness{0}_learnAssimilationUSED'.format(eps_badness)
+			# torch.manual_seed(0)
+			# run_3DVAR(y_clean, y_noisy, eta, G_assim_LEARNED, delta_t,
+			# 	sim_model, assimilation_model_params, lr,
+			# 	run_output_dir, H_obs_lowfi=H_obs, learn_assim=False, inits = my_random_inits, eps=eps, opt_surfaces_only=True)
 
 
 if __name__ == '__main__':
