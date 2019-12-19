@@ -2306,7 +2306,9 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		inits=None, plot_state_indices=None,
 		max_plot=None, learn_assim=False, eps=None, cheat=False, new_cheat=False, h=1e-3, lr_G=0.0005,
 		G_update_interval=1, N_q_tries=1, n_epochs=1, eps_hifi=None,
-		full_sequence=False, optimization=None, opt_surfaces_only=False):
+		full_sequence=False, optimization=None, opt_surfaces_only=False,
+		optim_full_state=True, random_nelder_inits=True, n_nelder_inits=1,
+		max_nelder_sols=None):
 
 	dtype = torch.FloatTensor
 
@@ -2331,6 +2333,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 	y_clean_lowfi = np.matmul(H_obs_lowfi.numpy(),y_clean.T).T
 	y_noisy_lowfi = np.matmul(H_obs_lowfi.numpy(),y_noisy.T).T
 
+	y_hifi = y_clean
 
 	# y_hifi = np.matmul(H_obs_hifi.numpy(),y_clean.T).T
 	# if noisy_hifi:
@@ -2367,9 +2370,14 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		foo_assim = torch.mm( torch.eye(G.shape[0]) - torch.mm(G, H_obs_lowfi), m_pred_now.detach()) + torch.mm(G,meas_lowfi_now)
 		return foo_assim
 
-	def f_Lk_cheat(G, m_pred_now, meas_lowfi_now, meas_hifi_now, H_obs_lowfi=H_obs_lowfi):
+	def f_Lk_cheat_OLD(G, m_pred_now, meas_lowfi_now, meas_hifi_now, H_obs_lowfi=H_obs_lowfi):
 		mk = f_mk(G, m_pred_now, meas_lowfi_now)
 		Lk = ( torch.mm(H_obs_lowfi, mk).squeeze() -  meas_hifi_now.squeeze() ).pow(2).sum()
+		return Lk
+
+	def f_Lk_cheat(G, m_pred_now, meas_lowfi_now, meas_hifi_now):
+		mk = f_mk(G, m_pred_now, meas_lowfi_now)
+		Lk = ( mk.squeeze() -  meas_hifi_now.squeeze() ).pow(2).sum()
 		return Lk
 
 	def f_Lk(G, m_assim_prev2, meas_prev1, meas_now, H=H_obs_lowfi):
@@ -2515,7 +2523,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 
 		print('Loss=',loss/i)
 		# pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
-		return (loss/i, total_loss/i)
+		return (loss.numpy()/i, total_loss.numpy()/i)
 
 
 	def f_Loss_FullState(G_input, partial_traj, full_traj, n_max, use_inits=inits):
@@ -2569,7 +2577,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 
 		print('Loss=',loss/i)
 		# pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
-		return (loss/i, total_loss/i)
+		return (loss.numpy()/i, total_loss.numpy()/i)
 
 
 	print('G_assim:', G_assim)
@@ -2698,23 +2706,35 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		dL_history = np.zeros(n_epochs)
 		G_assim_history = np.zeros((n_epochs, G_assim.shape[0]))
 		G_assim_history_running_mean = np.zeros((n_epochs, G_assim.shape[0]))
-		if optimization is 'NelderMead':
-			evalG = lambda G: f_Loss_Sum(G, use_inits=inits)
-			nm_epochs_neldermead = 5
+		if optimization == 'NelderMead':
+			if optim_full_state:
+				evalG = lambda G: f_Loss_FullState(G, partial_traj=torch.FloatTensor(y_noisy_lowfi), full_traj=torch.FloatTensor(y_clean), n_max=n_iters, use_inits=inits)[0]
+			else:
+				evalG = lambda G: f_Loss_PartialState(G, partial_traj=torch.FloatTensor(y_noisy_lowfi), n_max=n_iters, use_inits=inits)[0]
 			fmin = np.inf
 			# G0 = np.array([1,1,1])
 			# opt = scipy.optimize.fmin(func=evalG, x0=G0, full_output=True)
 			# if opt[1] <= fmin:
 			# 	fmin = opt[1]
 			# 	Gbest = opt[0]
-			G_opt['inits'] = np.zeros((nm_epochs_neldermead,G_assim.shape[0]))
-			G_opt['final'] = np.zeros((nm_epochs_neldermead,G_assim.shape[0]))
-			G_opt['optval'] = np.zeros((nm_epochs_neldermead,G_assim.shape[0]))
-			for i_nm in range(nm_epochs_neldermead):
-				G0 = np.random.multivariate_normal(mean=[0,0,0], cov=(0.1**2)*np.eye(3)).T[:,None]
+			# G_opt['opt_struct'] = []
+			G_opt['inits'] = np.zeros((n_nelder_inits,G_assim.shape[0]))
+			G_opt['final'] = np.zeros((n_nelder_inits,G_assim.shape[0]))
+			G_opt['optval'] = np.zeros((n_nelder_inits,G_assim.shape[0]))
+			for i_nm in range(n_nelder_inits):
+				if random_nelder_inits:
+					G0 = np.random.multivariate_normal(mean=[0,0,0], cov=(0.1**2)*np.eye(3)).T[:,None]
+				else:
+					G0 = G_assim.numpy()
 				print('NM Init=',G0)
-				# pdb.set_trace()
-				opt = scipy.optimize.fmin(func=evalG, x0=G0, full_output=True, disp=True)
+
+				# KoptHistory = [] #np.zeros((1, G_assim.shape[0]))
+				# def store(G):
+				# 	KoptHistory.append(G)
+				# opt = scipy.optimize.fmin(func=evalG, x0=G0.squeeze(), callback=store, maxfun=max_nelder_sols, full_output=True, disp=True)
+
+				opt = scipy.optimize.fmin(func=evalG, x0=G0.squeeze(), maxfun=max_nelder_sols, full_output=True, disp=True)
+				# G_opt['opt_struct'].append(opt)
 				G_opt['inits'][i_nm,:] = G0.squeeze()
 				G_opt['final'][i_nm,:] = opt[0].squeeze()
 				G_opt['optval'][i_nm,:] = opt[1].squeeze()
@@ -2767,6 +2787,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 			np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean,
 				model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G)
 	else:
+		# Standard Gradient Descent
 		# initialize storage variables
 		loss_history = np.zeros(n_iters)
 		dL_history = np.zeros(n_iters)
@@ -2785,7 +2806,10 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 				y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
 
 				# Do the assimilation!
-				m_assim_now = f_mk(G_assim, m_pred_now, meas_now)
+				try:
+					m_assim_now = f_mk(G_assim, m_pred_now, meas_now)
+				except:
+					pdb.set_trace()
 				G_assim_history[i,:] = G_assim.detach().numpy().squeeze()
 				G_assim_history_running_mean[i,:] = np.mean(G_assim_history[:i,:], axis=0)
 				use_inits = m_assim_now.detach().numpy().squeeze()
@@ -2801,6 +2825,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 						G_assim.data -= lr * G_assim.grad.data
 						G_assim.grad.data.zero_()
 						loss_history[i] = loss
+						# print('Iter',i,'Loss:',loss)
 					else:
 						if new_cheat:
 							H = H_obs_hifi
