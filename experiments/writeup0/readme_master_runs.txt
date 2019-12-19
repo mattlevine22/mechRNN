@@ -7,8 +7,8 @@ sbatch charterize_loss_surface.sh
 module purge
 module load cuda/9.0
 module load python/2.7.15-tf
-python lorenz63_3dvar_generateData.py --n_trajectories 10 --output_dir /groups/astuart/mlevine/writeup0/l63/3dvar/K_learning/pilot_optimization_run --output_filename TrainData.npz --t_end 100
-python lorenz63_3dvar_generateData.py --n_trajectories 10 --output_dir /groups/astuart/mlevine/writeup0/l63/3dvar/K_learning/pilot_optimization_run --output_filename TestData.npz --t_end 20
+python ../scripts/lorenz63_3dvar_generateData.py --n_trajectories 10 --output_dir /groups/astuart/mlevine/writeup0/l63/3dvar/K_learning/pilot_optimization_run --output_filename TrainData.npz --t_end 100
+python ../scripts/lorenz63_3dvar_generateData.py --n_trajectories 10 --output_dir /groups/astuart/mlevine/writeup0/l63/3dvar/K_learning/pilot_optimization_run --output_filename TestData.npz --t_end 20
 
 #2. Run GradientDescent learning
 sbatch jobs_K_Learning_GradientDescent_FullState.sh
@@ -19,7 +19,7 @@ sbatch jobs_K_Learning_GradientDescent_FullState.sh
 module purge
 module load cuda/9.0
 module load python/2.7.15-tf
-python l63_3dvar_GradientDescentTrain_summarize.py --output_dir /groups/astuart/mlevine/writeup0/l63/3dvar/K_learning/pilot_optimization_run --n_trains 3
+python ../scripts/l63_3dvar_GradientDescentTrain_summarize.py --output_dir /groups/astuart/mlevine/writeup0/l63/3dvar/K_learning/pilot_optimization_run --n_trains 3
 
 #4a. Run optimization with NelderMead Full State (can be run concurrently with 4b)
 sbatch jobs_K_Learning_NelderMead_FullState.sh
