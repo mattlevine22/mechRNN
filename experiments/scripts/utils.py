@@ -1112,8 +1112,9 @@ def train_chaosRNN(forward,
 		C = torch.zeros(output_size, hidden_size + (stack_output*output_size) ).type(dtype)
 		b = torch.zeros(output_size, 1).type(dtype)
 
-		for jj in range(output_size):
-			C[jj,jj] = 1
+		if not model_params['learn_residuals_rnn']:
+			for jj in range(output_size):
+				C[jj,jj] = 1
 
 
 		perfect_loss_vec_test = np.zeros((1,n_test_sets))
