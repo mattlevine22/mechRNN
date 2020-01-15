@@ -31,3 +31,10 @@ sbatch jobs_K_Learning_NelderMead_PartialState.sh
 # to test, run:
 # python3 l63_3dvar_NelderMeadTrain.py --output_dir test_optimizations --optim_full_state False --n_nelder_inits 2 --max_nelder_sols 10 --training_data_filename TrainData.npz --testing_data_filename TestData.npz --train_input_index 0
 
+#5. Run summaries
+module purge
+module load cuda/9.0
+module load python/2.7.15-tf
+python ../scripts/l63_3dvar_summarize.py --output_dir /groups/astuart/mlevine/writeup0/l63/3dvar/K_learning/pilot_optimization_run --n_train_trajectories 10 --n_test_trajectories 10
+# to test, run:
+python3 l63_3dvar_summarize.py --output_dir /Users/matthewlevine/Downloads/K_learning/pilot_optimization_run --n_train_trajectories 10 --n_test_trajectories 10
