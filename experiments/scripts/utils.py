@@ -452,7 +452,7 @@ def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_in
 	stacked_input = torch.FloatTensor(np.hstack( (y_pred_normalized, y0_normalized) )[:,None])
 	hidden_state = torch.relu( a + torch.mm(A,hidden_state) + torch.mm(B,stacked_input) )
 	stacked_output = torch.cat( ( torch.FloatTensor(y_pred_normalized[:,None]), hidden_state ) )
-	out = model_params['learn_residuals_rnn']*y_pred_normalized + b + torch.mm(C,stacked_output)
+	out = model_params['learn_residuals_rnn']*torch.FloatTensor(y_pred_normalized[:,None]) + b + torch.mm(C,stacked_output)
 	return  (out, hidden_state, solver_failed)
 
 
