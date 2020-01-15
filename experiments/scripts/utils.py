@@ -452,7 +452,7 @@ def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_in
 	stacked_input = torch.FloatTensor(np.hstack( (y_pred_normalized, y0_normalized) )[:,None])
 	hidden_state = torch.relu( a + torch.mm(A,hidden_state) + torch.mm(B,stacked_input) )
 	stacked_output = torch.cat( ( torch.FloatTensor(y_pred_normalized[:,None]), hidden_state ) )
-	out = b + torch.mm(C,stacked_output)
+	out = model_params['learn_residuals_rnn']*y_pred_normalized + b + torch.mm(C,stacked_output)
 	return  (out, hidden_state, solver_failed)
 
 
@@ -973,6 +973,7 @@ def train_chaosRNN(forward,
 			GP_grid = False,
 			alpha_list = [1e-10, 1e-8, 1e-6, 1e-4, 1e-2]):
 
+
 	t0 = time()
 
 	if torch.cuda.is_available():
@@ -994,6 +995,10 @@ def train_chaosRNN(forward,
 	if not model_params_TRUE:
 		model_params_TRUE = model_params.copy()
 		model_params_TRUE['ode_params'] = LORENZ_DEFAULT_PARAMS
+
+	# allow for backwards compatibility (ie if this setting is missing)
+	if 'learn_residuals_rnn' not in model_params:
+		model_params['learn_residuals_rnn'] = False
 
 	# keep_param_history = np.log10( n_epochs * y_clean_train.shape[0] * (hidden_size**2) ) < mem_thresh_order
 	# if not keep_param_history:
