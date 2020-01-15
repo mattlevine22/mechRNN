@@ -93,33 +93,6 @@ def main():
 
 	eps_badness = 0
 
-	# Gradient Descent MEAN Init
-	run_output_dir_TRAIN = '{0}/BadModel_eps{1}_{2}_{3}_GradientDescentMEANInit/Train{4}'.format(FLAGS.output_dir, FLAGS.optim_type, eps_badness, state_str, FLAGS.train_input_index)
-	if not os.path.exists(run_output_dir_TRAIN):
-		G_assim_init = np.load('{0}/BadModel_eps{1}_{2}_{3}_RandomInit/Kmean.npy'.format(FLAGS.output_dir, 'GradientDescent', eps_badness, 'FullState'))
-		# G_assim_init = np.array([[1,0,0]]).T/(1+my_eta)
-
-		# G_assim_init = np.random.multivariate_normal(mean=[0,0,0], cov=(0.1*FLAGS.G_init_sd**2)*np.eye(3)).T[:,None]
-		print('Init=',G_assim_init)
-		G_assim_LEARNED = run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_init, delta_t,
-			sim_model, assimilation_model_params, lr,
-			run_output_dir_TRAIN,
-			H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-			learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat,
-			full_sequence=full_sequence, optimization=FLAGS.optim_type, optim_full_state=optim_full_state,
-			random_nelder_inits=False, max_nelder_sols=FLAGS.max_nelder_sols)
-		# Test
-		# npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
-		# G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
-		G_assim_LEARNED = G_assim_LEARNED[:,None]
-		for n_test in range(y_clean_TEST.shape[0]):
-			run_output_dir_TEST = '{0}/BadModel_eps{1}_{2}_{3}_GradientDescentMEANInit/Train{4}/Test{5}'.format(FLAGS.output_dir, FLAGS.optim_type, eps_badness, state_str, FLAGS.train_input_index, n_test)
-			run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], eta, G_assim_LEARNED, delta_t,
-				sim_model, assimilation_model_params, lr,
-				run_output_dir_TEST,
-				H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
-				learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat)
-
 	# Gradient Descent run-specific Init
 	run_output_dir_TRAIN = '{0}/BadModel_eps{1}_{2}_{3}_GradientDescentInit/Train{4}'.format(FLAGS.output_dir, FLAGS.optim_type, eps_badness, state_str, FLAGS.train_input_index)
 	if not os.path.exists(run_output_dir_TRAIN):
@@ -148,6 +121,32 @@ def main():
 				H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
 				learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat)
 
+	# Gradient Descent MEAN Init
+	run_output_dir_TRAIN = '{0}/BadModel_eps{1}_{2}_{3}_GradientDescentMEANInit/Train{4}'.format(FLAGS.output_dir, FLAGS.optim_type, eps_badness, state_str, FLAGS.train_input_index)
+	if not os.path.exists(run_output_dir_TRAIN):
+		G_assim_init = np.load('{0}/BadModel_eps{1}_{2}_{3}_RandomInit/Kmean.npy'.format(FLAGS.output_dir, 'GradientDescent', eps_badness, 'FullState'))
+		# G_assim_init = np.array([[1,0,0]]).T/(1+my_eta)
+
+		# G_assim_init = np.random.multivariate_normal(mean=[0,0,0], cov=(0.1*FLAGS.G_init_sd**2)*np.eye(3)).T[:,None]
+		print('Init=',G_assim_init)
+		G_assim_LEARNED = run_3DVAR(y_clean_TRAIN, y_noisy_TRAIN, eta, G_assim_init, delta_t,
+			sim_model, assimilation_model_params, lr,
+			run_output_dir_TRAIN,
+			H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+			learn_assim=True, inits=random_state_init_TRAIN, eps=eps, cheat=FLAGS.cheat,
+			full_sequence=full_sequence, optimization=FLAGS.optim_type, optim_full_state=optim_full_state,
+			random_nelder_inits=False, max_nelder_sols=FLAGS.max_nelder_sols)
+		# Test
+		# npzfile = np.load(run_output_dir_TRAIN + '/output.npz')
+		# G_assim_LEARNED = npzfile['G_assim_history_running_mean'][-1,:,None]
+		G_assim_LEARNED = G_assim_LEARNED[:,None]
+		for n_test in range(y_clean_TEST.shape[0]):
+			run_output_dir_TEST = '{0}/BadModel_eps{1}_{2}_{3}_GradientDescentMEANInit/Train{4}/Test{5}'.format(FLAGS.output_dir, FLAGS.optim_type, eps_badness, state_str, FLAGS.train_input_index, n_test)
+			run_3DVAR(y_clean_TEST[n_test,:], y_noisy_TEST[n_test,:], eta, G_assim_LEARNED, delta_t,
+				sim_model, assimilation_model_params, lr,
+				run_output_dir_TEST,
+				H_obs_lowfi=H_obs_lowfi, H_obs_hifi=H_obs_hifi, noisy_hifi=FLAGS.noisy_hifi,
+				learn_assim=False, inits=random_state_init_TEST[n_test], eps=eps, cheat=FLAGS.cheat)
 
 
 	# Random Inits
