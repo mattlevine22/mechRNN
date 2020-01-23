@@ -223,7 +223,7 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 		ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN'+is_resid*' residual', color='blue')
 
 		try:
-			ax1.errorbar(x=eps_vec, y=[rnn_test_loss_medians[is_resid]]*len(eps_vec), yerr=[rnn_test_loss_stds[is_resid]]*len(eps_vec) ,label='vanilla RNN'is_resid*' residual', color='black')
+			ax1.errorbar(x=eps_vec, y=[rnn_test_loss_medians[is_resid]]*len(eps_vec), yerr=[rnn_test_loss_stds[is_resid]]*len(eps_vec) ,label='vanilla RNN'+is_resid*' residual', color='black')
 		except:
 			pass
 
