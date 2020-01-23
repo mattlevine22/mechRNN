@@ -194,7 +194,7 @@ def main():
 							compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha])
 
 					if learn_residuals_rnn:
-						run_output_dir = output_dir + '/iter{0}'.format(n) + '/vanillaRNN_residual{2}__epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size, learn_residuals_rnn)
+						run_output_dir = output_dir + '/iter{0}'.format(n) + '/vanillaRNN_residual{2}_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size, learn_residuals_rnn)
 						all_dirs.append(run_output_dir)
 						if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
 							# torch.manual_seed(0)
