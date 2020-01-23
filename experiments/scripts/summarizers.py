@@ -352,7 +352,9 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 				try:
 					t_valid_mins = {key: np.min(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
 				except:
-					pdb.set_trace()
+					# pdb.set_trace()
+					pass
+
 				t_valid_maxes = {key: np.max(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
 				t_valid_medians = {key: np.median(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
 				t_valid_means = {key: np.mean(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
