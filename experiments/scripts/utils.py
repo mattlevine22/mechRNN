@@ -186,7 +186,7 @@ def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_d
 	# y_clean = odeint(model, y0, tspan, args=my_args, mxstep=sim_model_params['mxstep'])
 
 	# pdb.set_trace()
-	sol = solve_ivp(fun=lambda t, y: model(y, t, *my_args), t_span=(tspan[0], tspan[-1]), y0=np.array(y0).T, method='RK45', t_eval=tspan)
+	sol = solve_ivp(fun=lambda t, y: model(y, t, *my_args), t_span=(tspan[0], tspan[-1]), y0=np.array(y0).T, method=sim_model_params['ode_int_method'], rtol=sim_model_params['ode_int_rtol'], atol=sim_model_params['ode_int_atol'], max_step=sim_model_params['ode_int_max_step'], t_eval=tspan)
 	y_clean = sol.y.T
 
 
@@ -329,7 +329,7 @@ def make_RNN_data2(model, tspan_train, tspan_test, sim_model_params, noise_frac=
 
 
 			pdb.set_trace()
-			sol = solve_ivp(fun=lambda t, y: model(y, t, *sim_model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *sim_model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=sim_model_params['ode_int_method'], rtol=sim_model_params['ode_int_rtol'], atol=sim_model_params['ode_int_atol'], max_step=sim_model_params['ode_int_max_step'], t_eval=tspan)
 			y_out2 = sol.y.T
 
 
@@ -429,7 +429,7 @@ def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_in
 		if not solver_failed:
 			# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
 
-			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 			y_out = sol.y.T
 
 			if not sol.success:
@@ -473,7 +473,7 @@ def forward_mech(input, hidden_state, w1, w2, b, c, v, normz_info, model, model_
 	y_out = odeint(model, y0, tspan, args=my_args, mxstep=model_params['mxstep'])
 
 	pdb.set_trace()
-	sol = solve_ivp(fun=lambda t, y: model(y, t, *my_args), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+	sol = solve_ivp(fun=lambda t, y: model(y, t, *my_args), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 	y_out2 = sol.y.T
 
 	# renormalize
@@ -552,7 +552,7 @@ def run_GP(y_clean_train, y_noisy_train,
 			if not solver_failed:
 				# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
 
-				sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+				sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 				y_out = sol.y.T
 
 				if not sol.success:
@@ -648,7 +648,7 @@ def run_GP(y_clean_train, y_noisy_train,
 				if not solver_failed:
 					# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
 
-					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 					y_out = sol.y.T
 
 					if not sol.success:
@@ -786,7 +786,7 @@ def run_GP(y_clean_train, y_noisy_train,
 			y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=model_params['mxstep'], full_output=True)
 
 			pdb.set_trace()
-			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params_TRUE['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params_TRUE['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params_TRUE['ode_int_method'], rtol=model_params_TRUE['ode_int_rtol'], atol=model_params_TRUE['ode_int_atol'], max_step=model_params_TRUE['ode_int_max_step'], t_eval=tspan)
 			y_out_TRUE2 = sol.y.T
 
 			true_model_pred = f_normalize_minmax(normz_info, y_out_TRUE[-1,:])
@@ -837,7 +837,7 @@ def run_GP(y_clean_train, y_noisy_train,
 					y_out_INIT, info_dict = odeint(model, np.array([x,y,z]), [0, 5, 10], args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
 
 					pdb.set_trace()
-					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(0, 10), y0=np.array([x,y,z]).T, method='RK45', t_eval=[0, 5, 10])
+					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(0, 10), y0=np.array([x,y,z]).T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=[0, 5, 10])
 					y_out_INIT2 = sol.y.T
 
 
@@ -848,7 +848,7 @@ def run_GP(y_clean_train, y_noisy_train,
 					y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'], full_output=True)
 
 					pdb.set_trace()
-					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 					y_out2 = sol.y.T
 
 
@@ -868,7 +868,7 @@ def run_GP(y_clean_train, y_noisy_train,
 					y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=model_params['mxstep'], full_output=True)
 
 					pdb.set_trace()
-					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params_TRUE['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params_TRUE['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params_TRUE['ode_int_method'], rtol=model_params_TRUE['ode_int_rtol'], atol=model_params_TRUE['ode_int_atol'], max_step=model_params_TRUE['ode_int_max_step'], t_eval=tspan)
 					y_out_TRUE2 = sol.y.T
 
 					true_model_pred = f_normalize_minmax(normz_info, y_out_TRUE[-1,:])
@@ -1041,7 +1041,7 @@ def train_chaosRNN(forward,
 			# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 			# unnormalize model_input so that it can go through the ODE solver
 			y0 = f_unNormalize_minmax(normz_info, output_train[j,:].numpy())
-			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method='RK45', t_eval=tspan)
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 
 			# y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['mxstep'])
 			# model_pred[j,:] = f_normalize_minmax(normz_info, y_out[-1,:])
@@ -2387,11 +2387,11 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 		return Lk
 
 	def f_Lk(G, m_assim_prev2, meas_prev1, meas_now, H=H_obs_lowfi):
-		sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=m_assim_prev2.T, method='RK45', t_eval=tspan)
+		sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=m_assim_prev2.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 		m_pred_prev1 = torch.FloatTensor(sol.y.T[-1,:,None])
 		m_assim_prev1 = f_mk(G, m_pred_prev1, meas_prev1).detach().numpy().squeeze()
 
-		sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=m_assim_prev1.T, method='RK45', t_eval=tspan)
+		sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=m_assim_prev1.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 		m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
 		Lk = ( torch.mm(H, m_pred_now) -  meas_now ).pow(2).sum()
 		return Lk
@@ -2404,7 +2404,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 			meas_now = torch.FloatTensor(y_noisy_lowfi[i,:,None])
 
 			# make prediction using previous state estimate
-			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method='RK45', t_eval=tspan)
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 			m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
 			y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
 
@@ -2439,7 +2439,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 			meas_now = torch.FloatTensor(y_noisy_lowfi[i,:,None])
 
 			# make prediction using previous state estimate
-			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method='RK45', t_eval=tspan)
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 			m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
 			y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
 
@@ -2492,7 +2492,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 			meas_now = torch.FloatTensor(partial_traj[i,:,None])
 
 			# make prediction using previous state estimate
-			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method='RK45', t_eval=tspan)
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 			m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
 			# y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
 
@@ -2546,7 +2546,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 			meas_now = torch.FloatTensor(partial_traj[i,:,None])
 
 			# make prediction using previous state estimate
-			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method='RK45', t_eval=tspan)
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 			m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
 			# y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
 
@@ -2604,7 +2604,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 			G_grid = np.zeros((len(tvec),len(xgrid),len(ygrid),3))
 			v0_true = get_lorenz_inits(n=1).squeeze()
 			v0_3dvar = get_lorenz_inits(n=1).squeeze()
-			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(t_span_opt[0],t_span_opt[-1]), y0=v0_true, method='RK45', t_eval=t_span_opt)
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(t_span_opt[0],t_span_opt[-1]), y0=v0_true, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=t_span_opt)
 			true_traj = torch.FloatTensor(sol.y.T)
 			true_partial = torch.mm(true_traj,H_obs_lowfi.t())
 			noisy_partial_traj = true_partial + eps*torch.FloatTensor(np.random.randn(true_partial.shape[0],true_partial.shape[1]))
@@ -2807,7 +2807,7 @@ def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
 
 				# make prediction using previous state estimate
 				# pdb.set_trace()
-				sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method='RK45', t_eval=tspan)
+				sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 				m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
 				y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
 

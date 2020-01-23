@@ -23,11 +23,17 @@ parser.add_argument('--noisy_training', type=str2bool, default=False, help='Opti
 parser.add_argument('--noisy_testing', type=str2bool, default=False, help='Optionally add measurement noise to synch and test sets.')
 parser.add_argument('--noise_frac', type=float, default=0.01, help='Relative SD of additive gaussian measurement noise')
 parser.add_argument('--alpha', type=float, default=1e-10, help='Alpha parameter for Gaussian Process Regression (scales w/ measurement noise)')
+parser.add_argument('--ode_int_method', type=str, default='RK45', help='See scipy solve_ivp documentation for options.')
+parser.add_argument('--ode_int_atol', type=float, default=1.5e-8, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--ode_int_rtol', type=float, default=1.5e-8, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--fix_seed', type=str2bool, default=False, help='Set to True if you want the call of this script to be reproducible (seed is set by last element of save_dir)')
 
 FLAGS = parser.parse_args()
 
-
 def main():
+	if FLAGS.fix_seed:
+		np.random.seed(int(FLAGS.savedir[-1]))
+
 	(a,b,c) = [10, 28, 8/3]
 	if FLAGS.random_state_inits:
 		# sampel uniform initial conditions
@@ -65,8 +71,8 @@ def main():
 	i = 0
 	for state_init in my_state_inits:
 		i += 1
-		sim_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'mxstep':0}
-		rnn_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'mxstep':0}
+		sim_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'ode_int_method':FLAGS.ode_int_method, 'ode_int_rtol':FLAGS.ode_int_rtol, 'ode_int_atol':FLAGS.ode_int_atol, 'ode_int_max_step':np.inf}
+		rnn_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'ode_int_method':FLAGS.ode_int_method, 'ode_int_rtol':FLAGS.ode_int_rtol, 'ode_int_atol':FLAGS.ode_int_atol, 'ode_int_max_step':np.inf}
 		all_dirs = []
 
 		# np.random.seed()
@@ -168,7 +174,7 @@ def main():
 
 			for eps_badness in np.random.permutation([0, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0]):
 			# for eps_badness in np.random.permutation([0.05, 0]):
-				rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b*(1+eps_badness), c), 'time_avg_norm':0.529, 'mxstep':0}
+				rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b*(1+eps_badness), c), 'time_avg_norm':0.529, 'ode_int_method':FLAGS.ode_int_method, 'ode_int_rtol':FLAGS.ode_int_rtol, 'ode_int_atol':FLAGS.ode_int_atol, 'ode_int_max_step':np.inf}
 
 				for learn_residuals_rnn in [True,False]:
 					rnn_BAD_model_params['learn_residuals_rnn'] = learn_residuals_rnn
