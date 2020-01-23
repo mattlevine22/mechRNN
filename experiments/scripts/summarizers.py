@@ -120,7 +120,6 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 							# gpr1_performance['t_valid_time'][my_eps][tt] += (np.inf,)
 							# gpr2_performance['t_valid_time'][my_eps][tt] += (np.inf,)
 			else:
-				pdb.set_trace()
 				hybrid_performance[is_resid]['mse'][my_eps] = (float(np.min(x_test.loc[:,kkt])),)
 				for gp in range(n_gprs):
 					gpr_performance[gp]['mse'][my_eps] = (float(np.min(gpr_test[gp][kkt])),)
@@ -340,59 +339,63 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	fig.savefig(fname=output_fname + '_xlog')
 	plt.close(fig)
 
-	# TRAIN TIME ANALYSIS
-	# plot summary
-	colors = ['red','orange','green','blue','purple','black']
-	fig, ax2 = plt.subplots(nrows=1, ncols=1,
-		figsize = [10, 10],
-		sharey=False, sharex=False)
-	for i_tt in range(len(t_vec)):
-		tt = t_vec[i_tt]
-		if many_epochs:
-			try:
-				t_valid_mins = {key: np.min(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
-			except:
-				pdb.set_trace()
-			t_valid_maxes = {key: np.max(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
-			t_valid_medians = {key: np.median(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
-			t_valid_means = {key: np.mean(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
-			t_valid_stds = {key: np.std(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
+	try:
+		# TRAIN TIME ANALYSIS
+		# plot summary
+		colors = ['red','orange','green','blue','purple','black']
+		fig, ax2 = plt.subplots(nrows=1, ncols=1,
+			figsize = [10, 10],
+			sharey=False, sharex=False)
+		for i_tt in range(len(t_vec)):
+			tt = t_vec[i_tt]
+			if many_epochs:
+				try:
+					t_valid_mins = {key: np.min(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
+				except:
+					pdb.set_trace()
+				t_valid_maxes = {key: np.max(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
+				t_valid_medians = {key: np.median(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
+				t_valid_means = {key: np.mean(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
+				t_valid_stds = {key: np.std(hybrid_performance['t_valid_time'][key][tt]) for key in hybrid_performance['t_valid_time']}
 
-			rnn_t_valid_mins = np.min(rnn_performance['t_valid_time'][tt])
-			rnn_t_valid_maxes = np.max(rnn_performance['t_valid_time'][tt])
-			rnn_t_valid_means = np.mean(rnn_performance['t_valid_time'][tt])
-			rnn_t_valid_medians = np.median(rnn_performance['t_valid_time'][tt])
-			rnn_t_valid_stds = np.std(rnn_performance['t_valid_time'][tt])
+				rnn_t_valid_mins = np.min(rnn_performance['t_valid_time'][tt])
+				rnn_t_valid_maxes = np.max(rnn_performance['t_valid_time'][tt])
+				rnn_t_valid_means = np.mean(rnn_performance['t_valid_time'][tt])
+				rnn_t_valid_medians = np.median(rnn_performance['t_valid_time'][tt])
+				rnn_t_valid_stds = np.std(rnn_performance['t_valid_time'][tt])
 
-			eps_vec = sorted(t_valid_medians.keys())
-			median_vec = [t_valid_medians[eps] for eps in eps_vec]
-			std_vec = [t_valid_stds[eps] for eps in eps_vec]
+				eps_vec = sorted(t_valid_medians.keys())
+				median_vec = [t_valid_medians[eps] for eps in eps_vec]
+				std_vec = [t_valid_stds[eps] for eps in eps_vec]
 
-			ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN (t>{0})'.format(tt), linestyle='-', color=colors[i_tt])
-			ax2.set_xlabel('epsilon Model Error')
-			ax2.set_ylabel('Train Time (opt Validity Time)')
+				ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN (t>{0})'.format(tt), linestyle='-', color=colors[i_tt])
+				ax2.set_xlabel('epsilon Model Error')
+				ax2.set_ylabel('Train Time (opt Validity Time)')
 
-			try:
-				ax2.errorbar(x=eps_vec, y=[rnn_t_valid_medians]*len(eps_vec), yerr=[rnn_t_valid_stds]*len(eps_vec), linestyle=':', label='vanilla RNN (t>{0})'.format(tt), color=colors[i_tt])
-			except:
-				pass
+				try:
+					ax2.errorbar(x=eps_vec, y=[rnn_t_valid_medians]*len(eps_vec), yerr=[rnn_t_valid_stds]*len(eps_vec), linestyle=':', label='vanilla RNN (t>{0})'.format(tt), color=colors[i_tt])
+				except:
+					pass
 
-			# try:
-			# 	special_eps_vec = [foo for foo in eps_vec if foo!=0]
-			# 	median_vec = [ode_t_valid_medians[eps] for eps in special_eps_vec]
-			# 	std_vec = [ode_t_valid_stds[eps] for eps in special_eps_vec]
-			# 	ax2.errorbar(x=special_eps_vec, y=median_vec, yerr=std_vec, label='model-only', color='red')
-			# except:
-			# 	pass
+				# try:
+				# 	special_eps_vec = [foo for foo in eps_vec if foo!=0]
+				# 	median_vec = [ode_t_valid_medians[eps] for eps in special_eps_vec]
+				# 	std_vec = [ode_t_valid_stds[eps] for eps in special_eps_vec]
+				# 	ax2.errorbar(x=special_eps_vec, y=median_vec, yerr=std_vec, label='model-only', color='red')
+				# except:
+				# 	pass
 
-	ax2.legend()
-	ax2.set_yscale('log')
-	fig.suptitle('Train-time until reaching optimal test performance (w.r.t. model error)')
-	fig.savefig(fname=output_fname+'_train_time')
+		ax2.legend()
+		ax2.set_yscale('log')
+		fig.suptitle('Train-time until reaching optimal test performance (w.r.t. model error)')
+		fig.savefig(fname=output_fname+'_train_time')
 
-	ax2.set_xscale('log')
-	fig.savefig(fname=output_fname+'_train_time_xlog')
-	plt.close(fig)
+		ax2.set_xscale('log')
+		fig.savefig(fname=output_fname+'_train_time_xlog')
+		plt.close(fig)
+	except:
+		print('Couldnt plot train time...probably because didnt set it up to recognize residual methods yet')
+		pass
 
 
 def extract_performance1(my_dirs, output_fname="./performance_comparisons", win=1, many_epochs=True, my_token='hs', n_gprs=0, my_labels={'xlabel': 'Experimental Variable'}):
