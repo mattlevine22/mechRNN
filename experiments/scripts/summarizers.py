@@ -39,6 +39,9 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 			is_resid = True
 		elif 'GPR' in d_label:
 			is_resid = True
+		elif 'RNN':
+			# assume for now that if residual not specified, then is_resid=False
+			is_resid = False
 		else:
 			print('Uh oh, unrecognized d_label')
 			print(d_label)
