@@ -319,7 +319,6 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 		# ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 2', color='green', linestyle='--')
 
 		for is_resid in [True,False]:
-			pdb.set_trace()
 			# hybrid RNN
 			eps_vec = sorted(t_valid_medians[is_resid].keys())
 			median_vec = [t_valid_medians[is_resid][eps] for eps in eps_vec]
