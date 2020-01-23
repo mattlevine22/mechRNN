@@ -27,8 +27,8 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	model_performance = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
 	rnn_performance = {True: {'mse':(), 't_valid':(), 'mse_time':(), 't_valid_time':{}},
 					   False: {'mse':(), 't_valid':(), 'mse_time':(), 't_valid_time':{}}}
-	hybrid_performance = {True: {'mse':(), 't_valid':(), 'mse_time':(), 't_valid_time':{}},
-					      False: {'mse':(), 't_valid':(), 'mse_time':(), 't_valid_time':{}}}
+	hybrid_performance = {True: {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}},
+					      False: {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}}
 	gpr_performance = [{'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}} for _ in range(n_gprs)]
 	for d in my_dirs:
 		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
