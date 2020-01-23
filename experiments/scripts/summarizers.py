@@ -120,6 +120,7 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 							# gpr1_performance['t_valid_time'][my_eps][tt] += (np.inf,)
 							# gpr2_performance['t_valid_time'][my_eps][tt] += (np.inf,)
 			else:
+				pdb.set_trace()
 				hybrid_performance[is_resid]['mse'][my_eps] = (float(np.min(x_test.loc[:,kkt])),)
 				for gp in range(n_gprs):
 					gpr_performance[gp]['mse'][my_eps] = (float(np.min(gpr_test[gp][kkt])),)
