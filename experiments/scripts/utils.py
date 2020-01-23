@@ -183,7 +183,7 @@ def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_d
 		x = None
 
 	y0 = sim_model_params['state_init']
-	# y_clean = odeint(model, y0, tspan, args=my_args, mxstep=sim_model_params['ode_int_max_step'])
+	# y_clean = odeint(model, y0, tspan, args=my_args, mxstep=0)
 
 	# pdb.set_trace()
 	sol = solve_ivp(fun=lambda t, y: model(y, t, *my_args), t_span=(tspan[0], tspan[-1]), y0=np.array(y0).T, method=sim_model_params['ode_int_method'], rtol=sim_model_params['ode_int_rtol'], atol=sim_model_params['ode_int_atol'], max_step=sim_model_params['ode_int_max_step'], t_eval=tspan)
@@ -325,7 +325,7 @@ def make_RNN_data2(model, tspan_train, tspan_test, sim_model_params, noise_frac=
 			y0 = y_clean_train[-1,:]
 			tspan = get_tspan(sim_model_params)
 			# tspan = [0, 0.5*sim_model_params['delta_t'], sim_model_params['delta_t']]
-			y_out = odeint(model, y0, tspan, args=sim_model_params['ode_params'], mxstep=sim_model_params['ode_int_max_step'])
+			y_out = odeint(model, y0, tspan, args=sim_model_params['ode_params'], mxstep=0)
 
 
 			pdb.set_trace()
@@ -420,14 +420,14 @@ def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_in
 		#
 		# unnormalize model_input so that it can go through the ODE solver
 		# y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
-		# y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['ode_int_max_step'])
+		# y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0)
 		# # pdb.set_trace()
 
 		# y_pred = y_out[-1,:] #last column
 		# y_pred_normalized = f_normalize_minmax(normz_info, y_pred)
 		y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
 		if not solver_failed:
-			# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['ode_int_max_step'], full_output=True)
+			# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
 
 			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 			y_out = sol.y.T
@@ -470,7 +470,7 @@ def forward_mech(input, hidden_state, w1, w2, b, c, v, normz_info, model, model_
 	tspan = [0,0.5,1]
 	driver = xmean + xsd*input.detach().numpy()
 	my_args = model_params + (driver,)
-	y_out = odeint(model, y0, tspan, args=my_args, mxstep=model_params['ode_int_max_step'])
+	y_out = odeint(model, y0, tspan, args=my_args, mxstep=0)
 
 	pdb.set_trace()
 	sol = solve_ivp(fun=lambda t, y: model(y, t, *my_args), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
@@ -550,7 +550,7 @@ def run_GP(y_clean_train, y_noisy_train,
 		if do_resid:
 			y0 = f_unNormalize_minmax(normz_info, pred)
 			if not solver_failed:
-				# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['ode_int_max_step'], full_output=True)
+				# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
 
 				sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 				y_out = sol.y.T
@@ -646,7 +646,7 @@ def run_GP(y_clean_train, y_noisy_train,
 			if do_resid:
 				y0 = f_unNormalize_minmax(normz_info, pred)
 				if not solver_failed:
-					# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['ode_int_max_step'], full_output=True)
+					# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
 
 					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 					y_out = sol.y.T
@@ -753,7 +753,7 @@ def run_GP(y_clean_train, y_noisy_train,
 		# bigTspan = np.arange(0, 2*n_residuals, 0.1)
 		# run_again = True
 		# while run_again:
-		# 	y_out_ATT, info_dict = odeint(model, np.squeeze(get_lorenz_inits(n=1)), bigTspan, args=model_params['ode_params'], mxstep=model_params['ode_int_max_step'], full_output=True)
+		# 	y_out_ATT, info_dict = odeint(model, np.squeeze(get_lorenz_inits(n=1)), bigTspan, args=model_params['ode_params'], mxstep=0, full_output=True)
 		# 	if info_dict['message'] == 'Integration successful.':
 		# 		run_again = False
 
@@ -769,7 +769,7 @@ def run_GP(y_clean_train, y_noisy_train,
 			y0 = random_attractor_points[my_inds[n],:]
 			y0_normalized = f_normalize_minmax(normz_info, y0)
 
-			y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['ode_int_max_step'], full_output=True)
+			y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
 			bad_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
 
 			if gp_style==1:
@@ -783,7 +783,7 @@ def run_GP(y_clean_train, y_noisy_train,
 
 			gp_forecast = do_resid*bad_model_pred + gpr.predict(x_input.reshape(1, -1) , return_std=False).squeeze()
 
-			y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=model_params['ode_int_max_step'], full_output=True)
+			y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=0, full_output=True)
 
 			pdb.set_trace()
 			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params_TRUE['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params_TRUE['ode_int_method'], rtol=model_params_TRUE['ode_int_rtol'], atol=model_params_TRUE['ode_int_atol'], max_step=model_params_TRUE['ode_int_max_step'], t_eval=tspan)
@@ -834,7 +834,7 @@ def run_GP(y_clean_train, y_noisy_train,
 					z = zvals[iz]
 
 					# FIRST, find the attractor (idk, run for >10 lyapunov times...)
-					y_out_INIT, info_dict = odeint(model, np.array([x,y,z]), [0, 5, 10], args=model_params['ode_params'], mxstep=model_params['ode_int_max_step'], full_output=True)
+					y_out_INIT, info_dict = odeint(model, np.array([x,y,z]), [0, 5, 10], args=model_params['ode_params'], mxstep=0, full_output=True)
 
 					pdb.set_trace()
 					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(0, 10), y0=np.array([x,y,z]).T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=[0, 5, 10])
@@ -845,7 +845,7 @@ def run_GP(y_clean_train, y_noisy_train,
 					y0_normalized = f_normalize_minmax(normz_info, y0)
 					# now, we assume that y0 is on the attractor
 
-					y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['ode_int_max_step'], full_output=True)
+					y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
 
 					pdb.set_trace()
 					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
@@ -865,7 +865,7 @@ def run_GP(y_clean_train, y_noisy_train,
 
 					gp_forecast = do_resid*bad_model_pred + gpr.predict(x_input.reshape(1, -1) , return_std=False).squeeze()
 
-					y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=model_params['ode_int_max_step'], full_output=True)
+					y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=0, full_output=True)
 
 					pdb.set_trace()
 					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params_TRUE['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params_TRUE['ode_int_method'], rtol=model_params_TRUE['ode_int_rtol'], atol=model_params_TRUE['ode_int_atol'], max_step=model_params_TRUE['ode_int_max_step'], t_eval=tspan)
@@ -1043,7 +1043,7 @@ def train_chaosRNN(forward,
 			y0 = f_unNormalize_minmax(normz_info, output_train[j,:].numpy())
 			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 
-			# y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=model_params['ode_int_max_step'])
+			# y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0)
 			# model_pred[j,:] = f_normalize_minmax(normz_info, y_out[-1,:])
 			model_pred[j,:] = f_normalize_minmax(normz_info, sol.y[:,-1])
 	else:
@@ -1061,7 +1061,7 @@ def train_chaosRNN(forward,
 	bigTspan = np.arange(0, 10*n_points, 0.1)
 	run_again = True
 	while run_again:
-		y_out_ATT, info_dict = odeint(model, np.squeeze(get_lorenz_inits(n=1)), bigTspan, args=model_params['ode_params'], mxstep=model_params['ode_int_max_step'], full_output=True)
+		y_out_ATT, info_dict = odeint(model, np.squeeze(get_lorenz_inits(n=1)), bigTspan, args=model_params['ode_params'], mxstep=0, full_output=True)
 		if info_dict['message'] == 'Integration successful.':
 			run_again = False
 
