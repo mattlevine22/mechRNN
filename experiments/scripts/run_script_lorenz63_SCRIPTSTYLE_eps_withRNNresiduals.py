@@ -150,7 +150,6 @@ def main():
 		for n in range(FLAGS.n_experiments):
 			for hidden_size in [50]:
 				#### run vanilla RNN ####
-				forward = forward_chaos_pureML
 
 				# train on clean data
 				# NOTE that vanilla RNN w/ no residuals is independent of model error---it only sees the raw data
@@ -161,7 +160,7 @@ def main():
 				all_dirs.append(run_output_dir)
 				if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
 					# torch.manual_seed(0)
-					train_chaosRNN(forward,
+					train_chaosRNN(forward_chaos_pureML,
 						y_clean_train_norm, y_noisy_train_norm,
 						y_clean_test_vec_norm, y_noisy_test_vec_norm,
 						y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
@@ -170,8 +169,7 @@ def main():
 						stack_hidden=False, stack_output=False,
 						compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha])
 
-			#### run mechRNN w/ BAD parameter ###
-			forward = forward_chaos_hybrid_full
+			#### run RNNs w/ BAD parameter ###
 
 			for eps_badness in np.random.permutation([0, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0]):
 			# for eps_badness in np.random.permutation([0.05, 0]):
@@ -185,7 +183,7 @@ def main():
 
 					if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
 						# torch.manual_seed(0)
-						train_chaosRNN(forward,
+						train_chaosRNN(forward_chaos_hybrid_full,
 							y_clean_train_norm, y_noisy_train_norm,
 							y_clean_test_vec_norm, y_noisy_test_vec_norm,
 							y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
@@ -198,7 +196,7 @@ def main():
 						all_dirs.append(run_output_dir)
 						if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
 							# torch.manual_seed(0)
-							train_chaosRNN(forward,
+							train_chaosRNN(forward_chaos_pureML,
 								y_clean_train_norm, y_noisy_train_norm,
 								y_clean_test_vec_norm, y_noisy_test_vec_norm,
 								y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
@@ -214,7 +212,7 @@ def main():
 					all_dirs.append(run_output_dir)
 					if not os.path.exists(run_output_dir+'/fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
 						# torch.manual_seed(0)
-						train_chaosRNN(forward,
+						train_chaosRNN(forward_chaos_pureML,
 							y_clean_train_norm, y_noisy_train_norm,
 							y_clean_test_vec_norm, y_noisy_test_vec_norm,
 							y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,

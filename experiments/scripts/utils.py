@@ -379,11 +379,45 @@ def forward_vanilla(data_input, hidden_state, w1, w2, b, c, v, *args, **kwargs):
 	out = c + torch.mm(v,hidden_state)
 	return  (out, hidden_state, solver_failed)
 
-def forward_chaos_pureML(data_input, hidden_state, A, B, C, a, b, *args, **kwargs):
-	solver_failed = False
+def forward_chaos_pureML(data_input, hidden_state, A, B, C, a, b, normz_info, model, model_params, model_output=None, solver_failed=False):
 	hidden_state = torch.relu(a + torch.mm(A,hidden_state) + torch.mm(B,data_input))
 	# hidden_state = torch.relu(a + torch.mm(A,hidden_state))
-	out = b + torch.mm(C,hidden_state)
+
+	y0_normalized = torch.squeeze(data_input).detach()
+	if model_output is None:
+		# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+		tspan = get_tspan(model_params)
+		# driver = xmean + xsd*data_input.detach().numpy()
+		# my_args = model_params + (driver,)
+		#
+		# unnormalize data_input so that it can go through the ODE solver
+		# y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
+		# y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0)
+		# # pdb.set_trace()
+
+		# y_pred = y_out[-1,:] #last column
+		# y_pred_normalized = f_normalize_minmax(normz_info, y_pred)
+		y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
+		if not solver_failed:
+			# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
+
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+			y_out = sol.y.T
+
+			if not sol.success:
+				# solver failed
+				print('ODE solver has failed at y0=',y0)
+				solver_failed = True
+		if solver_failed:
+			y_pred_normalized = np.copy(y0_normalized.numpy()) # persist previous solution
+		else:
+			# solver is OKAY--use the solution like a good boy!
+			y_pred_normalized = f_normalize_minmax(normz_info, y_out[-1,:])
+	else:
+		# pdb.set_trace()
+		y_pred_normalized = model_output
+
+	out = model_params['learn_residuals_rnn']*torch.FloatTensor(y_pred_normalized[:,None]) + b + torch.mm(C,hidden_state)
 	return  (out, hidden_state, solver_failed)
 
 def forward_chaos_pureML2(data_input, hidden_state, A, B, C, a, b, *args, **kwargs):
@@ -448,7 +482,6 @@ def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_in
 	# renormalize
 	# hidden_state[0] = torch.from_numpy( (y_out[-1] - ymin) / (ymax - ymin) )
 	# hidden_state[0] = torch.from_numpy( (y_out[-1] - ymean) / ysd )
-
 	stacked_input = torch.FloatTensor(np.hstack( (y_pred_normalized, y0_normalized) )[:,None])
 	hidden_state = torch.relu( a + torch.mm(A,hidden_state) + torch.mm(B,stacked_input) )
 	stacked_output = torch.cat( ( torch.FloatTensor(y_pred_normalized[:,None]), hidden_state ) )
