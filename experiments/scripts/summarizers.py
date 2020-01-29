@@ -56,15 +56,16 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 		else:
 			my_eps = float([z.strip(eps_token) for z in d_label.split('_') if eps_token in z][-1])
 			# do i need to force ndmin?
-			model_loss = np.loadtxt(d+'/perfectModel_loss_vec_clean_test.txt',ndmin=1)
-			model_t_valid = np.loadtxt(d+'/perfectModel_prediction_validity_time_clean_test.txt',ndmin=1)
-			for kkt in range(model_loss.shape[0]):
-				if my_eps in model_performance['mse']:
-					model_performance['mse'][my_eps] += (float(model_loss[kkt]),)
-					model_performance['t_valid'][my_eps] += (float(model_t_valid[kkt]),)
-				else:
-					model_performance['mse'][my_eps] = (float(model_loss[kkt]),)
-					model_performance['t_valid'][my_eps] = (float(model_t_valid[kkt]),)
+			if not is_vanilla:
+				model_loss = np.loadtxt(d+'/perfectModel_loss_vec_clean_test.txt',ndmin=1)
+				model_t_valid = np.loadtxt(d+'/perfectModel_prediction_validity_time_clean_test.txt',ndmin=1)
+				for kkt in range(model_loss.shape[0]):
+					if my_eps in model_performance['mse']:
+						model_performance['mse'][my_eps] += (float(model_loss[kkt]),)
+						model_performance['t_valid'][my_eps] += (float(model_t_valid[kkt]),)
+					else:
+						model_performance['mse'][my_eps] = (float(model_loss[kkt]),)
+						model_performance['t_valid'][my_eps] = (float(model_t_valid[kkt]),)
 
 		# do i need to force ndmin?
 		x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
