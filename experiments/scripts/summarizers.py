@@ -207,8 +207,8 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	except:
 		pass
 
-	eps_vec = sorted(gpr_test_loss_medians.keys())
 	for gp in range(n_gprs):
+		eps_vec = sorted(gpr_test_loss_medians[gp].keys())
 		if gp==3:
 			gp_nm = 'vanilla GPR'
 		else:
