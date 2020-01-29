@@ -201,8 +201,8 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 			test_loss_medians[is_vanilla][is_resid] = {key: np.median(hybrid_performance[is_vanilla][is_resid]['mse'][key]) for key in hybrid_performance[is_vanilla][is_resid]['mse']}
 			test_loss_stds[is_vanilla][is_resid] = {key: np.std(hybrid_performance[is_vanilla][is_resid]['mse'][key]) for key in hybrid_performance[is_vanilla][is_resid]['mse']}
 
-			t_valid_medians[is_resid] = {key: np.median(hybrid_performance[is_vanilla][is_resid]['t_valid'][key]) for key in hybrid_performance[is_vanilla][is_resid]['t_valid']}
-			t_valid_stds[is_resid] = {key: np.std(hybrid_performance[is_vanilla][is_resid]['t_valid'][key]) for key in hybrid_performance[is_vanilla][is_resid]['t_valid']}
+			t_valid_medians[is_vanilla][is_resid]  = {key: np.median(hybrid_performance[is_vanilla][is_resid]['t_valid'][key]) for key in hybrid_performance[is_vanilla][is_resid]['t_valid']}
+			t_valid_stds[is_vanilla][is_resid]  = {key: np.std(hybrid_performance[is_vanilla][is_resid]['t_valid'][key]) for key in hybrid_performance[is_vanilla][is_resid]['t_valid']}
 
 			# rnn_test_loss_mins[is_resid] = np.min(rnn_performance[is_resid]['mse'])
 			# rnn_test_loss_maxes[is_resid] = np.max(rnn_performance[is_resid]['mse'])
