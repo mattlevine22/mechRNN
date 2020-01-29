@@ -25,10 +25,11 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 
 	win = min(win,n_vals//3)
 	model_performance = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
-	rnn_performance = {True: {'mse':(), 't_valid':(), 'mse_time':(), 't_valid_time':{}},
-					   False: {'mse':(), 't_valid':(), 'mse_time':(), 't_valid_time':{}}}
-	hybrid_performance = {True: {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}},
-					      False: {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}}
+	black_box_rnn_performance = {'mse':(), 't_valid':(), 'mse_time':(), 't_valid_time':{}}
+	hybrid_performance = {True: {True: {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}},
+					      False: {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}},
+					      False: {True: {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}},
+					      False: {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}}}
 	gpr_performance = [{'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}} for _ in range(n_gprs)]
 	for d in my_dirs:
 		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
@@ -46,7 +47,11 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 			print('Uh oh, unrecognized d_label')
 			print(d_label)
 
+		is_vanilla = False
 		if 'vanilla' in d_label:
+			is_vanilla = True
+
+		if is_vanilla and not is_resid:
 			my_eps = None
 		else:
 			my_eps = float([z.strip(eps_token) for z in d_label.split('_') if eps_token in z][-1])
@@ -82,60 +87,60 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 				# for kk in plot_state_indices:
 				# 	ax4.plot(x_kl_test.loc[:,kk].rolling(win).mean(), label=d_label)
 			if my_eps is None:
-				rnn_performance[is_resid]['mse'] += (float(np.min(x_test.loc[:,kkt])),)
-				# rnn_performance[is_resid]['mse_time'] += (float(np.nanargmin(x_test)),)
+				black_box_rnn_performance['mse'] += (float(np.min(x_test.loc[:,kkt])),)
+				# black_box_rnn_performance['mse_time'] += (float(np.nanargmin(x_test)),)
 				if many_epochs:
-					rnn_performance[is_resid]['t_valid'] += (float(np.max(x_valid_test.loc[:,kkt])),)
+					black_box_rnn_performance['t_valid'] += (float(np.max(x_valid_test.loc[:,kkt])),)
 					for tt in t_vec:
-						if tt in rnn_performance[is_resid]['t_valid_time']:
+						if tt in black_box_rnn_performance['t_valid_time']:
 							try:
-								rnn_performance[is_resid]['t_valid_time'][tt] += (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
+								black_box_rnn_performance['t_valid_time'][tt] += (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
 							except:
-								rnn_performance[is_resid]['t_valid_time'][tt] += (np.inf,)
+								black_box_rnn_performance['t_valid_time'][tt] += (np.inf,)
 						else:
 							try:
-								rnn_performance[is_resid]['t_valid_time'][tt] = (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
+								black_box_rnn_performance['t_valid_time'][tt] = (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
 							except:
-								rnn_performance[is_resid]['t_valid_time'][tt] = (np.inf,)
-			elif my_eps in hybrid_performance[is_resid]['mse']:
-				hybrid_performance[is_resid]['mse'][my_eps] += (float(np.min(x_test.loc[:,kkt])),)
+								black_box_rnn_performance['t_valid_time'][tt] = (np.inf,)
+			elif my_eps in hybrid_performance[is_vanilla][is_resid]['mse']:
+				hybrid_performance[is_vanilla][is_resid]['mse'][my_eps] += (float(np.min(x_test.loc[:,kkt])),)
 				for gp in range(n_gprs):
 					gpr_performance[gp]['mse'][my_eps] += (float(np.min(gpr_test[gp][kkt])),)
 				# gpr1_performance['mse'][my_eps] += (float(np.min(gpr1_test[kkt])),)
 				# gpr2_performance['mse'][my_eps] += (float(np.min(gpr2_test[kkt])),)
 				# for tt in t_vec:
-				# 	hybrid_performance[is_resid]['mse_time'][my_eps][tt] += (x_test[x_test.iloc[:,0]>tt].index[0],)
+				# 	hybrid_performance[is_vanilla][is_resid]['mse_time'][my_eps][tt] += (x_test[x_test.iloc[:,0]>tt].index[0],)
 				if many_epochs:
-					hybrid_performance[is_resid]['t_valid'][my_eps] += (float(np.max(x_valid_test.loc[:,kkt])),)
+					hybrid_performance[is_vanilla][is_resid]['t_valid'][my_eps] += (float(np.max(x_valid_test.loc[:,kkt])),)
 					for gp in range(n_gprs):
 						gpr_performance[gp]['t_valid'][my_eps] += (float(np.max(gpr_valid_test[gp][kkt])),)
 					# gpr1_performance['t_valid'][my_eps] += (float(np.max(gpr1_valid_test[kkt])),)
 					# gpr2_performance['t_valid'][my_eps] += (float(np.max(gpr2_valid_test[kkt])),)
 					for tt in t_vec:
 						try:
-							hybrid_performance[is_resid]['t_valid_time'][my_eps][tt] += (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
+							hybrid_performance[is_vanilla][is_resid]['t_valid_time'][my_eps][tt] += (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
 							# gpr1_performance['t_valid_time'][my_eps][tt] += (gpr1_valid_test.loc[gpr1_valid_test.loc[:,kkt]>tt,kkt].index[0],)
 							# gpr2_performance['t_valid_time'][my_eps][tt] += (gpr2_valid_test.loc[gpr2_valid_test.loc[:,kkt]>tt,kkt].index[0],)
 						except:
-							hybrid_performance[is_resid]['t_valid_time'][my_eps][tt] += (np.inf,)
+							hybrid_performance[is_vanilla][is_resid]['t_valid_time'][my_eps][tt] += (np.inf,)
 							for gp in range(n_gprs):
 								gpr_performance[gp]['t_valid_time'][my_eps][tt] += (np.inf,)
 							# gpr1_performance['t_valid_time'][my_eps][tt] += (np.inf,)
 							# gpr2_performance['t_valid_time'][my_eps][tt] += (np.inf,)
 			else:
-				hybrid_performance[is_resid]['mse'][my_eps] = (float(np.min(x_test.loc[:,kkt])),)
+				hybrid_performance[is_vanilla][is_resid]['mse'][my_eps] = (float(np.min(x_test.loc[:,kkt])),)
 				for gp in range(n_gprs):
 					gpr_performance[gp]['mse'][my_eps] = (float(np.min(gpr_test[gp][kkt])),)
 				# gpr1_performance['mse'][my_eps] = (float(np.min(gpr1_test[kkt])),)
 				# gpr2_performance['mse'][my_eps] = (float(np.min(gpr2_test[kkt])),)
-				# hybrid_performance[is_resid]['mse_time'][my_eps] = {}
+				# hybrid_performance[is_vanilla][is_resid]['mse_time'][my_eps] = {}
 				# for tt in t_vec:
-				# 	hybrid_performance[is_resid]['mse_time'][my_eps][tt] = (x_test[x_test.iloc[:,0]>tt].index[0],)
+				# 	hybrid_performance[is_vanilla][is_resid]['mse_time'][my_eps][tt] = (x_test[x_test.iloc[:,0]>tt].index[0],)
 				if many_epochs:
-					hybrid_performance[is_resid]['t_valid'][my_eps] = (float(np.max(x_valid_test.loc[:,kkt])),)
+					hybrid_performance[is_vanilla][is_resid]['t_valid'][my_eps] = (float(np.max(x_valid_test.loc[:,kkt])),)
 					# gpr1_performance['t_valid'][my_eps] = (float(np.max(gpr1_valid_test[kkt])),)
 					# gpr2_performance['t_valid'][my_eps] = (float(np.max(gpr2_valid_test[kkt])),)
-					hybrid_performance[is_resid]['t_valid_time'][my_eps] = {}
+					hybrid_performance[is_vanilla][is_resid]['t_valid_time'][my_eps] = {}
 					# gpr1_performance['t_valid_time'][my_eps] = {}
 					# gpr2_performance['t_valid_time'][my_eps] = {}
 
@@ -146,11 +151,11 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 
 					for tt in t_vec:
 						try:
-							hybrid_performance[is_resid]['t_valid_time'][my_eps][tt] += (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
+							hybrid_performance[is_vanilla][is_resid]['t_valid_time'][my_eps][tt] += (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
 							# gpr1_performance['t_valid_time'][my_eps][tt] += (gpr1_valid_test.loc[gpr1_valid_test.loc[:,kkt]>tt,kkt].index[0],)
 							# gpr2_performance['t_valid_time'][my_eps][tt] += (gpr2_valid_test.loc[gpr2_valid_test.loc[:,kkt]>tt,kkt].index[0],)
 						except:
-							hybrid_performance[is_resid]['t_valid_time'][my_eps][tt] = (np.inf,)
+							hybrid_performance[is_vanilla][is_resid]['t_valid_time'][my_eps][tt] = (np.inf,)
 							for gp in range(n_gprs):
 								gpr_performance[gp]['t_valid_time'][my_eps][tt] = (np.inf,)
 							# gpr1_performance['t_valid_time'][my_eps][tt] = (np.inf,)
@@ -176,22 +181,33 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 		gpr_test_loss_stds.append({key: np.std(gpr_performance[gp]['mse'][key]) for key in gpr_performance[gp]['mse']})
 
 
-	test_loss_medians = {}
-	test_loss_stds = {}
-	rnn_test_loss_medians = {}
-	rnn_test_loss_stds = {}
-	for is_resid in [True, False]:
-		# test_loss_mins[is_resid] = {key: np.min(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
-		# test_loss_maxes[is_resid] = {key: np.max(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
-		# test_loss_means[is_resid] = {key: np.mean(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
-		test_loss_medians[is_resid] = {key: np.median(hybrid_performance[is_resid]['mse'][key]) for key in hybrid_performance[is_resid]['mse']}
-		test_loss_stds[is_resid] = {key: np.std(hybrid_performance[is_resid]['mse'][key]) for key in hybrid_performance[is_resid]['mse']}
 
-		# rnn_test_loss_mins[is_resid] = np.min(rnn_performance[is_resid]['mse'])
-		# rnn_test_loss_maxes[is_resid] = np.max(rnn_performance[is_resid]['mse'])
-		# rnn_test_loss_means[is_resid] = np.mean(rnn_performance[is_resid]['mse'])
-		rnn_test_loss_medians[is_resid] = np.median(rnn_performance[is_resid]['mse'])
-		rnn_test_loss_stds[is_resid] = np.std(rnn_performance[is_resid]['mse'])
+	eps_vec = sorted(ode_test_loss_medians.keys())
+	is_resid = False
+	is_vanilla = True
+	for big_key in black_box_rnn_performance:
+		hybrid_performance[is_vanilla][is_resid][big_key] = {eps_key: black_box_rnn_performance[big_key] for eps_key in eps_vec}
+
+	test_loss_medians = {True:{},False:{}}
+	test_loss_stds = {True:{},False:{}}
+	t_valid_medians = {True:{},False:{}}
+	t_valid_stds = {True:{},False:{}}
+	for is_vanilla in [True, False]:
+		for is_resid in [True, False]:
+			# test_loss_mins[is_resid] = {key: np.min(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
+			# test_loss_maxes[is_resid] = {key: np.max(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
+			# test_loss_means[is_resid] = {key: np.mean(hybrid_performance['mse'][key]) for key in hybrid_performance['mse']}
+			test_loss_medians[is_vanilla][is_resid] = {key: np.median(hybrid_performance[is_vanilla][is_resid]['mse'][key]) for key in hybrid_performance[is_vanilla][is_resid]['mse']}
+			test_loss_stds[is_vanilla][is_resid] = {key: np.std(hybrid_performance[is_vanilla][is_resid]['mse'][key]) for key in hybrid_performance[is_vanilla][is_resid]['mse']}
+
+			t_valid_medians[is_resid] = {key: np.median(hybrid_performance[is_vanilla][is_resid]['t_valid'][key]) for key in hybrid_performance[is_vanilla][is_resid]['t_valid']}
+			t_valid_stds[is_resid] = {key: np.std(hybrid_performance[is_vanilla][is_resid]['t_valid'][key]) for key in hybrid_performance[is_vanilla][is_resid]['t_valid']}
+
+			# rnn_test_loss_mins[is_resid] = np.min(rnn_performance[is_resid]['mse'])
+			# rnn_test_loss_maxes[is_resid] = np.max(rnn_performance[is_resid]['mse'])
+			# rnn_test_loss_means[is_resid] = np.mean(rnn_performance[is_resid]['mse'])
+			# rnn_test_loss_medians[is_resid] = np.median(rnn_performance[is_resid]['mse'])
+			# rnn_test_loss_stds[is_resid] = np.std(rnn_performance[is_resid]['mse'])
 
 	# plot summary
 	fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1,
@@ -224,26 +240,23 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	# ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 2', color='green', linestyle='--')
 
 	for is_resid in [True,False]:
-		eps_vec = sorted(test_loss_medians[is_resid].keys())
+		for is_vanilla in [True,False]:
+			if is_vanilla:
+				my_label = 'vanilla RNN'
+				my_color = 'black'
+			else:
+				my_label = 'hybrid RNN'
+				my_color = 'blue'
 
-		# hybrid RNN
-		median_vec = [test_loss_medians[is_resid][eps] for eps in eps_vec]
-		std_vec = [test_loss_stds[is_resid][eps] for eps in eps_vec]
-		ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN'+is_resid*' residual', color='blue', linestyle='-'+is_resid*'-')
+			my_label += is_resid*' residual'
+			my_linestyle = '-'+is_resid*'-'
 
-		# vanilla RNN
-		if is_resid:
-			eps_vec = sorted(rnn_test_loss_medians[is_resid].keys())
-			median_vec = [rnn_test_loss_medians[is_resid][eps] for eps in eps_vec]
-			std_vec = [rnn_test_loss_stds[is_resid][eps] for eps in eps_vec]
-		else:
-			median_vec = [rnn_test_loss_medians[is_resid]]*len(eps_vec)
-			std_vec = [rnn_test_loss_stds[is_resid]]*len(eps_vec)
+			eps_vec = sorted(test_loss_medians[is_vanilla][is_resid].keys())
 
-		try:
-			ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec ,label='vanilla RNN'+is_resid*' residual', color='black', linestyle='-'+is_resid*'-')
-		except:
-			pass
+			# plot RNN
+			median_vec = [test_loss_medians[is_vanilla][is_resid][eps] for eps in eps_vec]
+			std_vec = [test_loss_stds[is_vanilla][is_resid][eps] for eps in eps_vec]
+			ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=my_label, color=my_color, linestyle=my_linestyle)
 
 	ax1.set_xlabel('epsilon Model Error')
 	ax1.set_ylabel('Test Loss (MSE)')
@@ -280,22 +293,22 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 		# gpr2_t_valid_means = {key: np.mean(gpr2_performance['t_valid'][key]) for key in gpr2_performance['t_valid']}
 		# gpr2_t_valid_stds = {key: np.std(gpr2_performance['t_valid'][key]) for key in gpr2_performance['t_valid']}
 
-		t_valid_medians = {}
-		t_valid_stds = {}
-		rnn_t_valid_medians = {}
-		rnn_t_valid_stds = {}
-		for is_resid in [True,False]:
-			# t_valid_mins = {key: np.min(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
-			# t_valid_maxes = {key: np.max(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
-			# t_valid_means = {key: np.mean(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
-			t_valid_medians[is_resid] = {key: np.median(hybrid_performance[is_resid]['t_valid'][key]) for key in hybrid_performance[is_resid]['t_valid']}
-			t_valid_stds[is_resid] = {key: np.std(hybrid_performance[is_resid]['t_valid'][key]) for key in hybrid_performance[is_resid]['t_valid']}
+		# t_valid_medians = {}
+		# t_valid_stds = {}
+		# rnn_t_valid_medians = {}
+		# rnn_t_valid_stds = {}
+		# for is_resid in [True,False]:
+		# 	# t_valid_mins = {key: np.min(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
+		# 	# t_valid_maxes = {key: np.max(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
+		# 	# t_valid_means = {key: np.mean(hybrid_performance['t_valid'][key]) for key in hybrid_performance['t_valid']}
+		# 	t_valid_medians[is_resid] = {key: np.median(hybrid_performance[is_resid]['t_valid'][key]) for key in hybrid_performance[is_resid]['t_valid']}
+		# 	t_valid_stds[is_resid] = {key: np.std(hybrid_performance[is_resid]['t_valid'][key]) for key in hybrid_performance[is_resid]['t_valid']}
 
-			# rnn_t_valid_mins[is_resid] = np.min(rnn_performance[is_resid]['t_valid'])
-			# rnn_t_valid_maxes[is_resid] = np.max(rnn_performance[is_resid]['t_valid'])
-			# rnn_t_valid_means[is_resid] = np.mean(rnn_performance[is_resid]['t_valid'])
-			rnn_t_valid_medians[is_resid] = np.median(rnn_performance[is_resid]['t_valid'])
-			rnn_t_valid_stds[is_resid] = np.std(rnn_performance[is_resid]['t_valid'])
+		# 	# rnn_t_valid_mins[is_resid] = np.min(rnn_performance[is_resid]['t_valid'])
+		# 	# rnn_t_valid_maxes[is_resid] = np.max(rnn_performance[is_resid]['t_valid'])
+		# 	# rnn_t_valid_means[is_resid] = np.mean(rnn_performance[is_resid]['t_valid'])
+		# 	rnn_t_valid_medians[is_resid] = np.median(rnn_performance[is_resid]['t_valid'])
+		# 	rnn_t_valid_stds[is_resid] = np.std(rnn_performance[is_resid]['t_valid'])
 
 		# plotting
 		for gp in range(n_gprs):
@@ -330,17 +343,39 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 		# std_vec = [gpr2_t_valid_stds[eps] for eps in eps_vec]
 		# ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 2', color='green', linestyle='--')
 
-		for is_resid in [True,False]:
-			# hybrid RNN
-			eps_vec = sorted(t_valid_medians[is_resid].keys())
-			median_vec = [t_valid_medians[is_resid][eps] for eps in eps_vec]
-			std_vec = [t_valid_stds[is_resid][eps] for eps in eps_vec]
-			ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN'+is_resid*' residual', color='blue', linestyle='-'+is_resid*'-')
+		# for is_resid in [True,False]:
+		# 	# hybrid RNN
+		# 	eps_vec = sorted(t_valid_medians[is_resid].keys())
+		# 	median_vec = [t_valid_medians[is_resid][eps] for eps in eps_vec]
+		# 	std_vec = [t_valid_stds[is_resid][eps] for eps in eps_vec]
+		# 	ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN'+is_resid*' residual', color='blue', linestyle='-'+is_resid*'-')
 
-			try:
-				ax2.errorbar(x=eps_vec, y=[rnn_t_valid_medians[is_resid]]*len(eps_vec), yerr=[rnn_t_valid_stds[is_resid]]*len(eps_vec) ,label='vanilla RNN'+is_resid*' residual', color='black',  linestyle='-'+is_resid*'-')
-			except:
-				pass
+		# 	try:
+		# 		ax2.errorbar(x=eps_vec, y=[rnn_t_valid_medians[is_resid]]*len(eps_vec), yerr=[rnn_t_valid_stds[is_resid]]*len(eps_vec) ,label='vanilla RNN'+is_resid*' residual', color='black',  linestyle='-'+is_resid*'-')
+		# 	except:
+		# 		pass
+
+		for is_resid in [True,False]:
+			for is_vanilla in [True,False]:
+				if is_vanilla:
+					my_label = 'vanilla RNN'
+					my_color = 'black'
+				else:
+					my_label = 'hybrid RNN'
+					my_color = 'blue'
+
+				my_label += is_resid*' residual'
+				my_linestyle = '-'+is_resid*'-'
+
+				eps_vec = sorted(t_valid_medians[is_vanilla][is_resid].keys())
+
+				# plot RNN
+				median_vec = [t_valid_medians[is_vanilla][is_resid][eps] for eps in eps_vec]
+				std_vec = [t_valid_stds[is_vanilla][is_resid][eps] for eps in eps_vec]
+				ax2.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=my_label, color=my_color, linestyle=my_linestyle)
+
+
+
 
 		ax2.set_xlabel('epsilon Model Error')
 		ax2.set_ylabel('Validity Time')
