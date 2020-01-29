@@ -198,7 +198,7 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 		figsize = [10, 10],
 		sharey=False, sharex=False)
 
-	eps_vec = sorted(test_loss_medians[True].keys())
+	eps_vec = sorted(ode_test_loss_medians.keys())
 
 	try:
 		median_vec = [ode_test_loss_medians[eps] for eps in eps_vec]
@@ -207,6 +207,7 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	except:
 		pass
 
+	eps_vec = sorted(gpr_test_loss_medians.keys())
 	for gp in range(n_gprs):
 		if gp==3:
 			gp_nm = 'vanilla GPR'
@@ -223,13 +224,24 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	# ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid GPR 2', color='green', linestyle='--')
 
 	for is_resid in [True,False]:
+		eps_vec = sorted(test_loss_medians[is_resid].keys())
+
 		# hybrid RNN
 		median_vec = [test_loss_medians[is_resid][eps] for eps in eps_vec]
 		std_vec = [test_loss_stds[is_resid][eps] for eps in eps_vec]
 		ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='hybrid RNN'+is_resid*' residual', color='blue', linestyle='-'+is_resid*'-')
 
+		# vanilla RNN
+		if is_resid:
+			eps_vec = sorted(rnn_test_loss_medians[is_resid].keys())
+			median_vec = [rnn_test_loss_medians[is_resid][eps] for eps in eps_vec]
+			std_vec = [rnn_test_loss_stds[is_resid][eps] for eps in eps_vec]
+		else:
+			median_vec = [rnn_test_loss_medians[is_resid]]*len(eps_vec)
+			std_vec = [rnn_test_loss_stds[is_resid]]*len(eps_vec)
+
 		try:
-			ax1.errorbar(x=eps_vec, y=[rnn_test_loss_medians[is_resid]]*len(eps_vec), yerr=[rnn_test_loss_stds[is_resid]]*len(eps_vec) ,label='vanilla RNN'+is_resid*' residual', color='black', linestyle='-'+is_resid*'-')
+			ax1.errorbar(x=eps_vec, y=median_vec, yerr=std_vec ,label='vanilla RNN'+is_resid*' residual', color='black', linestyle='-'+is_resid*'-')
 		except:
 			pass
 

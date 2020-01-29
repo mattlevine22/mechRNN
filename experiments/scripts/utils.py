@@ -128,6 +128,18 @@ def easy_exp_decay_model(y_in,t,yb,c_gamma,x_in):
 	dydt = -c_gamma*(y_in-yb) + x_in[0]
 	return dydt
 
+def vanderpol_oscillator(Y,t,mu):
+	(x,y) = Y
+	dxdt = y
+	dydt = mu*( 1-(x**2) )*y - x
+
+	dYdt = [dxdt, dydt]
+	return dYdt
+
+def linear_dynamics_model(Y,t,A):
+	dYdt = np.matmul(A,Y)
+	return dYdt
+
 def lorenz63(Y,t,a,b,c):
 	(x,y,z) = Y
 	dxdt = -a*x + a*y
