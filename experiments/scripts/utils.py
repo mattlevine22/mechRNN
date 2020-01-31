@@ -595,16 +595,15 @@ def run_GP(y_clean_train, y_noisy_train,
 			n_test_sets,
 			err_thresh, gp_style=1, gp_only=False,
 			GP_grid = False,
-			alpha=1e-10):
+			alpha=1e-10,
+			do_resid=True):
 
 
 	if gp_only:
 		gp_nm = ''
 	else:
-		gp_nm = 'GPR{0}_'.format(gp_style)
+		gp_nm = 'GPR{0}_residual{1}'.format(gp_style, do_resid)
 
-	do_resid = 1
-	y=y_noisy_train[1:]-model_pred
 	if gp_style==1:
 		X = y_noisy_train[:-1]
 	elif gp_style==2:
@@ -614,7 +613,12 @@ def run_GP(y_clean_train, y_noisy_train,
 	elif gp_style==4:
 		do_resid = 0
 		X = y_noisy_train[:-1]
+
+	if do_resid:
+		y=y_noisy_train[1:]-model_pred
+	else:
 		y=y_noisy_train[1:]
+
 
 	nXDim = X.shape[1]
 	nYDim = y.shape[1]
@@ -1059,7 +1063,7 @@ def train_chaosRNN(forward,
 			max_plot=None, n_param_saves=None,
 			err_thresh=0.4, plot_state_indices=None,
 			precompute_model=True, kde_func=kde_scipy,
-			compute_kl=False, gp_only=False, gp_style=None,
+			compute_kl=False, gp_only=False, gp_style=None, gp_resid=None,
 			save_iterEpochs=False,
 			model_params_TRUE=None,
 			GP_grid = False,
@@ -1143,9 +1147,14 @@ def train_chaosRNN(forward,
 
 
 	if gp_style is None:
-		style_list = [1,2,3,4]
+		style_list = [1,2,3]
 	else:
 		style_list = [gp_style]
+
+	if gp_resid_list is None:
+		gp_resid_list = [True,False]
+	else:
+		gp_resid_list = [gp_resid]
 
 	# pdb.set_trace()
 	# identify Attractor points for GP grid eval
@@ -1164,30 +1173,32 @@ def train_chaosRNN(forward,
 		my_inds = np.random.randint(low=n_points, high=(10*n_points)-1, size=n_points)
 		random_attractor_points = y_out_ATT[my_inds,]
 
-	for gp_style in style_list:
-		for alpha in alpha_list:
-			print('Running GPR',gp_style,'for alpha=',alpha)
-			run_GP(y_clean_train, y_noisy_train,
-					y_clean_test, y_noisy_test,
-					y_clean_testSynch, y_noisy_testSynch,
-					model,f_unNormalize_Y,
-					model_pred,
-					train_seq_length,
-					test_seq_length,
-					output_size,
-					avg_output_test,
-					avg_output_clean_test,
-					normz_info, model_params, model_params_TRUE, random_attractor_points,
-					plot_state_indices,
-					output_dir,
-					n_plttrain,
-					n_plttest,
-					n_test_sets,
-					err_thresh,
-					gp_style,
-					gp_only,
-					GP_grid = GP_grid,
-					alpha = alpha)
+	for do_resid in gp_resid_list:
+		for gp_style in style_list:
+			for alpha in alpha_list:
+				print('Running GPR',gp_style,'for alpha=',alpha)
+				run_GP(y_clean_train, y_noisy_train,
+						y_clean_test, y_noisy_test,
+						y_clean_testSynch, y_noisy_testSynch,
+						model,f_unNormalize_Y,
+						model_pred,
+						train_seq_length,
+						test_seq_length,
+						output_size,
+						avg_output_test,
+						avg_output_clean_test,
+						normz_info, model_params, model_params_TRUE, random_attractor_points,
+						plot_state_indices,
+						output_dir,
+						n_plttrain,
+						n_plttest,
+						n_test_sets,
+						err_thresh,
+						gp_style,
+						gp_only,
+						GP_grid = GP_grid,
+						alpha = alpha,
+						do_resid= do_gp_resid)
 
 	if gp_only:
 		return
