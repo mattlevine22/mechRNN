@@ -161,6 +161,50 @@ def lorenz63_perturbed(Y,t,a=10,b=28,c=8/3,gamma=1,delta=0):
 	dYdt = [dxdt, dydt, dzdt]
 	return dYdt
 
+# def lorenz96multiscale(Z, t, K=8, J=8, hx=-0.8, hy=1, eps=2**(-7), Fx=10):
+
+# 	hx = hx * np.ones(K) # can take this out of rhs loop for efficiency later
+#     rhs = np.empty(K + K*J)
+#     x = Z[:K]
+#     y = Z[K:]
+
+#     ### slow variables subsystem ###
+#     # compute Yk averages
+#     Yk = Z[K:].reshape( (J, K), order = 'F').sum(axis = 0) / J
+
+#     # three boundary cases
+#     rhs[0] =   -x[K-1] * (x[K-2] - x[1]) - x[0]
+#     rhs[1] =   -x[0]   * (x[K-1] - x[2]) - x[1]
+#     rhs[K-1] = -x[K-2] * (x[K-3] - x[0]) - x[K-1]
+
+#     # general case
+#     rhs[2:K-1] = -x[1:K-2] * (x[0:K-3] - x[3:K]) - x[2:K-1]
+
+#     # add forcing
+#     rhs[:K] += Fx
+
+#     # add coupling w/ fast variables via averages
+#     # XXX verify this (twice: sign and vector-vector multiplication)
+#     rhs[:K] += hx * Yk
+
+#     ### fast variables subsystem ###
+#     # three boundary cases
+#     rhs[K]  = -y[1]  * (y[2] - y[-1]) - y[0]
+#     rhs[-2] = -y[-1] * (y[0] - y[-3]) - y[-2]
+#     rhs[-1] = -y[0]  * (y[1] - y[-2]) - y[-1]
+
+#     # general case
+#     rhs[K+1:-2] = -y[2:-1] * (y[3:] - y[:-3]) - y[1:-2]
+
+#     # add coupling w/ slow variables
+#     for k in range(K):
+#       rhs[K + k*J : K + (k+1)*J] += hy * x[k]
+
+#     # divide by epsilon
+#     rhs[K:] /= eps
+
+#     return rhs
+
 def f_normalize_ztrans(norm_dict,y):
 	y_norm = (y - norm_dict['Xmean']) / norm_dict['Xsd']
 	return y_norm
@@ -304,7 +348,10 @@ def make_RNN_data2(model, tspan_train, tspan_test, sim_model_params, noise_frac=
 		os.makedirs(output_dir)
 
 	t0 = time()
-	init_vec = f_get_state_inits(model=model, params=sim_model_params, n=(n_test_sets+1))
+	try:
+		init_vec = f_get_state_inits(model=model, params=sim_model_params, n=(n_test_sets+1))
+	except:
+		init_vec = f_get_state_inits(n=(n_test_sets+1))
 
 	# first get training set
 	sim_model_params['state_init'] = init_vec[0,:]
@@ -1102,17 +1149,20 @@ def train_chaosRNN(forward,
 
 	# pdb.set_trace()
 	# identify Attractor points for GP grid eval
-	n_points = 1000
-	bigTspan = np.arange(0, 10*n_points, 0.1)
-	run_again = True
-	while run_again:
-		y_out_ATT, info_dict = odeint(model, np.squeeze(get_lorenz_inits(n=1)), bigTspan, args=model_params['ode_params'], mxstep=0, full_output=True)
-		if info_dict['message'] == 'Integration successful.':
-			run_again = False
+	get_attractor = False
+	random_attractor_points = None
+	if get_attractor:
+		n_points = 1000
+		bigTspan = np.arange(0, 10*n_points, 0.1)
+		run_again = True
+		while run_again:
+			y_out_ATT, info_dict = odeint(model, np.squeeze(get_lorenz_inits(n=1)), bigTspan, args=model_params['ode_params'], mxstep=0, full_output=True)
+			if info_dict['message'] == 'Integration successful.':
+				run_again = False
 
-	# do a one 1/10 burn-in, then randomly downsample.
-	my_inds = np.random.randint(low=n_points, high=(10*n_points)-1, size=n_points)
-	random_attractor_points = y_out_ATT[my_inds,]
+		# do a one 1/10 burn-in, then randomly downsample.
+		my_inds = np.random.randint(low=n_points, high=(10*n_points)-1, size=n_points)
+		random_attractor_points = y_out_ATT[my_inds,]
 
 	for gp_style in style_list:
 		for alpha in alpha_list:
