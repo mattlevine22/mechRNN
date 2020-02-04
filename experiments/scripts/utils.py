@@ -643,7 +643,7 @@ def run_GP(y_clean_train, y_noisy_train,
 
 		# generate next-step ODE model prediction
 		# unnormalize model_input so that it can go through the ODE solver
-		if do_resid:
+		if do_resid or (gp_style in [2,3]):
 			y0 = f_unNormalize_minmax(normz_info, pred)
 			if not solver_failed:
 				# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
@@ -739,7 +739,7 @@ def run_GP(y_clean_train, y_noisy_train,
 			# generate next-step ODE model prediction
 			# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 			# unnormalize model_input so that it can go through the ODE solver
-			if do_resid:
+			if do_resid or (gp_style in [2,3]):
 				y0 = f_unNormalize_minmax(normz_info, pred)
 				if not solver_failed:
 					# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
@@ -1151,7 +1151,7 @@ def train_chaosRNN(forward,
 	else:
 		style_list = [gp_style]
 
-	if gp_resid_list is None:
+	if gp_resid is None:
 		gp_resid_list = [True,False]
 	else:
 		gp_resid_list = [gp_resid]
@@ -1198,7 +1198,7 @@ def train_chaosRNN(forward,
 						gp_only,
 						GP_grid = GP_grid,
 						alpha = alpha,
-						do_resid= do_gp_resid)
+						do_resid = do_resid)
 
 	if gp_only:
 		return
@@ -1875,12 +1875,13 @@ def train_chaosRNN(forward,
 			for kk in plot_state_indices:
 				ax4.errorbar(x=epoch_vec,y=pd.DataFrame(np.median(x_kl_test[:,:,kk],axis=1)).rolling(win).mean().loc[:,0], yerr=np.std(x_kl_test[:,:,kk],axis=1), label='RNN')
 
-		for gp_style in style_list:
-			gp_nm = 'GPR {0}'.format(gp_style)
-			gpr_valid_test = np.loadtxt(output_dir+'/GPR{0}_prediction_validity_time_clean_test.txt'.format(gp_style))
-			gpr_test = np.loadtxt(output_dir+'/GPR{0}_loss_vec_clean_test.txt'.format(gp_style))
-			ax2.errorbar(x=epoch_vec,y=[np.median(gpr_test)]*len(epoch_vec), yerr=[np.std(gpr_test)]*len(epoch_vec),label=gp_nm)
-			ax3.errorbar(x=epoch_vec,y=[np.median(gpr_valid_test)]*len(epoch_vec), yerr=[np.std(gpr_valid_test)]*len(epoch_vec),label=gp_nm)
+		for do_resid in gp_resid_list:
+			for gp_style in style_list:
+				gp_nm = 'GPR {0} {1}'.format(gp_style,do_resid*'residuals')
+				gpr_valid_test = np.loadtxt(output_dir+'/GPR{0}_residual{1}prediction_validity_time_clean_test.txt'.format(gp_style, do_resid))
+				gpr_test = np.loadtxt(output_dir+'/GPR{0}_residual{1}loss_vec_clean_test.txt'.format(gp_style, do_resid))
+				ax2.errorbar(x=epoch_vec,y=[np.median(gpr_test)]*len(epoch_vec), yerr=[np.std(gpr_test)]*len(epoch_vec),label=gp_nm)
+				ax3.errorbar(x=epoch_vec,y=[np.median(gpr_valid_test)]*len(epoch_vec), yerr=[np.std(gpr_valid_test)]*len(epoch_vec),label=gp_nm)
 
 		ax2.legend()
 		ax3.legend()

@@ -6,7 +6,7 @@ from summarizers import extract_epsilon_performance
 def main(pathname):
 	# pathname = '/Users/matthewlevine/code_projects/mechRNN/experiments/June4/lorenz63_eps_loop_10000epochs_v2'
 	my_dirs = []
-	for x in Path(pathname).glob('**/*RNN*'):
+	for x in Path(pathname).glob('**/*'):
 		x = str(x)
 		if os.path.exists(x+'/loss_vec_clean_test.txt'):
 			my_dirs.append(x)

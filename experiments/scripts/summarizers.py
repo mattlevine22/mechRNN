@@ -14,7 +14,160 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pdb
 
+import copy
+
 def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", win=1, many_epochs=True, eps_token='epsBadness'):
+	t_vec = [1,2,4,6,8,10]
+	# first, get sizes of things...max window size is 10% of whole test set.
+	init_dirs = [x for x in my_dirs if 'RNN' in x.split('/')[-1]]
+	d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
+	x_test = pd.DataFrame(np.loadtxt(init_dirs[0]+"/loss_vec_clean_test.txt"))
+	n_vals = x_test.shape[0]
+
+	win = min(win,n_vals//3)
+	model_performance = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
+	starter_dict = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
+
+	method_performance = {}
+	for d in my_dirs:
+		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
+
+		method_nm = d_label.split('_')[0]
+		if method_nm not in method_performance:
+			method_performance[method_nm] = {}
+
+		is_resid = 'residualTrue' in d_label
+		if is_resid not in method_performance[method_nm]:
+			method_performance[method_nm][is_resid] = copy.deepcopy(starter_dict)
+
+		do_smoothing = 'RNN' in method_nm
+
+		try:
+			#extract epsilon badness
+			my_eps = float([z.strip(eps_token) for z in d_label.split('_') if eps_token in z][-1])
+		except:
+			my_eps = None
+
+		if my_eps is not None and 'mechRNN' in d_label:
+			model_loss = np.loadtxt(d+'/perfectModel_loss_vec_clean_test.txt',ndmin=1)
+			model_t_valid = np.loadtxt(d+'/perfectModel_prediction_validity_time_clean_test.txt',ndmin=1)
+			for kkt in range(model_loss.shape[0]):
+				if my_eps in model_performance['mse']:
+					model_performance['mse'][my_eps] += (float(model_loss[kkt]),)
+					model_performance['t_valid'][my_eps] += (float(model_t_valid[kkt]),)
+				else:
+					model_performance['mse'][my_eps] = (float(model_loss[kkt]),)
+					model_performance['t_valid'][my_eps] = (float(model_t_valid[kkt]),)
+
+		# do i need to force ndmin?
+		# x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
+		x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
+		x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt"))
+
+		n_tests = x_valid_test.shape[1]
+		for kkt in range(n_tests):
+			if do_smoothing:
+				x_test.loc[:,kkt] = x_test.loc[:,kkt].rolling(win).mean()
+				if many_epochs:
+					x_valid_test.loc[:,kkt] = x_valid_test.loc[:,kkt].rolling(win).mean()
+
+			if my_eps in method_performance[method_nm][is_resid]['mse']:
+				method_performance[method_nm][is_resid]['mse'][my_eps] += (float(np.min(x_test.loc[:,kkt])),)
+				if many_epochs:
+					method_performance[method_nm][is_resid]['t_valid'][my_eps] += (float(np.max(x_valid_test.loc[:,kkt])),)
+					for tt in t_vec:
+						try:
+							method_performance[method_nm][is_resid]['t_valid_time'][my_eps][tt] += (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
+						except:
+							method_performance[method_nm][is_resid]['t_valid_time'][my_eps][tt] += (np.inf,)
+			else:
+				method_performance[method_nm][is_resid]['mse'][my_eps] = (float(np.min(x_test.loc[:,kkt])),)
+				if many_epochs:
+					method_performance[method_nm][is_resid]['t_valid'][my_eps] = (float(np.max(x_valid_test.loc[:,kkt])),)
+					method_performance[method_nm][is_resid]['t_valid_time'][my_eps] = {}
+					for tt in t_vec:
+						try:
+							method_performance[method_nm][is_resid]['t_valid_time'][my_eps][tt] += (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
+						except:
+							method_performance[method_nm][is_resid]['t_valid_time'][my_eps][tt] = (np.inf,)
+
+	# Summarize
+
+	### ODE model only
+	metric_list = ['mse','t_valid']
+	ode_test_loss = {key: {} for key in metric_list}
+	for metric_nm in metric_list:
+		ode_test_loss[metric_nm]['median'] = {key: np.median(model_performance[metric_nm][key]) for key in model_performance[metric_nm]}
+		ode_test_loss[metric_nm]['std'] = {key: np.std(model_performance[metric_nm][key]) for key in model_performance[metric_nm]}
+
+	### Summarize ML methods
+	method_summary = {key: {} for key in method_performance}
+	for method_nm in method_performance:
+		for is_resid in method_performance[method_nm]:
+			method_summary[method_nm][is_resid] = {key: {} for key in metric_list}
+			for metric_nm in metric_list:
+				# try:
+				method_summary[method_nm][is_resid][metric_nm]['median'] = {key: np.median(method_performance[method_nm][is_resid][metric_nm][key]) for key in method_performance[method_nm][is_resid][metric_nm]}
+				method_summary[method_nm][is_resid][metric_nm]['std'] = {key: np.std(method_performance[method_nm][is_resid][metric_nm][key]) for key in method_performance[method_nm][is_resid][metric_nm]}
+				# except:
+				# 	print('Stats failed for:', method_nm, is_resid, metric_nm)
+				# 	pass
+
+	# plot summary
+	fig, axlist = plt.subplots(nrows=2, ncols=1,
+		figsize = [10, 10],
+		sharey=False, sharex=False)
+
+	# ODE model only
+	c = -1
+	for metric_nm in metric_list:
+		c += 1
+		eps_vec = sorted(ode_test_loss[metric_nm]['median'].keys())
+		median_vec = [ode_test_loss[metric_nm]['median'][eps] for eps in eps_vec]
+		std_vec = [ode_test_loss[metric_nm]['std'][eps] for eps in eps_vec]
+		axlist[c].errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='ODE model only', color='red')
+
+	# Gaussian Processes
+	prop_cycle = plt.rcParams['axes.prop_cycle']
+	color_list = prop_cycle.by_key()['color']
+
+	m = -1
+	for method_nm in method_summary:
+		m += 1
+		color = color_list[m]
+		# if 'vanillaRNN' in method_nm:
+		# 	color = 'black'
+		# elif 'mechRNN' in method_nm:
+		# 	color = 'blue'
+		for is_resid in method_summary[method_nm]:
+			nm = method_nm + is_resid*' residual'
+			linestyle = '-'+is_resid*'-'
+			c = -1
+			for metric_nm in method_summary[method_nm][is_resid]:
+				c += 1
+				eps_vec = sorted(method_summary[method_nm][is_resid][metric_nm]['median'].keys())
+				median_vec = [method_summary[method_nm][is_resid][metric_nm]['median'][eps] for eps in eps_vec]
+				std_vec = [method_summary[method_nm][is_resid][metric_nm]['std'][eps] for eps in eps_vec]
+				axlist[c].errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=nm, linestyle=linestyle, color=color)
+
+
+	axlist[0].set_xlabel('epsilon Model Error')
+	axlist[0].set_ylabel('Test Loss (MSE)')
+	axlist[0].legend()
+	axlist[1].set_xlabel('epsilon Model Error')
+	axlist[1].set_ylabel('Validity Time')
+	axlist[1].legend()
+
+	fig.suptitle('Performance on Test Set Under Varying Model Error')
+	fig.savefig(fname=output_fname)
+
+	axlist[0].set_xscale('log')
+	axlist[1].set_xscale('log')
+	fig.savefig(fname=output_fname + '_xlog')
+	plt.close(fig)
+
+
+def extract_epsilon_performance_OLD(my_dirs, output_fname="./epsilon_comparisons", win=1, many_epochs=True, eps_token='epsBadness'):
 	t_vec = [1,2,4,6,8,10]
 	n_gprs = 4
 	# first, get sizes of things...max window size is 10% of whole test set.
