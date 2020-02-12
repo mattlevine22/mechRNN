@@ -36,9 +36,14 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 		if method_nm not in method_performance:
 			method_performance[method_nm] = {}
 
+		is_flow = 'learnflowTrue' in d_label
+
 		is_resid = 'residualTrue' in d_label
 		if is_resid not in method_performance[method_nm]:
-			method_performance[method_nm][is_resid] = copy.deepcopy(starter_dict)
+			method_performance[method_nm][is_resid] = {}
+
+		if is_flow not in method_performance[method_nm][is_resid]:
+			method_performance[method_nm][is_resid][is_flow] = copy.deepcopy(starter_dict)
 
 		do_smoothing = 'RNN' in method_nm
 
@@ -71,25 +76,25 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 				if many_epochs:
 					x_valid_test.loc[:,kkt] = x_valid_test.loc[:,kkt].rolling(win).mean()
 
-			if my_eps in method_performance[method_nm][is_resid]['mse']:
-				method_performance[method_nm][is_resid]['mse'][my_eps] += (float(np.min(x_test.loc[:,kkt])),)
+			if my_eps in method_performance[method_nm][is_resid][is_flow]['mse']:
+				method_performance[method_nm][is_resid][is_flow]['mse'][my_eps] += (float(np.min(x_test.loc[:,kkt])),)
 				if many_epochs:
-					method_performance[method_nm][is_resid]['t_valid'][my_eps] += (float(np.max(x_valid_test.loc[:,kkt])),)
+					method_performance[method_nm][is_resid][is_flow]['t_valid'][my_eps] += (float(np.max(x_valid_test.loc[:,kkt])),)
 					for tt in t_vec:
 						try:
-							method_performance[method_nm][is_resid]['t_valid_time'][my_eps][tt] += (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
+							method_performance[method_nm][is_resid][is_flow]['t_valid_time'][my_eps][tt] += (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
 						except:
-							method_performance[method_nm][is_resid]['t_valid_time'][my_eps][tt] += (np.inf,)
+							method_performance[method_nm][is_resid][is_flow]['t_valid_time'][my_eps][tt] += (np.inf,)
 			else:
-				method_performance[method_nm][is_resid]['mse'][my_eps] = (float(np.min(x_test.loc[:,kkt])),)
+				method_performance[method_nm][is_resid][is_flow]['mse'][my_eps] = (float(np.min(x_test.loc[:,kkt])),)
 				if many_epochs:
-					method_performance[method_nm][is_resid]['t_valid'][my_eps] = (float(np.max(x_valid_test.loc[:,kkt])),)
-					method_performance[method_nm][is_resid]['t_valid_time'][my_eps] = {}
+					method_performance[method_nm][is_resid][is_flow]['t_valid'][my_eps] = (float(np.max(x_valid_test.loc[:,kkt])),)
+					method_performance[method_nm][is_resid][is_flow]['t_valid_time'][my_eps] = {}
 					for tt in t_vec:
 						try:
-							method_performance[method_nm][is_resid]['t_valid_time'][my_eps][tt] += (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
+							method_performance[method_nm][is_resid][is_flow]['t_valid_time'][my_eps][tt] += (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
 						except:
-							method_performance[method_nm][is_resid]['t_valid_time'][my_eps][tt] = (np.inf,)
+							method_performance[method_nm][is_resid][is_flow]['t_valid_time'][my_eps][tt] = (np.inf,)
 
 	# Summarize
 
@@ -104,14 +109,15 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	method_summary = {key: {} for key in method_performance}
 	for method_nm in method_performance:
 		for is_resid in method_performance[method_nm]:
-			method_summary[method_nm][is_resid] = {key: {} for key in metric_list}
-			for metric_nm in metric_list:
-				# try:
-				method_summary[method_nm][is_resid][metric_nm]['median'] = {key: np.median(method_performance[method_nm][is_resid][metric_nm][key]) for key in method_performance[method_nm][is_resid][metric_nm]}
-				method_summary[method_nm][is_resid][metric_nm]['std'] = {key: np.std(method_performance[method_nm][is_resid][metric_nm][key]) for key in method_performance[method_nm][is_resid][metric_nm]}
-				# except:
-				# 	print('Stats failed for:', method_nm, is_resid, metric_nm)
-				# 	pass
+			for is_flow in method_summary[method_nm][is_resid]:
+				method_summary[method_nm][is_resid][is_flow] = {key: {} for key in metric_list}
+				for metric_nm in metric_list:
+					# try:
+					method_summary[method_nm][is_resid][is_flow][metric_nm]['median'] = {key: np.median(method_performance[method_nm][is_resid][is_flow][metric_nm][key]) for key in method_performance[method_nm][is_resid][is_flow][metric_nm]}
+					method_summary[method_nm][is_resid][is_flow][metric_nm]['std'] = {key: np.std(method_performance[method_nm][is_resid][is_flow][metric_nm][key]) for key in method_performance[method_nm][is_resid][is_flow][metric_nm]}
+					# except:
+					# 	print('Stats failed for:', method_nm, is_resid, metric_nm)
+					# 	pass
 
 	# plot summary
 	fig, axlist = plt.subplots(nrows=2, ncols=1,
@@ -140,15 +146,19 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 		# elif 'mechRNN' in method_nm:
 		# 	color = 'blue'
 		for is_resid in method_summary[method_nm]:
-			nm = method_nm + is_resid*' residual'
-			linestyle = '-'+is_resid*'-'
-			c = -1
-			for metric_nm in method_summary[method_nm][is_resid]:
-				c += 1
-				eps_vec = sorted(method_summary[method_nm][is_resid][metric_nm]['median'].keys())
-				median_vec = [method_summary[method_nm][is_resid][metric_nm]['median'][eps] for eps in eps_vec]
-				std_vec = [method_summary[method_nm][is_resid][metric_nm]['std'][eps] for eps in eps_vec]
-				axlist[c].errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=nm, linestyle=linestyle, color=color)
+			for is_flow in method_summary[method_nm][is_resid]:
+				nm = method_nm + is_resid*' residual' + is_flow*' flow'
+				linestyle = '-'+is_resid*'-'
+				marker = 'o'
+				if is_flow:
+					marker = 'v'
+				c = -1
+				for metric_nm in method_summary[method_nm][is_resid][is_flow]:
+					c += 1
+					eps_vec = sorted(method_summary[method_nm][is_resid][is_flow][metric_nm]['median'].keys())
+					median_vec = [method_summary[method_nm][is_resid][is_flow][metric_nm]['median'][eps] for eps in eps_vec]
+					std_vec = [method_summary[method_nm][is_resid][is_flow][metric_nm]['std'][eps] for eps in eps_vec]
+					axlist[c].errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=nm, linestyle=linestyle, color=color, marker=marker)
 
 
 	axlist[0].set_xlabel('epsilon Model Error')
