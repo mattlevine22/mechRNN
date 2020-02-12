@@ -616,6 +616,19 @@ def forward_mech(input, hidden_state, w1, w2, b, c, v, normz_info, model, model_
 	return  (out, hidden_state)
 
 
+def f_get_derivatives(X, h):
+	# This is a first-order backward method
+	(nvals, ndim) = X.shape
+	keep_inds = np.arange(1,nvals)
+
+	dX = np.zeros(X.shape)
+	for k in range(ndim):
+		for i in range(nvals-1):
+			dX[i+1,k] = (X[i+1,k] - X[i,k]) / h
+
+	return dX[keep_inds,:], keep_inds
+
+
 def run_GP(y_clean_train, y_noisy_train,
 			y_clean_test, y_noisy_test,
 			y_clean_testSynch, y_noisy_testSynch,
@@ -635,28 +648,52 @@ def run_GP(y_clean_train, y_noisy_train,
 			err_thresh, gp_style=1, gp_only=False,
 			GP_grid = False,
 			alpha=1e-10,
-			do_resid=True):
+			do_resid=True,
+			learn_flow=True):
+
+	y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
+	y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
 
 
 	if gp_only:
 		gp_nm = ''
 	else:
-		gp_nm = 'GPR{0}_residual{1}'.format(gp_style, do_resid)
+		gp_nm = 'GPR{0}_residual{1}_learnflow{2}'.format(gp_style, do_resid, learn_flow)
 
-	if gp_style==1:
-		X = y_noisy_train[:-1]
-	elif gp_style==2:
-		X = np.concatenate((y_noisy_train[:-1],model_pred),axis=1)
-	elif gp_style==3:
-		X = model_pred
-	elif gp_style==4:
-		do_resid = 0
-		X = y_noisy_train[:-1]
 
-	if do_resid:
-		y=y_noisy_train[1:]-model_pred
+	if learn_flow:
+		# approximate derivatives of trajectory
+		dy_noisy_train_raw, dy_inds = f_get_derivatives(y_noisy_train_raw, model_params['delta_t'])
+		dy_model_pred_raw = np.array([model(y, 0, *model_params['ode_params']) for y in y_noisy_train_raw[dy_inds]])
+		if gp_style==1:
+			X = y_noisy_train[dy_inds]
+		elif gp_style==2:
+			X = np.concatenate((y_noisy_train[dy_inds],dy_model_pred_raw),axis=1)
+		elif gp_style==3:
+			X = dy_model_pred_raw
+		elif gp_style==4:
+			do_resid = 0
+			X = y_noisy_train[dy_inds]
+
+		if do_resid:
+			y = dy_noisy_train_raw - dy_model_pred_raw
+		else:
+			y = dy_noisy_train_raw
 	else:
-		y=y_noisy_train[1:]
+		if gp_style==1:
+			X = y_noisy_train[:-1]
+		elif gp_style==2:
+			X = np.concatenate((y_noisy_train[:-1],model_pred),axis=1)
+		elif gp_style==3:
+			X = model_pred
+		elif gp_style==4:
+			do_resid = 0
+			X = y_noisy_train[:-1]
+
+		if do_resid:
+			y=y_noisy_train[1:]-model_pred
+		else:
+			y=y_noisy_train[1:]
 
 
 	nXDim = X.shape[1]
@@ -666,11 +703,29 @@ def run_GP(y_clean_train, y_noisy_train,
 	gpr = GaussianProcessRegressor(alpha=alpha).fit(X=X,y=y)
 	print(gp_nm,'Training Score =',gpr.score(X=X,y=y))
 
+	def corrected_model(y, t, params=None, do_resid=do_resid, gp_style=gp_style):
+		# pdb.set_trace()
+		f0 = np.array(model(y, t, *params))
+		if gp_style==1:
+			x = y
+		elif gp_style==2:
+			x = np.concatenate((y,f0))
+		elif gp_style==3:
+			x = f0
+		f_corrected = do_resid*f0 + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
+		return f_corrected
+
 	# gpr = GaussianProcessRegressor().fit(X=output_train[:-1],y=output_train[1:]-model_pred)
-	gpr_train_predictions_orig = do_resid*model_pred + gpr.predict(X).squeeze()
+
 	# gpr.score(model_pred, y_noisy_train[1:])
 
 	gpr_train_predictions_rerun = np.zeros([train_seq_length-1, output_size])
+	if learn_flow:
+		gpr_train_predictions_orig = np.zeros([train_seq_length-1, output_size])
+	else:
+		gpr_train_predictions_orig = do_resid*model_pred + gpr.predict(X).squeeze()
+
+
 	pred = y_noisy_train[0,:,None].squeeze()
 	# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 	tspan = get_tspan(model_params)
@@ -682,12 +737,15 @@ def run_GP(y_clean_train, y_noisy_train,
 
 		# generate next-step ODE model prediction
 		# unnormalize model_input so that it can go through the ODE solver
-		if do_resid or (gp_style in [2,3]):
+		if learn_flow or do_resid or (gp_style in [2,3]):
 			y0 = f_unNormalize_minmax(normz_info, pred)
 			if not solver_failed:
 				# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
 
-				sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+				if learn_flow:
+					sol = solve_ivp(fun=lambda t, y: corrected_model(y, t, model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+				else:
+					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 				y_out = sol.y.T
 
 				if not sol.success:
@@ -703,17 +761,18 @@ def run_GP(y_clean_train, y_noisy_train,
 			# don't need it anyway, so just make it 0
 			my_model_pred = 0
 
-		if gp_style==1:
-			x = pred
-		elif gp_style==2:
-			x = np.concatenate((pred, my_model_pred))
-		elif gp_style==3:
-			x = my_model_pred
-		elif gp_style==4:
-			x = pred
-
-
-		pred = do_resid*my_model_pred + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
+		if learn_flow:
+			pred = my_model_pred
+		else:
+			if gp_style==1:
+				x = pred
+			elif gp_style==2:
+				x = np.concatenate((pred, my_model_pred))
+			elif gp_style==3:
+				x = my_model_pred
+			elif gp_style==4:
+				x = pred
+			pred = do_resid*my_model_pred + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
 
 		# compute losses
 		# total_loss_test += (pred - target.squeeze()).pow(2).sum()/2
@@ -723,8 +782,6 @@ def run_GP(y_clean_train, y_noisy_train,
 		gpr_train_predictions_rerun[j,:] = pred
 	# pdb.set_trace()
 	# plot training fits
-	y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
-	y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
 	gpr_train_predictions_orig_raw = f_unNormalize_Y(normz_info,gpr_train_predictions_orig)
 	gpr_train_predictions_rerun_raw = f_unNormalize_Y(normz_info,gpr_train_predictions_rerun)
 
@@ -778,12 +835,14 @@ def run_GP(y_clean_train, y_noisy_train,
 			# generate next-step ODE model prediction
 			# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 			# unnormalize model_input so that it can go through the ODE solver
-			if do_resid or (gp_style in [2,3]):
+			if learn_flow or do_resid or (gp_style in [2,3]):
 				y0 = f_unNormalize_minmax(normz_info, pred)
 				if not solver_failed:
 					# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
-
-					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+					if learn_flow:
+						sol = solve_ivp(fun=lambda t, y: corrected_model(y, t, model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+					else:
+						sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 					y_out = sol.y.T
 
 					if not sol.success:
@@ -801,16 +860,18 @@ def run_GP(y_clean_train, y_noisy_train,
 				# don't need it anyway, so just make it 0
 				my_model_pred = 0
 
-			if gp_style==1:
-				x = pred
-			elif gp_style==2:
-				x = np.concatenate((pred, my_model_pred))
-			elif gp_style==3:
-				x = my_model_pred
-			elif gp_style==4:
-				x = pred
-
-			pred = do_resid*my_model_pred + gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
+			if learn_flow:
+				pred = my_model_pred
+			else:
+				if gp_style==1:
+					x = pred
+				elif gp_style==2:
+					x = np.concatenate((pred, my_model_pred))
+				elif gp_style==3:
+					x = my_model_pred
+				elif gp_style==4:
+					x = pred
+				pred = do_resid*my_model_pred + gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
 
 			# compute losses
 			j_loss = sum((pred - target)**2)
@@ -1103,6 +1164,7 @@ def train_chaosRNN(forward,
 			err_thresh=0.4, plot_state_indices=None,
 			precompute_model=True, kde_func=kde_scipy,
 			compute_kl=False, gp_only=False, gp_style=None, gp_resid=None,
+			learn_flow = False,
 			save_iterEpochs=False,
 			model_params_TRUE=None,
 			GP_grid = False,
@@ -1195,6 +1257,11 @@ def train_chaosRNN(forward,
 	else:
 		gp_resid_list = [gp_resid]
 
+	if learn_flow is None:
+		learn_flow_list = [True,False]
+	else:
+		learn_flow_list = [learn_flow]
+
 	# pdb.set_trace()
 	# identify Attractor points for GP grid eval
 	get_attractor = False
@@ -1212,32 +1279,34 @@ def train_chaosRNN(forward,
 		my_inds = np.random.randint(low=n_points, high=(10*n_points)-1, size=n_points)
 		random_attractor_points = y_out_ATT[my_inds,]
 
-	for do_resid in gp_resid_list:
-		for gp_style in style_list:
-			for alpha in alpha_list:
-				print('Running GPR',gp_style,'for alpha=',alpha)
-				run_GP(y_clean_train, y_noisy_train,
-						y_clean_test, y_noisy_test,
-						y_clean_testSynch, y_noisy_testSynch,
-						model,f_unNormalize_Y,
-						model_pred,
-						train_seq_length,
-						test_seq_length,
-						output_size,
-						avg_output_test,
-						avg_output_clean_test,
-						normz_info, model_params, model_params_TRUE, random_attractor_points,
-						plot_state_indices,
-						output_dir,
-						n_plttrain,
-						n_plttest,
-						n_test_sets,
-						err_thresh,
-						gp_style,
-						gp_only,
-						GP_grid = GP_grid,
-						alpha = alpha,
-						do_resid = do_resid)
+	for learn_flow in learn_flow_list:
+		for do_resid in gp_resid_list:
+			for gp_style in style_list:
+				for alpha in alpha_list:
+					print('Running GPR',gp_style,'for alpha=',alpha)
+					run_GP(y_clean_train, y_noisy_train,
+							y_clean_test, y_noisy_test,
+							y_clean_testSynch, y_noisy_testSynch,
+							model,f_unNormalize_Y,
+							model_pred,
+							train_seq_length,
+							test_seq_length,
+							output_size,
+							avg_output_test,
+							avg_output_clean_test,
+							normz_info, model_params, model_params_TRUE, random_attractor_points,
+							plot_state_indices,
+							output_dir,
+							n_plttrain,
+							n_plttest,
+							n_test_sets,
+							err_thresh,
+							gp_style,
+							gp_only,
+							GP_grid = GP_grid,
+							alpha = alpha,
+							do_resid = do_resid,
+							learn_flow = learn_flow)
 
 	if gp_only:
 		return
