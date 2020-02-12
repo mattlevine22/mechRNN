@@ -150,9 +150,9 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 			for is_flow in method_summary[method_nm][is_resid]:
 				nm = method_nm + is_resid*' residual' + is_flow*' flow'
 				linestyle = '-'+is_resid*'-'
-				marker = 'o'
+				marker = None
 				if is_flow:
-					marker = 'v'
+					marker = 'o'
 				c = -1
 				for metric_nm in method_summary[method_nm][is_resid][is_flow]:
 					c += 1
