@@ -205,6 +205,45 @@ def lorenz63_perturbed(Y,t,a=10,b=28,c=8/3,gamma=1,delta=0):
 
 #     return rhs
 
+def compute_lyapounov_time(model, model_params, Tdatagen=1000, Teval=10, Teval_step=0.01, burn_in_frac=0.5, output_dir=".", num_ics=500, eps=0.01):
+
+	# FIRST, get lots of data from the attractor
+	y0 = model_params['state_init']
+	t_eval = np.arange(start=0, stop=Tdatagen, step=Teval_step)
+	sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(0, Tdatagen), y0=np.array(y0).T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=t_eval)
+	y_clean = sol.y.T
+	start_ind = np.int(burn_in_frac*len(y_clean))
+
+	# randoly reorder the trajectory
+	ic_vec = np.random.permutation(y_clean[start_ind:,:])
+
+	t_eval = np.arange(start=0, stop=Teval, step=Teval_step)
+	my_lyap_time0 = np.zeros((num_ics,len(y0)))
+	# my_lyap_time1 = np.zeros((num_ics,len(y0)))
+	for i in range(num_ics):
+		y0 = ic_vec[i,:]
+		sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(0, Teval), y0=np.array(y0).T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=t_eval)
+		for d in range(len(y0)):
+			y0eps = np.copy(y0)
+			y0eps[d] += eps
+
+			soleps = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(0, Teval), y0=np.array(y0eps).T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=t_eval)
+
+			soldiff = np.abs(sol.y[d,:] - soleps.y[d,:])
+			where0 = np.argmax(soldiff > eps*np.exp(1))
+			# where1 = np.argmax( np.log(soldiff) > (np.log(eps)+1) )
+
+			my_lyap_time0[i,d] = t_eval[where0]
+			# my_lyap_time1[i,d] = t_eval[where1]
+		if (i%20 == 0):
+			print('Lyapunov time for d=',1, 'is',np.mean(my_lyap_time0[0:i,1]),'\\pm',np.std(my_lyap_time0[0:i,1]))
+
+	for d in range(len(y0)):
+		print('Lyapunov time for d=',d, 'is',np.mean(my_lyap_time0[:,d]),'\\pm',np.std(my_lyap_time0[:,d]))
+		# print('Lyapunov time (v1) for d=',d, 'is',np.mean(my_lyap_time1[:,d]),'\\pm',np.std(my_lyap_time1[:,d]))
+
+	return
+
 def f_normalize_ztrans(norm_dict,y):
 	y_norm = (y - norm_dict['Xmean']) / norm_dict['Xsd']
 	return y_norm

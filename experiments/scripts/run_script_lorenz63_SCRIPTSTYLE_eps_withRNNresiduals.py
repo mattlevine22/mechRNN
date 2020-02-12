@@ -75,6 +75,10 @@ def main():
 		rnn_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'ode_int_method':FLAGS.ode_int_method, 'ode_int_rtol':FLAGS.ode_int_rtol, 'ode_int_atol':FLAGS.ode_int_atol, 'ode_int_max_step':np.inf}
 		all_dirs = []
 
+		# compute_lyapounov_time(sim_model, sim_model_params)
+		# lowfi_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b, c), 'time_avg_norm':0.529, 'ode_int_method':FLAGS.ode_int_method, 'ode_int_rtol':1e-3, 'ode_int_atol':1e-6, 'ode_int_max_step':np.inf}
+		# compute_lyapounov_time(sim_model, lowfi_model_params)
+
 		# np.random.seed()
 		if FLAGS.noisy_training:
 			nm_train = 'noisy{0}'.format(FLAGS.noise_frac)
