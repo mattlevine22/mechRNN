@@ -109,7 +109,8 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	method_summary = {key: {} for key in method_performance}
 	for method_nm in method_performance:
 		for is_resid in method_performance[method_nm]:
-			for is_flow in method_summary[method_nm][is_resid]:
+			method_summary[method_nm][is_resid] = {}
+			for is_flow in method_performance[method_nm][is_resid]:
 				method_summary[method_nm][is_resid][is_flow] = {key: {} for key in metric_list}
 				for metric_nm in metric_list:
 					# try:
