@@ -629,9 +629,9 @@ def f_get_derivatives(X, h):
 	for k in range(ndim):
 		# Internal mesh points
 		dX[1:-1] = (X[2:,k] - X[:-2,k]) / (2*h)
-	    # End points
-	    dX[0,k]  = (X[1,k]  - X[0,k])/h
-	    dX[-1,k] = (X[-1,k]  - X[-2,k])/h
+		# End points
+		dX[0,k]  = (X[1,k]  - X[0,k]) / h
+		dX[-1,k] = (X[-1,k]  - X[-2,k]) / h
 
 	return dX[keep_inds,:], keep_inds
 
