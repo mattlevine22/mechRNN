@@ -161,8 +161,11 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 					eps_vec = sorted(method_summary[method_nm][is_resid][is_flow][metric_nm]['median'].keys())
 					if len(eps_vec)==1 and eps_vec[0]==None:
 						eps_vec = all_eps
-					median_vec = [method_summary[method_nm][is_resid][is_flow][metric_nm]['median'][eps] for eps in eps_vec]
-					std_vec = [method_summary[method_nm][is_resid][is_flow][metric_nm]['std'][eps] for eps in eps_vec]
+						median_vec = [method_summary[method_nm][is_resid][is_flow][metric_nm]['median'][None] for _ in eps_vec]
+						std_vec = [method_summary[method_nm][is_resid][is_flow][metric_nm]['std'][None] for _ in eps_vec]
+					else:
+						median_vec = [method_summary[method_nm][is_resid][is_flow][metric_nm]['median'][eps] for eps in eps_vec]
+						std_vec = [method_summary[method_nm][is_resid][is_flow][metric_nm]['std'][eps] for eps in eps_vec]
 					axlist[c].errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=nm, linestyle=linestyle, color=color, marker=marker, fillstyle='none')
 
 
