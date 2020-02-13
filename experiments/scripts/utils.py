@@ -623,15 +623,15 @@ def f_get_derivatives(X, h):
 	# This is a first-order central finite-difference method from
 	# http://hplgit.github.io/pyhpc/doc/pub/._project001.html
 	(nvals, ndim) = X.shape
-	keep_inds = np.arange(1,nvals)
+	keep_inds = np.arange(nvals)
 
 	dX = np.zeros(X.shape)
 	for k in range(ndim):
 		# Internal mesh points
 		dX[1:-1] = (X[2:,k] - X[:-2,k]) / (2*h)
 	    # End points
-	    dX[0,k]  = (X[1,k]  - X[0,k]) / h
-	    dX[-1,k] = (X[-1,k]  - X[-2,k]) / h
+	    dX[0,k]  = (X[1,k]  - X[0,k])/h
+	    dX[-1,k] = (X[-1,k]  - X[-2,k])/h
 
 	return dX[keep_inds,:], keep_inds
 
