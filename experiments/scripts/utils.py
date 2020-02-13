@@ -19,10 +19,13 @@ import scipy.optimize
 
 from sklearn.gaussian_process import GaussianProcessRegressor
 
-import torch
-from torch.autograd import Variable
-import torch.nn.init as init
-import torch.cuda
+try:
+	import torch
+	from torch.autograd import Variable
+	import torch.nn.init as init
+	import torch.cuda
+except:
+	pass
 
 import matplotlib
 matplotlib.use('Agg')
