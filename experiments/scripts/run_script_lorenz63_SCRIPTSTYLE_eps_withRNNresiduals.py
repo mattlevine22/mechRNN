@@ -163,7 +163,7 @@ def main():
 				# model-free GPR
 				run_output_dir = output_dir + '/iter{0}'.format(n) + '/ModelFreeGPR_residual{1}_clean_hs{0}'.format(hidden_size, learn_residuals)
 				all_dirs.append(run_output_dir)
-				if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
+				if not os.path.exists(run_output_dir+'/fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
 					# torch.manual_seed(0)
 					train_chaosRNN(forward_chaos_pureML,
 						y_clean_train_norm, y_noisy_train_norm,
