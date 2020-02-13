@@ -173,7 +173,7 @@ def main():
 						run_output_dir, normz_info, rnn_sim_model,
 						stack_hidden=False, stack_output=False,
 						compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha],
-						gp_style=1, gp_resid=False, gp_only=True, precompute_model=False)
+						gp_style=1, gp_resid=False, gp_only=True)
 
 
 				run_output_dir = output_dir + '/iter{0}'.format(n) + '/vanillaRNN_residual{1}_clean_hs{0}'.format(hidden_size, learn_residuals)
@@ -187,7 +187,7 @@ def main():
 						rnn_model_params, hidden_size, n_epochs, lr,
 						run_output_dir, normz_info, rnn_sim_model,
 						stack_hidden=False, stack_output=False,
-						compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha], precompute_model=False)
+						compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha])
 
 
 			#### run RNNs w/ BAD parameter ###
