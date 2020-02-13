@@ -620,14 +620,17 @@ def forward_mech(input, hidden_state, w1, w2, b, c, v, normz_info, model, model_
 
 
 def f_get_derivatives(X, h):
-	# This is a first-order backward method
+	# This is a first-order central finite-difference method
 	(nvals, ndim) = X.shape
 	keep_inds = np.arange(1,nvals)
 
 	dX = np.zeros(X.shape)
 	for k in range(ndim):
-		for i in range(nvals-1):
-			dX[i+1,k] = (X[i+1,k] - X[i,k]) / h
+		# Internal mesh points
+		dX[1:-1] = (X[2:,k] - X[:-2,k]) / (2*h)
+	    # End points
+	    dX[0,k]  = (X[1,k]  - X[0,k]) / h
+	    dX[-1,k] = (X[-1,k]  - X[-2,k]) / h
 
 	return dX[keep_inds,:], keep_inds
 
