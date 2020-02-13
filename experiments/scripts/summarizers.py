@@ -16,7 +16,7 @@ import pdb
 
 import copy
 
-def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", win=1, many_epochs=True, eps_token='epsBadness'):
+def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", win=1, many_epochs=True, eps_token='epsBadness', ignore_flow=True):
 	t_vec = [1,2,4,6,8,10]
 	# first, get sizes of things...max window size is 10% of whole test set.
 	init_dirs = [x for x in my_dirs if 'RNN' in x.split('/')[-1]]
@@ -31,14 +31,16 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	method_performance = {}
 	for d in my_dirs:
 		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
+		is_flow = 'learnflowTrue' in d_label
+		is_resid = 'residualTrue' in d_label
+
+		if ignore_flow and is_flow:
+			continue
 
 		method_nm = d_label.split('_')[0]
 		if method_nm not in method_performance:
 			method_performance[method_nm] = {}
 
-		is_flow = 'learnflowTrue' in d_label
-
-		is_resid = 'residualTrue' in d_label
 		if is_resid not in method_performance[method_nm]:
 			method_performance[method_nm][is_resid] = {}
 
