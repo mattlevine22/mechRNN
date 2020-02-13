@@ -160,19 +160,6 @@ def main():
 				learn_residuals = False
 				rnn_model_params['learn_residuals_rnn'] = learn_residuals
 
-				run_output_dir = output_dir + '/iter{0}'.format(n) + '/vanillaRNN_residual{1}_clean_hs{0}'.format(hidden_size, learn_residuals)
-				all_dirs.append(run_output_dir)
-				if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
-					# torch.manual_seed(0)
-					train_chaosRNN(forward_chaos_pureML,
-						y_clean_train_norm, y_noisy_train_norm,
-						y_clean_test_vec_norm, y_noisy_test_vec_norm,
-						y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
-						rnn_model_params, hidden_size, n_epochs, lr,
-						run_output_dir, normz_info, rnn_sim_model,
-						stack_hidden=False, stack_output=False,
-						compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha])
-
 				# model-free GPR
 				run_output_dir = output_dir + '/iter{0}'.format(n) + '/ModelFreeGPR_residual{1}_clean_hs{0}'.format(hidden_size, learn_residuals)
 				all_dirs.append(run_output_dir)
@@ -187,6 +174,20 @@ def main():
 						stack_hidden=False, stack_output=False,
 						compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha],
 						gp_style=1, gp_resid=False, gp_only=True)
+
+
+				run_output_dir = output_dir + '/iter{0}'.format(n) + '/vanillaRNN_residual{1}_clean_hs{0}'.format(hidden_size, learn_residuals)
+				all_dirs.append(run_output_dir)
+				if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
+					# torch.manual_seed(0)
+					train_chaosRNN(forward_chaos_pureML,
+						y_clean_train_norm, y_noisy_train_norm,
+						y_clean_test_vec_norm, y_noisy_test_vec_norm,
+						y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
+						rnn_model_params, hidden_size, n_epochs, lr,
+						run_output_dir, normz_info, rnn_sim_model,
+						stack_hidden=False, stack_output=False,
+						compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha])
 
 
 			#### run RNNs w/ BAD parameter ###
