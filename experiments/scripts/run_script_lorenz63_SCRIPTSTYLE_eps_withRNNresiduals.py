@@ -173,7 +173,7 @@ def main():
 						run_output_dir, normz_info, rnn_sim_model,
 						stack_hidden=False, stack_output=False,
 						compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha],
-						gp_style=1, gp_resid=False, gp_only=True)
+						gp_style=1, gp_resid=False, gp_only=True, precompute_model=False)
 
 
 				run_output_dir = output_dir + '/iter{0}'.format(n) + '/vanillaRNN_residual{1}_clean_hs{0}'.format(hidden_size, learn_residuals)
@@ -187,7 +187,7 @@ def main():
 						rnn_model_params, hidden_size, n_epochs, lr,
 						run_output_dir, normz_info, rnn_sim_model,
 						stack_hidden=False, stack_output=False,
-						compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha])
+						compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha], precompute_model=False)
 
 
 			#### run RNNs w/ BAD parameter ###
@@ -201,7 +201,12 @@ def main():
 						rnn_BAD_model_params['learn_residuals_rnn'] = learn_residuals
 
 						# GP ONLY
-						for gp_style in [1,2,3]:
+						if learn_residuals:
+							gp_list = [1,2,3] #GPR 1 is only a function of measured state, so it is model-free without residuals
+						else:
+							gp_list = [2,3]
+
+						for gp_style in gp_list:
 							run_output_dir = output_dir + '/iter{0}'.format(n) + '/hybridGPR{2}_residual{3}_learnflow{4}_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size, gp_style, learn_residuals, learn_flow)
 							all_dirs.append(run_output_dir)
 							if not os.path.exists(run_output_dir+'/fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
