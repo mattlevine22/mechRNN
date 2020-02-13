@@ -620,7 +620,8 @@ def forward_mech(input, hidden_state, w1, w2, b, c, v, normz_info, model, model_
 
 
 def f_get_derivatives(X, h):
-	# This is a first-order central finite-difference method
+	# This is a first-order central finite-difference method from
+	# http://hplgit.github.io/pyhpc/doc/pub/._project001.html
 	(nvals, ndim) = X.shape
 	keep_inds = np.arange(1,nvals)
 
