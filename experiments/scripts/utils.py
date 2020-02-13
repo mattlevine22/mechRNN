@@ -1987,7 +1987,7 @@ def train_chaosRNN(forward,
 			for do_resid in gp_resid_list:
 				for gp_style in style_list:
 					gp_nm = 'GPR {0} {1} {2}'.format(gp_style,do_resid*'residuals',learn_flow*' flow')
-					gpr_valid_test = np.loadtxt(output_dir+'/GPR{0}_residual{1}prediction_validity_time_clean_test.txt'.format(gp_style, do_resid))
+					gpr_valid_test = np.loadtxt(output_dir+'/GPR{0}_residual{1}_learnFlow{2}prediction_validity_time_clean_test.txt'.format(gp_style, do_resid,learn_flow))
 					gpr_test = np.loadtxt(output_dir+'/GPR{0}_residual{1}_learnFlow{2}loss_vec_clean_test.txt'.format(gp_style, do_resid,learn_flow))
 					ax2.errorbar(x=epoch_vec,y=[np.median(gpr_test)]*len(epoch_vec), yerr=[np.std(gpr_test)]*len(epoch_vec),label=gp_nm)
 					ax3.errorbar(x=epoch_vec,y=[np.median(gpr_valid_test)]*len(epoch_vec), yerr=[np.std(gpr_valid_test)]*len(epoch_vec),label=gp_nm)
