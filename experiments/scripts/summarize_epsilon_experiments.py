@@ -2,7 +2,7 @@ import sys
 import os
 from pathlib import Path
 from summarizers import extract_epsilon_performance
-fom utils import str2bool
+from utils import str2bool
 import argparse
 
 parser = argparse.ArgumentParser(description='mechRNN')
