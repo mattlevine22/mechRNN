@@ -7,10 +7,11 @@ import argparse
 
 parser = argparse.ArgumentParser(description='mechRNN')
 parser.add_argument('--ignore_flow', type=str2bool, default=True, help='if True, does not plot flow-based learning results')
-
+parser.add_argument('--pathname', type=str, default='.', help='directory with results to read in/out')
 FLAGS = parser.parse_args()
 
-def main(pathname):
+def main():
+	pathname = FLAGS.pathname
 	# pathname = '/Users/matthewlevine/code_projects/mechRNN/experiments/June4/lorenz63_eps_loop_10000epochs_v2'
 	my_dirs = []
 	for x in Path(pathname).glob('**/*'):
@@ -25,4 +26,4 @@ def main(pathname):
 		extract_epsilon_performance(my_dirs,output_fname=pathname+'/compare_epsilons',ignore_flow=FLAGS.ignore_flow)
 
 if __name__ == '__main__':
-	main(sys.argv[1])
+	main()
