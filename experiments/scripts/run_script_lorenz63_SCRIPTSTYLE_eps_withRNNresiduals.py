@@ -221,34 +221,37 @@ def main():
 									gp_resid=learn_residuals,
 									learn_flow=learn_flow)
 
-					# mechRNN
-					run_output_dir = output_dir + '/iter{0}'.format(n) + '/mechRNN_residual{2}_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size, learn_residuals)
-					all_dirs.append(run_output_dir)
+						if not learn_flow:
+							# mechRNN
+							run_output_dir = output_dir + '/iter{0}'.format(n) + '/mechRNN_residual{2}_learnflow{3}_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size, learn_residuals, learn_flow)
+							all_dirs.append(run_output_dir)
 
-					if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
-						# torch.manual_seed(0)
-						train_chaosRNN(forward_chaos_hybrid_full,
-							y_clean_train_norm, y_noisy_train_norm,
-							y_clean_test_vec_norm, y_noisy_test_vec_norm,
-							y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
-							rnn_BAD_model_params, hidden_size, n_epochs, lr,
-							run_output_dir, normz_info, rnn_sim_model,
-							compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha])
+							if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
+								# torch.manual_seed(0)
+								train_chaosRNN(forward_chaos_hybrid_full,
+									y_clean_train_norm, y_noisy_train_norm,
+									y_clean_test_vec_norm, y_noisy_test_vec_norm,
+									y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
+									rnn_BAD_model_params, hidden_size, n_epochs, lr,
+									run_output_dir, normz_info, rnn_sim_model,
+									compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha],
+									learn_flow=learn_flow)
 
-					# vanillaRNN on bad-model's residuals
-					if learn_residuals:
-						run_output_dir = output_dir + '/iter{0}'.format(n) + '/vanillaRNN_residual{2}_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size, learn_residuals)
-						all_dirs.append(run_output_dir)
-						if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
-							# torch.manual_seed(0)
-							train_chaosRNN(forward_chaos_pureML,
-								y_clean_train_norm, y_noisy_train_norm,
-								y_clean_test_vec_norm, y_noisy_test_vec_norm,
-								y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
-								rnn_BAD_model_params, hidden_size, n_epochs, lr,
-								run_output_dir, normz_info, rnn_sim_model,
-								stack_hidden=False, stack_output=False,
-								compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha])
+						# vanillaRNN on bad-model's residuals
+						if not learn_flow and learn_residuals:
+							run_output_dir = output_dir + '/iter{0}'.format(n) + '/vanillaRNN_residual{2}_learnflow{3}_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size, learn_residuals, learn_flow)
+							all_dirs.append(run_output_dir)
+							if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
+								# torch.manual_seed(0)
+								train_chaosRNN(forward_chaos_pureML,
+									y_clean_train_norm, y_noisy_train_norm,
+									y_clean_test_vec_norm, y_noisy_test_vec_norm,
+									y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
+									rnn_BAD_model_params, hidden_size, n_epochs, lr,
+									run_output_dir, normz_info, rnn_sim_model,
+									stack_hidden=False, stack_output=False,
+									compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha],
+									learn_flow=learn_flow)
 
 
 			# plot comparative training errors

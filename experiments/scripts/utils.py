@@ -1170,7 +1170,7 @@ def train_chaosRNN(forward,
 			max_plot=None, n_param_saves=None,
 			err_thresh=0.4, plot_state_indices=None,
 			precompute_model=True, kde_func=kde_scipy,
-			compute_kl=False, gp_only=False, gp_style=None, gp_resid=None,
+			compute_kl=False, gp_only=False, gp_style=2, gp_resid=True,
 			learn_flow = False,
 			save_iterEpochs=False,
 			model_params_TRUE=None,
@@ -1253,22 +1253,6 @@ def train_chaosRNN(forward,
 	else:
 		model_pred = [None for j in range(train_seq_length-1)]
 
-
-	if gp_style is None:
-		style_list = [1,2,3]
-	else:
-		style_list = [gp_style]
-
-	if gp_resid is None:
-		gp_resid_list = [True,False]
-	else:
-		gp_resid_list = [gp_resid]
-
-	if learn_flow is None:
-		learn_flow_list = [True,False]
-	else:
-		learn_flow_list = [learn_flow]
-
 	# pdb.set_trace()
 	# identify Attractor points for GP grid eval
 	get_attractor = False
@@ -1286,41 +1270,37 @@ def train_chaosRNN(forward,
 		my_inds = np.random.randint(low=n_points, high=(10*n_points)-1, size=n_points)
 		random_attractor_points = y_out_ATT[my_inds,]
 
-	for learn_flow in learn_flow_list:
-		for do_resid in gp_resid_list:
-			for gp_style in style_list:
-				for alpha in alpha_list:
-					print('Running GPR',gp_style,'for alpha=',alpha)
-					run_GP(y_clean_train, y_noisy_train,
-							y_clean_test, y_noisy_test,
-							y_clean_testSynch, y_noisy_testSynch,
-							model,f_unNormalize_Y,
-							model_pred,
-							train_seq_length,
-							test_seq_length,
-							output_size,
-							avg_output_test,
-							avg_output_clean_test,
-							normz_info, model_params, model_params_TRUE, random_attractor_points,
-							plot_state_indices,
-							output_dir,
-							n_plttrain,
-							n_plttest,
-							n_test_sets,
-							err_thresh,
-							gp_style,
-							gp_only,
-							GP_grid = GP_grid,
-							alpha = alpha,
-							do_resid = do_resid,
-							learn_flow = learn_flow)
-
 	if gp_only:
+		for alpha in alpha_list:
+			print('Running GPR',gp_style,'for alpha=',alpha)
+			run_GP(y_clean_train, y_noisy_train,
+					y_clean_test, y_noisy_test,
+					y_clean_testSynch, y_noisy_testSynch,
+					model,f_unNormalize_Y,
+					model_pred,
+					train_seq_length,
+					test_seq_length,
+					output_size,
+					avg_output_test,
+					avg_output_clean_test,
+					normz_info, model_params, model_params_TRUE, random_attractor_points,
+					plot_state_indices,
+					output_dir,
+					n_plttrain,
+					n_plttest,
+					n_test_sets,
+					err_thresh,
+					gp_style,
+					gp_only,
+					GP_grid = GP_grid,
+					alpha = alpha,
+					do_resid = gp_resid,
+					learn_flow = learn_flow)
+		# plot GP comparisons
+		if GP_grid:
+			style_list = [1,2,3]
+			compare_GPs(output_dir,style_list)
 		return
-
-	# plot GP comparisons
-	if style_list and GP_grid:
-		compare_GPs(output_dir,style_list)
 
 
 	# first, SHOW that a simple mechRNN can fit the data perfectly (if we are running a mechRNN)
@@ -1990,14 +1970,14 @@ def train_chaosRNN(forward,
 			for kk in plot_state_indices:
 				ax4.errorbar(x=epoch_vec,y=pd.DataFrame(np.median(x_kl_test[:,:,kk],axis=1)).rolling(win).mean().loc[:,0], yerr=np.std(x_kl_test[:,:,kk],axis=1), label='RNN')
 
-		for learn_flow in learn_flow_list:
-			for do_resid in gp_resid_list:
-				for gp_style in style_list:
-					gp_nm = 'GPR {0} {1} {2}'.format(gp_style,do_resid*'residuals',learn_flow*' flow')
-					gpr_valid_test = np.loadtxt(output_dir+'/GPR{0}_residual{1}_learnflow{2}prediction_validity_time_clean_test.txt'.format(gp_style, do_resid,learn_flow))
-					gpr_test = np.loadtxt(output_dir+'/GPR{0}_residual{1}_learnflow{2}loss_vec_clean_test.txt'.format(gp_style, do_resid,learn_flow))
-					ax2.errorbar(x=epoch_vec,y=[np.median(gpr_test)]*len(epoch_vec), yerr=[np.std(gpr_test)]*len(epoch_vec),label=gp_nm)
-					ax3.errorbar(x=epoch_vec,y=[np.median(gpr_valid_test)]*len(epoch_vec), yerr=[np.std(gpr_valid_test)]*len(epoch_vec),label=gp_nm)
+		# for learn_flow in learn_flow_list:
+		# 	for do_resid in gp_resid_list:
+		# 		for gp_style in style_list:
+		# 			gp_nm = 'GPR {0} {1} {2}'.format(gp_style,do_resid*'residuals',learn_flow*' flow')
+		# 			gpr_valid_test = np.loadtxt(output_dir+'/GPR{0}_residual{1}_learnflow{2}prediction_validity_time_clean_test.txt'.format(gp_style, do_resid,learn_flow))
+		# 			gpr_test = np.loadtxt(output_dir+'/GPR{0}_residual{1}_learnflow{2}loss_vec_clean_test.txt'.format(gp_style, do_resid,learn_flow))
+		# 			ax2.errorbar(x=epoch_vec,y=[np.median(gpr_test)]*len(epoch_vec), yerr=[np.std(gpr_test)]*len(epoch_vec),label=gp_nm)
+		# 			ax3.errorbar(x=epoch_vec,y=[np.median(gpr_valid_test)]*len(epoch_vec), yerr=[np.std(gpr_valid_test)]*len(epoch_vec),label=gp_nm)
 
 		ax2.legend()
 		ax3.legend()

@@ -147,8 +147,11 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	prop_cycle = plt.rcParams['axes.prop_cycle']
 	color_list = prop_cycle.by_key()['color']
 
+	nm_list = list(method_summary.keys())
+	nm_list.sort()
+
 	m = -1
-	for method_nm in method_summary:
+	for method_nm in nm_list:
 		m += 1
 		color = color_list[m]
 		# if 'vanillaRNN' in method_nm:
