@@ -147,13 +147,22 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	prop_cycle = plt.rcParams['axes.prop_cycle']
 	color_list = prop_cycle.by_key()['color']
 
+	fixed_nm_list = ['ModelFreeGPR','hybridGPR1','hybridGPR2','hybridGPR3','mechRNN','vanillaRNN']
+	color_dict = [fixed_nm_list[i]: color_list[i] for i in range(len(fixed_nm_list))]
+
 	nm_list = list(method_summary.keys())
 	nm_list.sort()
 
 	m = -1
+	mextra = -1
 	for method_nm in nm_list:
 		m += 1
-		color = color_list[m]
+		try:
+			color = color_dict[method_nm]
+		except:
+			mextra += 1
+			color_list[len(fixed_nm_list)+mextra]
+		# color = color_list[m]
 		# if 'vanillaRNN' in method_nm:
 		# 	color = 'black'
 		# elif 'mechRNN' in method_nm:
