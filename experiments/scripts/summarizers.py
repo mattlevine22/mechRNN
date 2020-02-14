@@ -123,9 +123,14 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 					# 	pass
 
 	# plot summary
-	fig, axlist = plt.subplots(nrows=2, ncols=1,
-		figsize = [10, 10],
+	fig_mse, ax_mse = plt.subplots(nrows=1, ncols=1,
+		figsize = [10, 5],
 		sharey=False, sharex=False)
+	fig_t, ax_t = plt.subplots(nrows=1, ncols=1,
+		figsize = [10, 5],
+		sharey=False, sharex=False)
+
+	axlist = [ax_mse, ax_t]
 
 	# ODE model only
 	c = -1
@@ -178,13 +183,18 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	axlist[1].set_ylabel('Validity Time')
 	axlist[1].legend()
 
-	fig.suptitle('Performance on Test Set Under Varying Model Error')
-	fig.savefig(fname=output_fname)
+	fig_t.suptitle('Performance on Test Set Under Varying Model Error')
+	fig_t.savefig(fname=output_fname + '_tvalid')
+	fig_mse.suptitle('Performance on Test Set Under Varying Model Error')
+	fig_mse.savefig(fname=output_fname + '_mse')
 
 	axlist[0].set_xscale('log')
 	axlist[1].set_xscale('log')
-	fig.savefig(fname=output_fname + '_xlog')
-	plt.close(fig)
+
+	fig_t.savefig(fname=output_fname + '_tvalid_xlog')
+	fig_mse.savefig(fname=output_fname + '_mse_xlog')
+	plt.close(fig_t)
+	plt.close(fig_mse)
 
 
 def extract_epsilon_performance_OLD(my_dirs, output_fname="./epsilon_comparisons", win=1, many_epochs=True, eps_token='epsBadness'):
