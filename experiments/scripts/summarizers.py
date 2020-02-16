@@ -19,12 +19,15 @@ import copy
 def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", win=1, many_epochs=True, eps_token='epsBadness', ignore_flow=True):
 	t_vec = [1,2,4,6,8,10]
 	# first, get sizes of things...max window size is 10% of whole test set.
-	init_dirs = [x for x in my_dirs if 'RNN' in x.split('/')[-1]]
-	d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
-	x_test = pd.DataFrame(np.loadtxt(init_dirs[0]+"/loss_vec_clean_test.txt"))
-	n_vals = x_test.shape[0]
+	try:
+		init_dirs = [x for x in my_dirs if 'RNN' in x.split('/')[-1]]
+		d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
+		x_test = pd.DataFrame(np.loadtxt(init_dirs[0]+"/loss_vec_clean_test.txt"))
+		n_vals = x_test.shape[0]
+		win = min(win,n_vals//3)
+	except:
+		pass
 
-	win = min(win,n_vals//3)
 	model_performance = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
 	starter_dict = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
 
