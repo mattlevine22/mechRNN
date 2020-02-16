@@ -30,11 +30,18 @@ parser.add_argument('--datagen_ode_int_method', type=str, default='RK45', help='
 parser.add_argument('--datagen_ode_int_atol', type=float, default=1.5e-8, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
 parser.add_argument('--datagen_ode_int_rtol', type=float, default=1.5e-8, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
 parser.add_argument('--fix_seed', type=str2bool, default=False, help='Set to True if you want the call of this script to be reproducible (seed is set by last element of save_dir)')
-parser.add_argument('--run_RNN', type=str2bool, default=False, help='Set to True if you want to train RNNs)')
+parser.add_argument('--run_RNN', type=str2bool, default=False, help='Set to True if you want to train RNNs')
+parser.add_argument('--do_flow', type=str2bool, default=True, help='Set to True if you want to learn the vector field rhs of the ode')
 
 FLAGS = parser.parse_args()
 
 def main():
+
+	if FLAGS.do_flow:
+		learn_flow_list = [False,True]
+	else:
+		learn_flow_list = [False]
+
 	if FLAGS.fix_seed:
 		np.random.seed(int(FLAGS.savedir[-1]))
 
@@ -201,7 +208,7 @@ def main():
 			# for eps_badness in np.random.permutation([0.05, 0]):
 				rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b*(1+eps_badness), c), 'time_avg_norm':0.529, 'ode_int_method':FLAGS.ode_int_method, 'ode_int_rtol':FLAGS.ode_int_rtol, 'ode_int_atol':FLAGS.ode_int_atol, 'ode_int_max_step':np.inf}
 
-				for learn_flow in [False,True]:
+				for learn_flow in learn_flow_list:
 					for learn_residuals in [True,False]:
 						rnn_BAD_model_params['learn_residuals_rnn'] = learn_residuals
 
