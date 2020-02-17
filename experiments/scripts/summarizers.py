@@ -136,15 +136,15 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	axlist = [ax_mse, ax_t]
 
 	# ODE model only
-	c = -1
-	for metric_nm in metric_list:
-		c += 1
-		eps_vec = sorted(ode_test_loss[metric_nm]['median'].keys())
-		median_vec = [ode_test_loss[metric_nm]['median'][eps] for eps in eps_vec]
-		std_vec = [ode_test_loss[metric_nm]['std'][eps] for eps in eps_vec]
-		axlist[c].errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='ODE model only', color='red')
+	# c = -1
+	# for metric_nm in metric_list:
+	# 	c += 1
+	# 	eps_vec = sorted(ode_test_loss[metric_nm]['median'].keys())
+	# 	median_vec = [ode_test_loss[metric_nm]['median'][eps] for eps in eps_vec]
+	# 	std_vec = [ode_test_loss[metric_nm]['std'][eps] for eps in eps_vec]
+	# 	axlist[c].errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='ODE model only', color='red')
 
-	all_eps = eps_vec.copy()
+	all_eps = sorted(ode_test_loss[metric_list[0]]['median'].keys())
 
 	# Gaussian Processes
 	prop_cycle = plt.rcParams['axes.prop_cycle']
