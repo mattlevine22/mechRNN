@@ -655,10 +655,10 @@ def	run_ode_test(y_clean_test, y_noisy_test,
 
 	gp_nm = ''
 
-	loss_vec_test_PUREODE = np.zeros((1,n_test_sets))
-	loss_vec_clean_test_PUREODE = np.zeros((1,n_test_sets))
-	pred_validity_vec_test_PUREODE = np.zeros((1,n_test_sets))
-	pred_validity_vec_clean_test_PUREODE = np.zeros((1,n_test_sets))
+	loss_vec_test = np.zeros((1,n_test_sets))
+	loss_vec_clean_test = np.zeros((1,n_test_sets))
+	pred_validity_vec_test = np.zeros((1,n_test_sets))
+	pred_validity_vec_clean_test = np.zeros((1,n_test_sets))
 
 	# loop over test sets
 	tspan = get_tspan(model_params)
