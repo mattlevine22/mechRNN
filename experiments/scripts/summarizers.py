@@ -58,9 +58,9 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 		except:
 			my_eps = None
 
-		if my_eps is not None and 'mechRNN' in d_label:
-			model_loss = np.loadtxt(d+'/perfectModel_loss_vec_clean_test.txt',ndmin=1)
-			model_t_valid = np.loadtxt(d+'/perfectModel_prediction_validity_time_clean_test.txt',ndmin=1)
+		if my_eps is not None and 'pureODE' in d_label:
+			model_loss = np.loadtxt(d+'/loss_vec_clean_test.txt',ndmin=1)
+			model_t_valid = np.loadtxt(d+'/prediction_validity_time_clean_test.txt',ndmin=1)
 			for kkt in range(model_loss.shape[0]):
 				if my_eps in model_performance['mse']:
 					model_performance['mse'][my_eps] += (float(model_loss[kkt]),)
