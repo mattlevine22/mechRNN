@@ -694,6 +694,9 @@ def	run_ode_test(y_clean_test, y_noisy_test,
 			else:
 				# solver is OKAY--use the solution like a good boy!
 				my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+
+			pred = my_model_pred
+
 			# compute losses
 			j_loss = sum((pred - target)**2)
 			j_loss_clean = sum((pred - target_clean)**2)
