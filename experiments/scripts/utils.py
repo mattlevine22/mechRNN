@@ -1397,6 +1397,7 @@ def train_chaosRNN(forward,
 					n_plttest,
 					n_test_sets,
 					err_thresh)
+		return
 
 
 	if gp_only:
