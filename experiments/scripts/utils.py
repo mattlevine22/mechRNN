@@ -734,7 +734,7 @@ def	run_ode_test(y_clean_test, y_noisy_test,
 		ax_list[0].legend()
 
 		fig.suptitle('Pure ODE Testing fit')
-		fig.savefig(fname=output_dir+'/fit_ode_TEST_{1}'.format(kkt))
+		fig.savefig(fname=output_dir+'/fit_ode_TEST_{0}'.format(kkt))
 		plt.close(fig)
 
 	np.savetxt(output_dir+'/loss_vec_test.txt',loss_vec_test)
