@@ -636,6 +636,115 @@ def f_get_derivatives(X, h):
 	return dX[keep_inds,:], keep_inds
 
 
+def	run_ode_test(y_clean_test, y_noisy_test,
+				y_clean_testSynch, y_noisy_testSynch,
+				model,f_unNormalize_Y,
+				model_pred,
+				train_seq_length,
+				test_seq_length,
+				output_size,
+				avg_output_test,
+				avg_output_clean_test,
+				normz_info, model_params, model_params_TRUE, random_attractor_points,
+				plot_state_indices,
+				output_dir,
+				n_plttrain,
+				n_plttest,
+				n_test_sets,
+				err_thresh):
+
+	gp_nm = ''
+
+	loss_vec_test_PUREODE = np.zeros((1,n_test_sets))
+	loss_vec_clean_test_PUREODE = np.zeros((1,n_test_sets))
+	pred_validity_vec_test_PUREODE = np.zeros((1,n_test_sets))
+	pred_validity_vec_clean_test_PUREODE = np.zeros((1,n_test_sets))
+
+	# loop over test sets
+	tspan = get_tspan(model_params)
+	for kkt in range(n_test_sets):
+		# now compute test loss
+		total_loss_test = 0
+		total_loss_clean_test = 0
+		pred = y_noisy_testSynch[kkt,-1,None].squeeze()
+		# pred = np.squeeze(y_noisy_testSynch[-1,:,None].T)
+		pw_loss_test = np.zeros(test_seq_length)
+		pw_loss_clean_test = np.zeros(test_seq_length)
+		gpr_test_predictions = np.zeros([test_seq_length, output_size])
+		solver_failed = False
+		for j in range(test_seq_length):
+			target = y_noisy_test[kkt,j,:]
+			target_clean = y_clean_test[kkt,j,:]
+
+			# generate next-step ODE model prediction
+			# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+			# unnormalize model_input so that it can go through the ODE solver
+			y0 = f_unNormalize_minmax(normz_info, pred)
+
+			# compute prediction using PURE ODE MODEL
+			if not solver_failed:
+				sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+				y_out = sol.y.T
+				if not sol.success:
+					# solver failed
+					print('ODE solver has failed at y0=',y0)
+					solver_failed = True
+			if solver_failed:
+				my_model_pred = np.copy(pred) # persist previous normalized solution
+			else:
+				# solver is OKAY--use the solution like a good boy!
+				my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+			# compute losses
+			j_loss = sum((pred - target)**2)
+			j_loss_clean = sum((pred - target_clean)**2)
+			total_loss_test += j_loss
+			total_loss_clean_test += j_loss_clean
+			pw_loss_test[j] = j_loss**0.5 / avg_output_test
+			pw_loss_clean_test[j] = j_loss_clean**0.5 / avg_output_clean_test
+			gpr_test_predictions[j,:] = pred
+
+		total_loss_test = total_loss_test / test_seq_length
+		total_loss_clean_test = total_loss_clean_test / test_seq_length
+
+		#store losses
+		loss_vec_test[0,kkt] = total_loss_test
+		loss_vec_clean_test[0,kkt] = total_loss_clean_test
+		pred_validity_vec_test[0,kkt] = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
+		pred_validity_vec_clean_test[0,kkt] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
+
+		# plot forecast over test set
+		y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
+		gpr_test_predictions_raw = f_unNormalize_Y(normz_info,gpr_test_predictions)
+
+		fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+		if not isinstance(ax_list,np.ndarray):
+			ax_list = [ax_list]
+
+		# NOW, show testing fit
+		for kk in range(len(ax_list)):
+			ax3 = ax_list[kk]
+			t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+			# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
+			ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
+			ax3.plot(t_plot, gpr_test_predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='Available ODE fit')
+			ax3.set_xlabel('time')
+			ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
+			ax3.tick_params(axis='y', labelcolor='red')
+
+		ax_list[0].legend()
+
+		fig.suptitle('Pure ODE Testing fit')
+		fig.savefig(fname=output_dir+'/fit_ode_TEST_{1}'.format(kkt))
+		plt.close(fig)
+
+	np.savetxt(output_dir+'/loss_vec_test.txt',loss_vec_test)
+	np.savetxt(output_dir+'/loss_vec_clean_test.txt',loss_vec_clean_test)
+	np.savetxt(output_dir+'/prediction_validity_time_test.txt',pred_validity_vec_test)
+	np.savetxt(output_dir+'/prediction_validity_time_clean_test.txt',pred_validity_vec_clean_test)
+	return
+
+
+
 def run_GP(y_clean_train, y_noisy_train,
 			y_clean_test, y_noisy_test,
 			y_clean_testSynch, y_noisy_testSynch,
@@ -1175,7 +1284,8 @@ def train_chaosRNN(forward,
 			save_iterEpochs=False,
 			model_params_TRUE=None,
 			GP_grid = False,
-			alpha_list = [1e-10, 1e-8, 1e-6, 1e-4, 1e-2]):
+			alpha_list = [1e-10, 1e-8, 1e-6, 1e-4, 1e-2],
+			ode_only=False):
 
 
 	t0 = time()
@@ -1269,6 +1379,25 @@ def train_chaosRNN(forward,
 		# do a one 1/10 burn-in, then randomly downsample.
 		my_inds = np.random.randint(low=n_points, high=(10*n_points)-1, size=n_points)
 		random_attractor_points = y_out_ATT[my_inds,]
+
+	if ode_only:
+		run_ode_test(y_clean_test, y_noisy_test,
+					y_clean_testSynch, y_noisy_testSynch,
+					model,f_unNormalize_Y,
+					model_pred,
+					train_seq_length,
+					test_seq_length,
+					output_size,
+					avg_output_test,
+					avg_output_clean_test,
+					normz_info, model_params, model_params_TRUE, random_attractor_points,
+					plot_state_indices,
+					output_dir,
+					n_plttrain,
+					n_plttest,
+					n_test_sets,
+					err_thresh)
+
 
 	if gp_only:
 		for alpha in alpha_list:

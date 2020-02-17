@@ -208,6 +208,20 @@ def main():
 			# for eps_badness in np.random.permutation([0.05, 0]):
 				rnn_BAD_model_params = {'state_names': ['x','y','z'], 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':(a, b*(1+eps_badness), c), 'time_avg_norm':0.529, 'ode_int_method':FLAGS.ode_int_method, 'ode_int_rtol':FLAGS.ode_int_rtol, 'ode_int_atol':FLAGS.ode_int_atol, 'ode_int_max_step':np.inf}
 
+				# FIRST run bad ODE model alone
+				run_output_dir = output_dir + '/iter{0}'.format(n) + '/pureODE_epsBadness{0}_clean'.format(eps_badness)
+				all_dirs.append(run_output_dir)
+				if not os.path.exists(run_output_dir+'/fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
+					# torch.manual_seed(0)
+					train_chaosRNN(forward_chaos_pureML,
+						y_clean_train_norm, y_noisy_train_norm,
+						y_clean_test_vec_norm, y_noisy_test_vec_norm,
+						y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
+						rnn_BAD_model_params, hidden_size, n_epochs, lr,
+						run_output_dir, normz_info, rnn_sim_model,
+						compute_kl=FLAGS.compute_kl,
+						ode_only=True)
+
 				for learn_flow in learn_flow_list:
 					for learn_residuals in [True,False]:
 						rnn_BAD_model_params['learn_residuals_rnn'] = learn_residuals
