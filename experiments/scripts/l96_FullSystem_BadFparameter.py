@@ -2,6 +2,7 @@ from utils import *
 import numpy as np
 import torch
 import argparse
+import json
 from L96M import L96M #(from file import class)
 
 parser = argparse.ArgumentParser(description='mechRNN')
@@ -24,9 +25,9 @@ parser.add_argument('--noisy_training', type=str2bool, default=False, help='Opti
 parser.add_argument('--noisy_testing', type=str2bool, default=False, help='Optionally add measurement noise to synch and test sets.')
 parser.add_argument('--noise_frac', type=float, default=0.01, help='Relative SD of additive gaussian measurement noise')
 parser.add_argument('--alpha', type=float, default=1e-10, help='Alpha parameter for Gaussian Process Regression (scales w/ measurement noise)')
-parser.add_argument('--ode_int_method', type=str, default='BDF', help='See scipy solve_ivp documentation for options.')
-parser.add_argument('--ode_int_atol', type=float, default=1.5e-8, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
-parser.add_argument('--ode_int_rtol', type=float, default=1.5e-8, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--ode_int_method', type=str, default='RK45', help='See scipy solve_ivp documentation for options.')
+parser.add_argument('--ode_int_atol', type=float, default=1.5e-6, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--ode_int_rtol', type=float, default=1.5e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
 parser.add_argument('--datagen_ode_int_method', type=str, default='BDF', help='See scipy solve_ivp documentation for options.')
 parser.add_argument('--datagen_ode_int_atol', type=float, default=1.5e-8, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
 parser.add_argument('--datagen_ode_int_rtol', type=float, default=1.5e-8, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
@@ -51,7 +52,6 @@ def main():
 	J = FLAGS.J
 	if J is None:
 		J = K
-
 
 	# initialize TRUE model
 	l96m_TRUE = L96M(K=K, J=J, F=10, eps=FLAGS.eps_scale) # model used to generate Train/Test data
@@ -112,6 +112,10 @@ def main():
 
 		# master output directory name
 		output_dir = FLAGS.savedir + '_output' + str(i) + '_{0}Train_{1}Test'.format(nm_train, nm_test)
+
+		# write settings file
+		with open(output_dir + '/run_settings.txt', 'w') as f:
+		    json.dump(FLAGS.__dict__, f, indent=2)
 
 		# simulate clean and noisy data
 		(input_data_train, y_clean_train, y_noisy_train,
@@ -239,12 +243,13 @@ def main():
 
 				# GPR w/out residuals (learn_flow=False) gp_style 2 and 3
 				for learn_flow in [False]:
-					for learn_residuals in [True,False]:
-						if learn_residuals:
-							gp_list = [1,2,3] #GPR 1 is only a function of measured state, so it is model-free without residuals
-						else:
-							gp_list = [2,3]
-
+					for learn_residuals in [True]:
+					# for learn_residuals in [True,False]:
+						# if learn_residuals:
+						# 	gp_list = [1,2,3] #GPR 1 is only a function of measured state, so it is model-free without residuals
+						# else:
+						# 	gp_list = [2,3]
+						gp_list = [1]
 						for gp_style in gp_list:
 							run_output_dir = output_dir + '/iter{0}'.format(n) + '/hybridGPR{1}_residual{2}_learnflow{3}_Fbad{4}_clean_hs{0}'.format(hidden_size, gp_style, learn_residuals, learn_flow, Fbad)
 							all_dirs.append(run_output_dir)
