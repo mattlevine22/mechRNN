@@ -115,10 +115,16 @@ def main():
 			# file exists
 			pass
 
+		def getval(x):
+			try:
+				return getattr(x, '__dict__', str(x))
+			except:
+				return None
+
 		settings_fname = main_dir + '/run_settings.txt'
 		if not os.path.exists(settings_fname):
 			with open(settings_fname, 'w') as f:
-			    json.dump(FLAGS.__dict__, f, default=lambda x: getattr(x, '__dict__', str(x)), indent=2)
+			    json.dump(FLAGS.__dict__, f, default=lambda x: getval(x) , indent=2)
 
 
 		# simulate clean and noisy data
