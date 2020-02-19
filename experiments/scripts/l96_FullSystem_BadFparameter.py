@@ -122,7 +122,7 @@ def main():
 			pass
 
 		settings_fname = main_dir + '/run_settings.txt'
-		if not os.path.exists:
+		if not os.path.exists(settings_fname):
 			with open(settings_fname, 'w') as f:
 			    json.dump(FLAGS.__dict__, f, indent=2)
 
