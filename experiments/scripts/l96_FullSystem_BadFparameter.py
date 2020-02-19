@@ -114,7 +114,8 @@ def main():
 		output_dir = FLAGS.savedir + '_output' + str(i) + '_{0}Train_{1}Test'.format(nm_train, nm_test)
 
 		# write settings file
-		with open(output_dir + '/run_settings.txt', 'w') as f:
+		main_dir = FLAGS.savedir[:FLAGS.savedir.rfind("/")]
+		with open(main_dir + '/run_settings.txt', 'w') as f:
 		    json.dump(FLAGS.__dict__, f, indent=2)
 
 		# simulate clean and noisy data
