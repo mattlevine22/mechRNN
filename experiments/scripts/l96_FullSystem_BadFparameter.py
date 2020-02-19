@@ -115,10 +115,16 @@ def main():
 
 		# write settings file
 		main_dir = FLAGS.savedir[:FLAGS.savedir.rfind("/")]
-		if not os.path.exists(main_dir):
-			os.makedirs(main_dir)
-		with open(main_dir + '/run_settings.txt', 'w') as f:
-		    json.dump(FLAGS.__dict__, f, indent=2)
+		try:
+			os.mkdir(main_dir)
+		except:
+			# file exists
+			pass
+
+		settings_fname = main_dir + '/run_settings.txt'
+		if not os.path.exists:
+			with open(settings_fname, 'w') as f:
+			    json.dump(FLAGS.__dict__, f, indent=2)
 
 		# simulate clean and noisy data
 		(input_data_train, y_clean_train, y_noisy_train,
