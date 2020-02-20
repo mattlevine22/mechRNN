@@ -270,7 +270,7 @@ def main():
 									learn_flow=learn_flow)
 
 						if FLAGS.run_RNN:
-							if not learn_flow:
+							if not learn_flow and not learn_residuals:
 								# mechRNN
 								run_output_dir = output_dir + '/iter{0}'.format(n) + '/mechRNN_residual{2}_learnflow{3}_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size, learn_residuals, learn_flow)
 								all_dirs.append(run_output_dir)
