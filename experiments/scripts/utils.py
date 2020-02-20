@@ -485,7 +485,8 @@ def forward_chaos_pureML(data_input, hidden_state, A, B, C, a, b, normz_info, mo
 	# hidden_state = torch.relu(a + torch.mm(A,hidden_state))
 
 	y0_normalized = torch.squeeze(data_input).detach()
-	if model_output is None:
+
+	if model_output is None and model_params['learn_residuals_rnn']:
 		# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 		tspan = get_tspan(model_params)
 		# driver = xmean + xsd*data_input.detach().numpy()
@@ -499,26 +500,35 @@ def forward_chaos_pureML(data_input, hidden_state, A, B, C, a, b, normz_info, mo
 		# y_pred = y_out[-1,:] #last column
 		# y_pred_normalized = f_normalize_minmax(normz_info, y_pred)
 		y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
+
+		# check if y0 is a bad initial condition
+		if (any(abs(y0)>1000)):
+			print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
+			solver_failed = True
+
 		if not solver_failed:
 			# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
-
 			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 			y_out = sol.y.T
-
 			if not sol.success:
 				# solver failed
 				print('ODE solver has failed at y0=',y0)
 				solver_failed = True
+
 		if solver_failed:
 			y_pred_normalized = np.copy(y0_normalized.numpy()) # persist previous solution
 		else:
 			# solver is OKAY--use the solution like a good boy!
 			y_pred_normalized = f_normalize_minmax(normz_info, y_out[-1,:])
-	else:
-		# pdb.set_trace()
-		y_pred_normalized = model_output
 
-	out = model_params['learn_residuals_rnn']*torch.FloatTensor(y_pred_normalized[:,None]) + b + torch.mm(C,hidden_state)
+		final_pred = torch.FloatTensor(y_pred_normalized[:,None])
+	else:
+		if model_output is None:
+			final_pred = 0
+		else:
+			final_pred = torch.FloatTensor(model_output[:,None])
+
+	out = model_params['learn_residuals_rnn']*final_pred + b + torch.mm(C,hidden_state)
 	return  (out, hidden_state, solver_failed)
 
 def forward_chaos_pureML2(data_input, hidden_state, A, B, C, a, b, *args, **kwargs):
@@ -1265,7 +1275,6 @@ def compare_GPs(output_dir,style_list):
 		plt.close(fig)
 
 
-
 def train_chaosRNN(forward,
 			y_clean_train, y_noisy_train,
 			y_clean_test, y_noisy_test,
@@ -1710,7 +1719,6 @@ def train_chaosRNN(forward,
 				pred = pred.detach()
 				long_predictions[j,:] = pred.data.numpy().ravel()
 				hidden_state = hidden_state.detach()
-
 			#normalize losses
 			total_loss_test = total_loss_test / test_seq_length
 			total_loss_clean_test = total_loss_clean_test / test_seq_length
@@ -1729,6 +1737,7 @@ def train_chaosRNN(forward,
 				kl_vec_inv_clean_test[i_epoch,kkt,:] = kl4dummies(
 								f_unNormalize_Y(normz_info, y_clean_test),
 								f_unNormalize_Y(normz_info, long_predictions))
+
 		# print updates every 10 iterations or in 10% incrememnts
 		if  i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0:
 			print("Epoch {0}\nTotal run-time = {1}\nTraining Loss = {2}\nTesting Loss = {3}".format(
