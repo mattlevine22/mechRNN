@@ -571,16 +571,21 @@ def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_in
 		# y_pred = y_out[-1,:] #last column
 		# y_pred_normalized = f_normalize_minmax(normz_info, y_pred)
 		y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
+
+		# check if y0 is a bad initial condition
+		if (any(abs(y0)>1000)):
+			print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
+			solver_failed = True
+
 		if not solver_failed:
 			# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
-
 			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 			y_out = sol.y.T
-
 			if not sol.success:
 				# solver failed
 				print('ODE solver has failed at y0=',y0)
 				solver_failed = True
+
 		if solver_failed:
 			y_pred_normalized = np.copy(y0_normalized.numpy()) # persist previous solution
 		else:
