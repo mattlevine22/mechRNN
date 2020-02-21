@@ -247,6 +247,8 @@ def main():
 				# GPR w/out residuals (learn_flow=False) gp_style 2 and 3
 				for learn_flow in [False]:
 					for learn_residuals in [True,False]:
+						rnn_BAD_model_params['learn_residuals_rnn'] = learn_residuals
+
 						if learn_residuals:
 							gp_list = [1] #GPR 1 is only a function of measured state, so it is model-free without residuals
 						else:
