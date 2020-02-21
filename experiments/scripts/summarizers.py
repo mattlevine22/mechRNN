@@ -41,6 +41,15 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 			continue
 
 		method_nm = d_label.split('_')[0]
+		# Try to get hidden dimension of RNN
+		try:
+			hs = int(d.split("/")[-1].split('_')[-1].strip('hs'))
+			if 'RNN' in method_nm:
+				method_nm += ' (D = {0})'.format(hs)
+		except:
+			pass
+
+
 		if method_nm not in method_performance:
 			method_performance[method_nm] = {}
 
@@ -52,12 +61,6 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 
 		do_smoothing = 'RNN' in method_nm
 
-		# Try to get hidden dimension of RNN
-		try:
-			hs = int(d.split("/")[-1].split('_')[-1].strip('hs'))
-			method_nm += ' (D = {0})'.format(hs)
-		except:
-			pass
 
 		try:
 			#extract epsilon badness
