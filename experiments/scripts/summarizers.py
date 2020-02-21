@@ -52,6 +52,13 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 
 		do_smoothing = 'RNN' in method_nm
 
+		# Try to get hidden dimension of RNN
+		try:
+			hs = int(d.split("/")[-1].split('_')[-1].strip('hs'))
+			method_nm += ' (D = {0})'.format(hs)
+		except:
+			pass
+
 		try:
 			#extract epsilon badness
 			my_eps = float([z.strip(eps_token) for z in d_label.split('_') if eps_token in z][-1])
