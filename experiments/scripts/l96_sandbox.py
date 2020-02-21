@@ -196,7 +196,7 @@ def main():
 		########## NOW start running RNN fits ############
 		#### run RNNs w/ SLOW system ###
 		for n in range(FLAGS.n_experiments):
-			for hidden_size in [50]:
+			for hidden_size in [50, 100, 200]:
 				param_tuple = ()
 				if FLAGS.slow_only:
 					rnn_state_init = state_init[:K]
@@ -227,7 +227,7 @@ def main():
 				learn_residuals = False
 				rnn_BAD_model_params['learn_residuals_rnn'] = learn_residuals
 
-				run_output_dir = output_dir + '/iter{0}'.format(n) + '/ModelFreeGPR_residual{1}_clean_hs{0}'.format(hidden_size, learn_residuals)
+				run_output_dir = output_dir + '/iter{0}'.format(n) + '/ModelFreeGPR_residual{0}_clean'.format(learn_residuals)
 				all_dirs.append(run_output_dir)
 				if not os.path.exists(run_output_dir+'/fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
 					# torch.manual_seed(0)
@@ -255,7 +255,7 @@ def main():
 							gp_list = []
 
 						for gp_style in gp_list:
-							run_output_dir = output_dir + '/iter{0}'.format(n) + '/hybridGPR{1}_residual{2}_learnflow{3}_clean_hs{0}'.format(hidden_size, gp_style, learn_residuals, learn_flow)
+							run_output_dir = output_dir + '/iter{0}'.format(n) + '/hybridGPR{0}_residual{1}_learnflow{2}_clean'.format(gp_style, learn_residuals, learn_flow)
 							all_dirs.append(run_output_dir)
 							if not os.path.exists(run_output_dir+'/fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
 								# torch.manual_seed(0)
