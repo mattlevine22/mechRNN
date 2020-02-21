@@ -285,7 +285,7 @@ def main():
 										compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha],
 										plot_state_indices=plot_state_indices_SLOW)
 
-							if not learn_flow and learn_residuals:
+							if not learn_flow:
 								# vanillaRNN on bad-model's residuals
 								run_output_dir = output_dir + '/iter{0}'.format(n) + '/vanillaRNN_residual{1}_clean_hs{0}'.format(hidden_size, learn_residuals)
 								all_dirs.append(run_output_dir)
