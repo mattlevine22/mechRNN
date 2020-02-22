@@ -16,6 +16,12 @@ import pdb
 
 import copy
 
+from matplotlib import cm
+from colorspacious import cspace_converter
+from collections import OrderedDict
+
+cmaps = OrderedDict()
+
 def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", win=1, many_epochs=True, eps_token='epsBadness', ignore_flow=True):
 	t_vec = [1,2,4,6,8,10]
 	# first, get sizes of things...max window size is 10% of whole test set.
@@ -157,25 +163,32 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	all_eps = sorted(ode_test_loss[metric_list[0]]['median'].keys())
 
 	# Gaussian Processes
+	nm_list = list(method_summary.keys())
+	nm_list.sort()
+
 	prop_cycle = plt.rcParams['axes.prop_cycle']
-	color_list = prop_cycle.by_key()['color']
+	# color_list = prop_cycle.by_key()['color']
+
+	color_list = [
+    '#1f77b4', '#aec7e8', '#ff7f0e', '#ffbb78', '#2ca02c', '#98df8a',
+    '#d62728', '#ff9896', '#9467bd', '#c5b0d5', '#8c564b', '#c49c94',
+    '#e377c2', '#f7b6d2', '#7f7f7f', '#c7c7c7', '#bcbd22', '#dbdb8d',
+    '#17becf', '#9edae5']
+
 
 	fixed_nm_list = ['ModelFreeGPR','hybridGPR1','hybridGPR2','hybridGPR3','mechRNN','vanillaRNN','pureODE']
 	color_dict = {fixed_nm_list[i]: color_list[i] for i in range(len(fixed_nm_list))}
 
-	nm_list = list(method_summary.keys())
-	nm_list.sort()
 
 	m = -1
 	mextra = -1
 	for method_nm in nm_list:
 		m += 1
-		color = color_list[m]
-		# try:
-		# 	color = color_dict[method_nm]
-		# except:
-		# 	mextra += 1
-		# 	color_list[len(fixed_nm_list)+mextra]
+		try:
+			color = color_dict[method_nm]
+		except:
+			mextra += 1
+			color_list[len(fixed_nm_list)+mextra]
 		# color = color_list[m]
 		# if 'vanillaRNN' in method_nm:
 		# 	color = 'black'
