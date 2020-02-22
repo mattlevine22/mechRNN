@@ -217,6 +217,8 @@ def compare_performance_bar_chart(my_dirs, output_fname="./epsilon_comparisons",
 	sns.barplot(ax=axlist[0], x='method_nm', y='median', hue='group_nm', data=df[df.metric_nm=='t_valid'])
 	sns.barplot(ax=axlist[1], x='method_nm', y='median', hue='group_nm', data=df[df.metric_nm=='mse'])
 
+	axlist[0].set_xticklabels(axlist[0].get_xticklabels(), rotation=45)
+	axlist[1].set_xticklabels(axlist[1].get_xticklabels(), rotation=45)
 	# axlist[0].set_xlabel('epsilon Model Error')
 	# axlist[0].set_ylabel('Test Loss (MSE)')
 	# axlist[0].legend()
@@ -229,11 +231,6 @@ def compare_performance_bar_chart(my_dirs, output_fname="./epsilon_comparisons",
 	fig_mse.suptitle('Performance on Test Set Under Varying Model Error')
 	fig_mse.savefig(fname=output_fname + '_mse')
 
-	axlist[0].set_xscale('log')
-	axlist[1].set_xscale('log')
-
-	fig_t.savefig(fname=output_fname + '_tvalid_xlog')
-	fig_mse.savefig(fname=output_fname + '_mse_xlog')
 	plt.close(fig_t)
 	plt.close(fig_mse)
 
