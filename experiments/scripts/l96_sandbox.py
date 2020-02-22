@@ -196,7 +196,7 @@ def main():
 		########## NOW start running RNN fits ############
 		#### run RNNs w/ SLOW system ###
 		for n in range(FLAGS.n_experiments):
-			for hidden_size in [100, 200, 50]:
+			for hidden_size in [50, 100, 200]:
 				param_tuple = ()
 				if FLAGS.slow_only:
 					rnn_state_init = state_init[:K]
@@ -271,6 +271,22 @@ def main():
 									plot_state_indices=plot_state_indices_SLOW)
 
 						if FLAGS.run_RNN:
+							if not learn_flow:
+								# vanillaRNN on bad-model's residuals
+								run_output_dir = output_dir + '/iter{0}'.format(n) + '/vanillaRNN_residual{1}_clean_hs{0}'.format(hidden_size, learn_residuals)
+								all_dirs.append(run_output_dir)
+								if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
+									# torch.manual_seed(0)
+									train_chaosRNN(forward_chaos_pureML,
+										y_clean_train_norm, y_noisy_train_norm,
+										y_clean_test_vec_norm, y_noisy_test_vec_norm,
+										y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
+										rnn_BAD_model_params, hidden_size, n_epochs, lr,
+										run_output_dir, normz_info, rnn_sim_model,
+										stack_hidden=False, stack_output=False,
+										compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha],
+										plot_state_indices=plot_state_indices_SLOW)
+
 							if not learn_flow and not learn_residuals:
 								# mechRNN
 								run_output_dir = output_dir + '/iter{0}'.format(n) + '/mechRNN_residual{1}_learnflow{2}_clean_hs{0}'.format(hidden_size, learn_residuals, learn_flow)
@@ -287,21 +303,6 @@ def main():
 										compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha],
 										plot_state_indices=plot_state_indices_SLOW)
 
-							if not learn_flow:
-								# vanillaRNN on bad-model's residuals
-								run_output_dir = output_dir + '/iter{0}'.format(n) + '/vanillaRNN_residual{1}_clean_hs{0}'.format(hidden_size, learn_residuals)
-								all_dirs.append(run_output_dir)
-								if not os.path.exists(run_output_dir+'/rnn_fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
-									# torch.manual_seed(0)
-									train_chaosRNN(forward_chaos_pureML,
-										y_clean_train_norm, y_noisy_train_norm,
-										y_clean_test_vec_norm, y_noisy_test_vec_norm,
-										y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
-										rnn_BAD_model_params, hidden_size, n_epochs, lr,
-										run_output_dir, normz_info, rnn_sim_model,
-										stack_hidden=False, stack_output=False,
-										compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha],
-										plot_state_indices=plot_state_indices_SLOW)
 
 			# plot comparative training errors
 			my_dirs = [d for d in all_dirs if "clean" in d]
