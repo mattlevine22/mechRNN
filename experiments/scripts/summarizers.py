@@ -196,14 +196,14 @@ def compare_performance_bar_chart(my_dirs, output_fname="./epsilon_comparisons",
 					median = method_summary[method_nm][is_resid][is_flow][metric_nm]['median'][my_eps]
 					std = method_summary[method_nm][is_resid][is_flow][metric_nm]['std'][my_eps]
 					if is_resid:
-						group_nm = 'Learn residual' + is_flow' flow'
+						group_nm = 'Learn residual' + is_flow*' flow'
 					else:
-						group_nm = 'Learn whole' + is_flow' flow'
+						group_nm = 'Learn whole' + is_flow*' flow'
 
 					my_dict = {'method_nm': method_nm,
 								'is_resid': is_resid,
 								'is_flow': is_flow,
-								'group_nm':, group_nm,
+								'group_nm': group_nm,
 								'metric_nm': metric_nm,
 								'median': median,
 								'std': std,
