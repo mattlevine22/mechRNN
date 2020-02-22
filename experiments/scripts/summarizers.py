@@ -5,7 +5,7 @@ import math
 import numpy as np
 import numpy.matlib
 # from statsmodels.nonparametric.kde import KDEUnivariate
-from scipy.stats import gaussian_kde
+# from scipy.stats import gaussian_kde
 
 import matplotlib
 matplotlib.use('Agg')
