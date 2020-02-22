@@ -195,9 +195,15 @@ def compare_performance_bar_chart(my_dirs, output_fname="./epsilon_comparisons",
 				for metric_nm in method_summary[method_nm][is_resid][is_flow]:
 					median = method_summary[method_nm][is_resid][is_flow][metric_nm]['median'][my_eps]
 					std = method_summary[method_nm][is_resid][is_flow][metric_nm]['std'][my_eps]
+					if is_resid:
+						group_nm = 'Learn residual' + is_flow' flow'
+					else:
+						group_nm = 'Learn whole' + is_flow' flow'
+
 					my_dict = {'method_nm': method_nm,
 								'is_resid': is_resid,
 								'is_flow': is_flow,
+								'group_nm':, group_nm,
 								'metric_nm': metric_nm,
 								'median': median,
 								'std': std,
@@ -208,8 +214,8 @@ def compare_performance_bar_chart(my_dirs, output_fname="./epsilon_comparisons",
 # seaborn.barplot(x=None, y=None, hue=None, data=None, order=None, hue_order=None, estimator=<function mean at 0x10a2a03b0>, ci=95, n_boot=1000, units=None, seed=None, orient=None, color=None, palette=None, saturation=0.75, errcolor='.26', errwidth=None, capsize=None, dodge=True, ax=None, **kwargs)¶
 
 	pdb.set_trace()
-	sns.barplot(ax=axlist[0], x='method_nm', y='median', rot=45, hue=['is_resid','is_flow'], data=df[df.metric_nm=='t_valid'])
-	sns.barplot(ax=axlist[1], x='method_nm', y='median', rot=45, hue=['is_resid','is_flow'], data=df[df.metric_nm=='mse'])
+	sns.barplot(ax=axlist[0], x='method_nm', y='median', rot=45, hue='group_nm', data=df[df.metric_nm=='t_valid'])
+	sns.barplot(ax=axlist[1], x='method_nm', y='median', rot=45, hue='group_nm', data=df[df.metric_nm=='mse'])
 
 	# axlist[0].set_xlabel('epsilon Model Error')
 	# axlist[0].set_ylabel('Test Loss (MSE)')
