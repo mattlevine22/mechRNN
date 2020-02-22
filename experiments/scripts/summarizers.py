@@ -134,10 +134,10 @@ def compare_performance_bar_chart(my_dirs, output_fname="./epsilon_comparisons",
 
 	# plot summary
 	fig_mse, ax_mse = plt.subplots(nrows=1, ncols=1,
-		figsize = [10, 5],
+		figsize = [10, 10],
 		sharey=False, sharex=False)
 	fig_t, ax_t = plt.subplots(nrows=1, ncols=1,
-		figsize = [10, 5],
+		figsize = [10, 10],
 		sharey=False, sharex=False)
 
 	axlist = [ax_mse, ax_t]
