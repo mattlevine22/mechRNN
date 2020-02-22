@@ -199,7 +199,7 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 			color = color_dict[method_nm]
 		except:
 			mextra += 1
-			color_list[len(fixed_nm_list)+mextra]
+			color = color_list[len(fixed_nm_list)+mextra]
 		# color = color_list[m]
 		# if 'vanillaRNN' in method_nm:
 		# 	color = 'black'
