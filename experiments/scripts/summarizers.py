@@ -16,12 +16,6 @@ import pdb
 
 import copy
 
-from matplotlib import cm
-from colorspacious import cspace_converter
-from collections import OrderedDict
-
-cmaps = OrderedDict()
-
 def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", win=1, many_epochs=True, eps_token='epsBadness', ignore_flow=True):
 	t_vec = [1,2,4,6,8,10]
 	# first, get sizes of things...max window size is 10% of whole test set.
