@@ -201,7 +201,7 @@ def compare_performance_bar_chart(my_dirs, output_fname="./epsilon_comparisons",
 								'median': median,
 								'std': std,
 								'legend_nm': nm}
-					summary_dict_list.append(dict1)
+					summary_dict_list.append(my_dict)
 
 	df = pd.DataFrame(summary_dict_list)
 # seaborn.barplot(x=None, y=None, hue=None, data=None, order=None, hue_order=None, estimator=<function mean at 0x10a2a03b0>, ci=95, n_boot=1000, units=None, seed=None, orient=None, color=None, palette=None, saturation=0.75, errcolor='.26', errwidth=None, capsize=None, dodge=True, ax=None, **kwargs)¶
