@@ -11,15 +11,14 @@ from datetime import timedelta
 import math
 import numpy as np
 import numpy.matlib
-from scipy.stats import entropy
-from scipy.integrate import odeint, solve_ivp
-# from statsmodels.nonparametric.kde import KDEUnivariate
-from scipy.stats import gaussian_kde
-import scipy.optimize
-
-from sklearn.gaussian_process import GaussianProcessRegressor
-
 try:
+	from scipy.stats import entropy
+	from scipy.integrate import odeint, solve_ivp
+	# from statsmodels.nonparametric.kde import KDEUnivariate
+	from scipy.stats import gaussian_kde
+	import scipy.optimize
+
+	from sklearn.gaussian_process import GaussianProcessRegressor
 	import torch
 	from torch.autograd import Variable
 	import torch.nn.init as init
