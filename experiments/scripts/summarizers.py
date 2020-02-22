@@ -16,6 +16,220 @@ import pdb
 
 import copy
 
+
+def compare_performance_bar_chart(my_dirs, output_fname="./epsilon_comparisons", win=1, many_epochs=True, eps_token='epsBadness', ignore_flow=True):
+	t_vec = [1,2,4,6,8,10]
+	# first, get sizes of things...max window size is 10% of whole test set.
+	try:
+		init_dirs = [x for x in my_dirs if 'RNN' in x.split('/')[-1]]
+		d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
+		x_test = pd.DataFrame(np.loadtxt(init_dirs[0]+"/loss_vec_clean_test.txt"))
+		n_vals = x_test.shape[0]
+		win = min(win,n_vals//3)
+	except:
+		pass
+
+	model_performance = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
+	starter_dict = {'mse':{}, 't_valid':{}, 'mse_time':{}, 't_valid_time':{}}
+
+	method_performance = {}
+	for d in my_dirs:
+		d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
+		is_flow = 'learnflowTrue' in d_label
+		is_resid = 'residualTrue' in d_label
+
+		if ignore_flow and is_flow:
+			continue
+
+		method_nm = d_label.split('_')[0]
+		# Try to get hidden dimension of RNN
+		try:
+			hs = int(d.split("/")[-1].split('_')[-1].strip('hs'))
+			if 'RNN' in method_nm:
+				method_nm += ' (D = {0})'.format(hs)
+		except:
+			pass
+
+
+		if method_nm not in method_performance:
+			method_performance[method_nm] = {}
+
+		if is_resid not in method_performance[method_nm]:
+			method_performance[method_nm][is_resid] = {}
+
+		if is_flow not in method_performance[method_nm][is_resid]:
+			method_performance[method_nm][is_resid][is_flow] = copy.deepcopy(starter_dict)
+
+		do_smoothing = 'RNN' in method_nm
+
+		my_eps = None
+
+		if 'pureODE' in d_label:
+			model_loss = np.loadtxt(d+'/loss_vec_clean_test.txt',ndmin=1)
+			model_t_valid = np.loadtxt(d+'/prediction_validity_time_clean_test.txt',ndmin=1)
+			for kkt in range(model_loss.shape[0]):
+				if my_eps in model_performance['mse']:
+					model_performance['mse'][my_eps] += (float(model_loss[kkt]),)
+					model_performance['t_valid'][my_eps] += (float(model_t_valid[kkt]),)
+				else:
+					model_performance['mse'][my_eps] = (float(model_loss[kkt]),)
+					model_performance['t_valid'][my_eps] = (float(model_t_valid[kkt]),)
+
+		# do i need to force ndmin?
+		# x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
+		x_test = pd.DataFrame(np.loadtxt(d+"/loss_vec_clean_test.txt"))
+		x_valid_test = pd.DataFrame(np.loadtxt(d+"/prediction_validity_time_clean_test.txt"))
+
+		n_tests = x_valid_test.shape[1]
+		for kkt in range(n_tests):
+			if do_smoothing:
+				x_test.loc[:,kkt] = x_test.loc[:,kkt].rolling(win).mean()
+				if many_epochs:
+					x_valid_test.loc[:,kkt] = x_valid_test.loc[:,kkt].rolling(win).mean()
+
+			if my_eps in method_performance[method_nm][is_resid][is_flow]['mse']:
+				method_performance[method_nm][is_resid][is_flow]['mse'][my_eps] += (float(np.min(x_test.loc[:,kkt])),)
+				if many_epochs:
+					method_performance[method_nm][is_resid][is_flow]['t_valid'][my_eps] += (float(np.max(x_valid_test.loc[:,kkt])),)
+					for tt in t_vec:
+						try:
+							method_performance[method_nm][is_resid][is_flow]['t_valid_time'][my_eps][tt] += (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
+						except:
+							method_performance[method_nm][is_resid][is_flow]['t_valid_time'][my_eps][tt] += (np.inf,)
+			else:
+				method_performance[method_nm][is_resid][is_flow]['mse'][my_eps] = (float(np.min(x_test.loc[:,kkt])),)
+				if many_epochs:
+					method_performance[method_nm][is_resid][is_flow]['t_valid'][my_eps] = (float(np.max(x_valid_test.loc[:,kkt])),)
+					method_performance[method_nm][is_resid][is_flow]['t_valid_time'][my_eps] = {}
+					for tt in t_vec:
+						try:
+							method_performance[method_nm][is_resid][is_flow]['t_valid_time'][my_eps][tt] += (x_valid_test.loc[x_valid_test.loc[:,kkt]>tt,kkt].index[0],)
+						except:
+							method_performance[method_nm][is_resid][is_flow]['t_valid_time'][my_eps][tt] = (np.inf,)
+
+	# Summarize
+
+	### ODE model only
+	metric_list = ['mse','t_valid']
+	ode_test_loss = {key: {} for key in metric_list}
+	for metric_nm in metric_list:
+		ode_test_loss[metric_nm]['median'] = {key: np.median(model_performance[metric_nm][key]) for key in model_performance[metric_nm]}
+		ode_test_loss[metric_nm]['std'] = {key: np.std(model_performance[metric_nm][key]) for key in model_performance[metric_nm]}
+
+	### Summarize ML methods
+	method_summary = {key: {} for key in method_performance}
+	for method_nm in method_performance:
+		for is_resid in method_performance[method_nm]:
+			method_summary[method_nm][is_resid] = {}
+			for is_flow in method_performance[method_nm][is_resid]:
+				method_summary[method_nm][is_resid][is_flow] = {key: {} for key in metric_list}
+				for metric_nm in metric_list:
+					# try:
+					method_summary[method_nm][is_resid][is_flow][metric_nm]['median'] = {key: np.median(method_performance[method_nm][is_resid][is_flow][metric_nm][key]) for key in method_performance[method_nm][is_resid][is_flow][metric_nm]}
+					method_summary[method_nm][is_resid][is_flow][metric_nm]['std'] = {key: np.std(method_performance[method_nm][is_resid][is_flow][metric_nm][key]) for key in method_performance[method_nm][is_resid][is_flow][metric_nm]}
+					# except:
+					# 	print('Stats failed for:', method_nm, is_resid, metric_nm)
+					# 	pass
+
+	# plot summary
+	fig_mse, ax_mse = plt.subplots(nrows=1, ncols=1,
+		figsize = [10, 5],
+		sharey=False, sharex=False)
+	fig_t, ax_t = plt.subplots(nrows=1, ncols=1,
+		figsize = [10, 5],
+		sharey=False, sharex=False)
+
+	axlist = [ax_mse, ax_t]
+
+	# ODE model only
+	# c = -1
+	# for metric_nm in metric_list:
+	# 	c += 1
+	# 	eps_vec = sorted(ode_test_loss[metric_nm]['median'].keys())
+	# 	median_vec = [ode_test_loss[metric_nm]['median'][eps] for eps in eps_vec]
+	# 	std_vec = [ode_test_loss[metric_nm]['std'][eps] for eps in eps_vec]
+	# 	axlist[c].errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label='ODE model only', color='red')
+
+	# all_eps = sorted(ode_test_loss[metric_list[0]]['median'].keys())
+
+	# Gaussian Processes
+	nm_list = list(method_summary.keys())
+	nm_list.sort()
+
+	prop_cycle = plt.rcParams['axes.prop_cycle']
+	# color_list = prop_cycle.by_key()['color']
+
+	color_list = [
+    '#1f77b4',
+    '#ff7f0e',
+    '#2ca02c',
+    '#d62728',
+    '#9467bd',
+    '#8c564b',
+    '#e377c2',
+    '#7f7f7f',
+    '#bcbd22',
+    '#17becf',
+	'#aec7e8',
+	'#ffbb78',
+	'#98df8a',
+	'#ff9896',
+	'#c5b0d5',
+	'#c49c94',
+	'#f7b6d2',
+	'#c7c7c7',
+	'#dbdb8d',
+	'#9edae5']
+
+
+
+	fixed_nm_list = ['ModelFreeGPR','hybridGPR1','hybridGPR2','hybridGPR3','mechRNN','vanillaRNN','pureODE']
+	color_dict = {fixed_nm_list[i]: color_list[i] for i in range(len(fixed_nm_list))}
+
+	summary_dict_list = []
+	for method_nm in nm_list:
+		for is_resid in method_summary[method_nm]:
+			for is_flow in method_summary[method_nm][is_resid]:
+				nm = method_nm + is_resid*' residual' + is_flow*' flow'
+				for metric_nm in method_summary[method_nm][is_resid][is_flow]:
+					median = method_summary[method_nm][is_resid][is_flow][metric_nm]['median'][my_eps]
+					std = method_summary[method_nm][is_resid][is_flow][metric_nm]['std'][my_eps]
+					my_dict = {'method_nm': method_nm,
+								'is_resid': is_resid,
+								'is_flow': is_flow,
+								'metric_nm': metric_nm,
+								'median': median,
+								'std': std,
+								'legend_nm': nm}
+					summary_dict_list.append(dict1)
+
+	df = pd.DataFrame(summary_dict_list)
+# seaborn.barplot(x=None, y=None, hue=None, data=None, order=None, hue_order=None, estimator=<function mean at 0x10a2a03b0>, ci=95, n_boot=1000, units=None, seed=None, orient=None, color=None, palette=None, saturation=0.75, errcolor='.26', errwidth=None, capsize=None, dodge=True, ax=None, **kwargs)¶
+
+	pdb.set_trace()
+	sns.barplot(ax=axlist[0], x='method_nm', y='median', errwidth='std', rot=45, hue=['is_resid','is_flow'], data=df[df.metric_nm=='t_valid'])
+
+	# axlist[0].set_xlabel('epsilon Model Error')
+	# axlist[0].set_ylabel('Test Loss (MSE)')
+	# axlist[0].legend()
+	# axlist[1].set_xlabel('epsilon Model Error')
+	# axlist[1].set_ylabel('Validity Time')
+	# axlist[1].legend()
+
+	fig_t.suptitle('Performance on Test Set Under Varying Model Error')
+	fig_t.savefig(fname=output_fname + '_tvalid')
+	fig_mse.suptitle('Performance on Test Set Under Varying Model Error')
+	fig_mse.savefig(fname=output_fname + '_mse')
+
+	axlist[0].set_xscale('log')
+	axlist[1].set_xscale('log')
+
+	fig_t.savefig(fname=output_fname + '_tvalid_xlog')
+	fig_mse.savefig(fname=output_fname + '_mse_xlog')
+	plt.close(fig_t)
+	plt.close(fig_mse)
+
+
 def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", win=1, many_epochs=True, eps_token='epsBadness', ignore_flow=True):
 	t_vec = [1,2,4,6,8,10]
 	# first, get sizes of things...max window size is 10% of whole test set.
