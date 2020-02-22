@@ -156,6 +156,9 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 
 	all_eps = sorted(ode_test_loss[metric_list[0]]['median'].keys())
 
+	# Gaussian Processes
+	nm_list = list(method_summary.keys())
+	nm_list.sort()
 
 	prop_cycle = plt.rcParams['axes.prop_cycle']
 	# color_list = prop_cycle.by_key()['color']
@@ -190,7 +193,7 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 
 	m = -1
 	mextra = 0
-	for method_nm in method_summary.keys():
+	for method_nm in nm_list:
 		m += 1
 		try:
 			color = color_dict[method_nm]
