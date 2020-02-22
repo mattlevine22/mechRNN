@@ -192,7 +192,7 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 
 
 	m = -1
-	mextra = -1
+	mextra = 0
 	for method_nm in nm_list:
 		m += 1
 		try:
