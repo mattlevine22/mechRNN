@@ -214,8 +214,8 @@ def compare_performance_bar_chart(my_dirs, output_fname="./epsilon_comparisons",
 # seaborn.barplot(x=None, y=None, hue=None, data=None, order=None, hue_order=None, estimator=<function mean at 0x10a2a03b0>, ci=95, n_boot=1000, units=None, seed=None, orient=None, color=None, palette=None, saturation=0.75, errcolor='.26', errwidth=None, capsize=None, dodge=True, ax=None, **kwargs)¶
 
 	pdb.set_trace()
-	sns.barplot(ax=axlist[0], x='method_nm', y='median', rot=45, hue='group_nm', data=df[df.metric_nm=='t_valid'])
-	sns.barplot(ax=axlist[1], x='method_nm', y='median', rot=45, hue='group_nm', data=df[df.metric_nm=='mse'])
+	sns.barplot(ax=axlist[0], x='method_nm', y='median', hue='group_nm', data=df[df.metric_nm=='t_valid'])
+	sns.barplot(ax=axlist[1], x='method_nm', y='median', hue='group_nm', data=df[df.metric_nm=='mse'])
 
 	# axlist[0].set_xlabel('epsilon Model Error')
 	# axlist[0].set_ylabel('Test Loss (MSE)')
