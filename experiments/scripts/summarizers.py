@@ -170,11 +170,11 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	mextra = -1
 	for method_nm in nm_list:
 		m += 1
-		try:
-			color = color_dict[method_nm]
-		except:
-			mextra += 1
-			color_list[len(fixed_nm_list)+mextra]
+		# try:
+		# 	color = color_dict[method_nm]
+		# except:
+		# 	mextra += 1
+		# 	color_list[len(fixed_nm_list)+mextra]
 		# color = color_list[m]
 		# if 'vanillaRNN' in method_nm:
 		# 	color = 'black'
@@ -198,7 +198,7 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 					else:
 						median_vec = [method_summary[method_nm][is_resid][is_flow][metric_nm]['median'][eps] for eps in eps_vec]
 						std_vec = [method_summary[method_nm][is_resid][is_flow][metric_nm]['std'][eps] for eps in eps_vec]
-					axlist[c].errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=nm, linestyle=linestyle, color=color, marker=marker, fillstyle='none')
+					axlist[c].errorbar(x=eps_vec, y=median_vec, yerr=std_vec, label=nm, linestyle=linestyle, marker=marker, fillstyle='none')
 
 
 	axlist[0].set_xlabel('epsilon Model Error')
