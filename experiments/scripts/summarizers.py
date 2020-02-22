@@ -170,7 +170,7 @@ def extract_epsilon_performance(my_dirs, output_fname="./epsilon_comparisons", w
 	mextra = -1
 	for method_nm in nm_list:
 		m += 1
-		color = color_dict[m]
+		color = color_list[m]
 		# try:
 		# 	color = color_dict[method_nm]
 		# except:
