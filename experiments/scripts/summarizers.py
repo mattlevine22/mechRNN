@@ -213,8 +213,8 @@ def compare_performance_bar_chart(my_dirs, output_fname="./epsilon_comparisons",
 	df = pd.DataFrame(summary_dict_list)
 # seaborn.barplot(x=None, y=None, hue=None, data=None, order=None, hue_order=None, estimator=<function mean at 0x10a2a03b0>, ci=95, n_boot=1000, units=None, seed=None, orient=None, color=None, palette=None, saturation=0.75, errcolor='.26', errwidth=None, capsize=None, dodge=True, ax=None, **kwargs)¶
 
-	sns.barplot(ax=axlist[0], x='method_nm', y='median', hue='group_nm', data=df[df.metric_nm=='t_valid'])
-	sns.barplot(ax=axlist[1], x='method_nm', y='median', hue='group_nm', data=df[df.metric_nm=='mse'])
+	sns.barplot(ax=axlist[0], x='method_nm', y='median', hue='group_nm', data=df[df.metric_nm=='mse'])
+	sns.barplot(ax=axlist[1], x='method_nm', y='median', hue='group_nm', data=df[df.metric_nm=='t_valid'])
 
 	axlist[0].set_xticklabels(axlist[0].get_xticklabels(), rotation=45, horizontalalignment='right', fontweight='light', fontsize='x-large')
 	axlist[1].set_xticklabels(axlist[1].get_xticklabels(), rotation=45, horizontalalignment='right', fontweight='light', fontsize='x-large')
