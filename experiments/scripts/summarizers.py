@@ -134,10 +134,10 @@ def compare_performance_bar_chart(my_dirs, output_fname="./epsilon_comparisons",
 
 	# plot summary
 	fig_mse, ax_mse = plt.subplots(nrows=1, ncols=1,
-		figsize = [10, 10],
+		figsize = [10, 6],
 		sharey=False, sharex=False)
 	fig_t, ax_t = plt.subplots(nrows=1, ncols=1,
-		figsize = [10, 10],
+		figsize = [10, 6],
 		sharey=False, sharex=False)
 
 	axlist = [ax_mse, ax_t]
@@ -216,8 +216,9 @@ def compare_performance_bar_chart(my_dirs, output_fname="./epsilon_comparisons",
 	sns.barplot(ax=axlist[0], x='method_nm', y='median', hue='group_nm', data=df[df.metric_nm=='t_valid'])
 	sns.barplot(ax=axlist[1], x='method_nm', y='median', hue='group_nm', data=df[df.metric_nm=='mse'])
 
-	axlist[0].set_xticklabels(axlist[0].get_xticklabels(), rotation=45)
-	axlist[1].set_xticklabels(axlist[1].get_xticklabels(), rotation=45)
+	axlist[0].set_xticklabels(axlist[0].get_xticklabels(), rotation=45, horizontalalignment='right', fontweight='light', fontsize='x-large')
+	axlist[1].set_xticklabels(axlist[1].get_xticklabels(), rotation=45, horizontalalignment='right', fontweight='light', fontsize='x-large')
+
 	# axlist[0].set_xlabel('epsilon Model Error')
 	# axlist[0].set_ylabel('Test Loss (MSE)')
 	# axlist[0].legend()
@@ -225,8 +226,8 @@ def compare_performance_bar_chart(my_dirs, output_fname="./epsilon_comparisons",
 	# axlist[1].set_ylabel('Validity Time')
 	# axlist[1].legend()
 
-	fig_mse.subplots_adjust(bottom=0.3)
-	fig_t.subplots_adjust(bottom=0.3)
+	fig_mse.subplots_adjust(bottom=0.2)
+	fig_t.subplots_adjust(bottom=0.2)
 
 	fig_t.suptitle('Performance on Test Set Under Varying Model Error')
 	fig_t.savefig(fname=output_fname + '_tvalid')
