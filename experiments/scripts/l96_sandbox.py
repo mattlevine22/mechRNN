@@ -5,6 +5,9 @@ import argparse
 import json
 from L96M import L96M #(from file import class)
 
+
+L96Mdefault = L96M()
+
 parser = argparse.ArgumentParser(description='mechRNN')
 parser.add_argument('--epoch', type=int, default=4, help='number of epochs')
 parser.add_argument('--lr', type=float, default=0.05, help='learning rate')
@@ -34,9 +37,10 @@ parser.add_argument('--datagen_ode_int_rtol', type=float, default=1.5e-8, help='
 parser.add_argument('--fix_seed', type=str2bool, default=False, help='Set to True if you want the call of this script to be reproducible (seed is set by last element of save_dir')
 parser.add_argument('--run_RNN', type=str2bool, default=False, help='Set to True if you want to train RNNs')
 parser.add_argument('--do_flow', type=str2bool, default=False, help='Set to True if you want to learn the vector field rhs of the ode')
-parser.add_argument('--K', type=int, default=4, help='Dimension of Slow Variables')
-parser.add_argument('--F', type=float, default=10, help='Forcing of L96 vars')
-parser.add_argument('--hx', type=float, default=-0.8, help='coupling of slow vars to the fast vars')
+parser.add_argument('--K', type=int, default=L96Mdefault.K, help='Dimension of Slow Variables')
+parser.add_argument('--J', type=int, default=L96Mdefault.J, help='Dimension of Slow Variables')
+parser.add_argument('--F', type=float, default=L96Mdefault.F, help='Forcing of L96 vars')
+parser.add_argument('--hx', type=float, default=L96Mdefault.hx, help='coupling of slow vars to the fast vars')
 parser.add_argument('--slow_only', type=str2bool, default=True, help='')
 
 FLAGS = parser.parse_args()
@@ -46,7 +50,7 @@ def main():
 		np.random.seed(int(FLAGS.savedir[-1]))
 
 	K = FLAGS.K
-	J = K
+	J = FLAGS.J
 
 	#python3 l96_sandbox.py --savedir ~/Downloads/l96_tests_v2/BDF_Init0 --delta_t 0.01 --t_train 10 --n_tests 1 --fix_seed True --t_test 10 --slow_only True
 	# initialize TRUE model
