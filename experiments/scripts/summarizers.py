@@ -133,8 +133,12 @@ def compare_performance_bar_chart(my_dirs, output_fname="./epsilon_comparisons",
 					# 	pass
 
 	# plot summary
-	fig_mse, ax_mse = plt.figure(figsize=(10,5))
-	fig_t, ax_t = plt.figure(figsize=(10,5))
+	fig_mse, ax_mse = plt.subplots(nrows=1, ncols=1,
+		figsize = [10, 10],
+		sharey=False, sharex=False)
+	fig_t, ax_t = plt.subplots(nrows=1, ncols=1,
+		figsize = [10, 10],
+		sharey=False, sharex=False)
 
 	axlist = [ax_mse, ax_t]
 
@@ -225,6 +229,9 @@ def compare_performance_bar_chart(my_dirs, output_fname="./epsilon_comparisons",
 	fig_t.savefig(fname=output_fname + '_tvalid')
 	fig_mse.suptitle('Performance on Test Set Under Varying Model Error')
 	fig_mse.savefig(fname=output_fname + '_mse')
+
+	fig_mse.subplots_adjust(bottom=0.2)
+	fig_t.subplots_adjust(bottom=0.2)
 
 	plt.close(fig_t)
 	plt.close(fig_mse)
