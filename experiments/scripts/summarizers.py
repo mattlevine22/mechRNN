@@ -225,13 +225,14 @@ def compare_performance_bar_chart(my_dirs, output_fname="./epsilon_comparisons",
 	# axlist[1].set_ylabel('Validity Time')
 	# axlist[1].legend()
 
+	fig_mse.subplots_adjust(bottom=0.3)
+	fig_t.subplots_adjust(bottom=0.3)
+
 	fig_t.suptitle('Performance on Test Set Under Varying Model Error')
 	fig_t.savefig(fname=output_fname + '_tvalid')
 	fig_mse.suptitle('Performance on Test Set Under Varying Model Error')
 	fig_mse.savefig(fname=output_fname + '_mse')
 
-	fig_mse.subplots_adjust(bottom=0.4)
-	fig_t.subplots_adjust(bottom=0.4)
 
 	plt.close(fig_t)
 	plt.close(fig_mse)
