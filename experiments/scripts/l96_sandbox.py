@@ -196,7 +196,7 @@ def main():
 		########## NOW start running RNN fits ############
 		#### run RNNs w/ SLOW system ###
 		for n in range(FLAGS.n_experiments):
-			for hidden_size in [50, 100, 200]:
+			for hidden_size in [50, 25, 100, 200]:
 				param_tuple = ()
 				if FLAGS.slow_only:
 					rnn_state_init = state_init[:K]
