@@ -30,11 +30,24 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+import json
 import pandas as pd
 import pdb
 
 
 LORENZ_DEFAULT_PARAMS = (10, 28, 8/3)
+
+
+def getval(x):
+	try:
+		return getattr(x, '__dict__', str(x))
+	except:
+		return None
+
+def write_settings(FLAGS, settings_fname):
+	with open(settings_fname, 'w') as f:
+		json.dump(FLAGS.__dict__, f, default=lambda x: getval(x) , indent=2)
+	return
 
 def str2array(x):
 	# x = '[[1,0,0],[0,1,0],[0,0,1]]'
@@ -650,6 +663,61 @@ def f_get_derivatives(X, h):
 	return dX[keep_inds,:], keep_inds
 
 
+def invariant_density_plot(test_data, pred_data, plot_inds, state_names, output_fname, kde_func=kde_scipy):
+	# plot KDE of test data vs predictions
+	fig, (ax_list) = plt.subplots(len(plot_inds),1)
+	if not isinstance(ax_list,np.ndarray):
+		ax_list = [ax_list]
+
+	for kk in range(len(ax_list)):
+		ax1 = ax_list[kk]
+		pk = plot_inds[kk]
+		try:
+			x_grid = np.linspace(min(test_data[:,pk]), max(test_data[:,pk]), 1000)
+			ax1.plot(x_grid, kde_func(test_data[:,pk], x_grid), label='test data')
+		except:
+			pass
+		try:
+			x_grid = np.linspace(min(pred_data[:,pk]), max(pred_data[:,pk]), 1000)
+			ax1.plot(x_grid, kde_func(pred_data[:,pk], x_grid), label='learned fit')
+		except:
+			pass
+		ax1.set_ylabel('P({0})'.format(state_names[pk]), rotation=0)
+
+	ax_list[0].legend()
+
+	fig.suptitle('Learned Invariant Density')
+	fig.savefig(fname=output_fname)
+	plt.close(fig)
+	return
+
+
+def phase_plot(data, plot_inds, state_names, output_fname):
+	fig, ax_list = plt.subplots(len(plot_inds),len(plot_inds), figsize=[11,11])
+	for i_y in range(len(plot_inds)):
+		yy = plot_inds[i_y]
+		left_y = True
+		if yy == plot_inds[-1]:
+			bottom_x = True
+		else:
+			bottom_x = False
+		for i_x in range(len(plot_inds)):
+			xx = plot_inds[i_x]
+
+			ax = ax_list[i_y][i_x]
+			if xx!=yy:
+				ax.plot(data[:,xx],data[:,yy])
+			if bottom_x:
+				ax.set_xlabel(state_names[xx])
+			if left_y:
+				ax.set_ylabel(state_names[yy])
+				left_y = False
+	fig.suptitle('ODE simulation')
+	fig.savefig(fname=output_fname)
+	plt.close(fig)
+	return
+
+
 def	run_ode_test(y_clean_test, y_noisy_test,
 				y_clean_testSynch, y_noisy_testSynch,
 				model,f_unNormalize_Y,
@@ -675,6 +743,8 @@ def	run_ode_test(y_clean_test, y_noisy_test,
 	pred_validity_vec_clean_test = np.zeros((1,n_test_sets))
 
 	# loop over test sets
+	ALLy_clean_test_raw = []
+	ALLgpr_test_predictions_raw = []
 	tspan = get_tspan(model_params)
 	for kkt in range(n_test_sets):
 		# now compute test loss
@@ -754,12 +824,31 @@ def	run_ode_test(y_clean_test, y_noisy_test,
 		fig.savefig(fname=output_dir+'/fit_ode_TEST_{0}'.format(kkt))
 		plt.close(fig)
 
+		## Plot phase plot
+		phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt))
+		phase_plot(data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_AvailableODE_TEST_{0}'.format(kkt))
+
+		# plot KDE of test data vs predictions
+		invdens_plotname = output_dir+'/invariant_density_TEST_{0}'.format(kkt)
+		invariant_density_plot(test_data=y_clean_test_raw, pred_data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
+
+		ALLy_clean_test_raw.append(y_clean_test_raw)
+		ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
+
+	ALLy_clean_test_raw = np.array(ALLy_clean_test_raw)
+	ALLgpr_test_predictions_raw = np.array(ALLgpr_test_predictions_raw)
+	ALLy_clean_test_raw = np.reshape(ALLy_clean_test_raw,(ALLy_clean_test_raw.shape[0]*ALLy_clean_test_raw.shape[1],ALLy_clean_test_raw.shape[2]))
+	ALLgpr_test_predictions_raw = np.reshape(ALLgpr_test_predictions_raw,(ALLgpr_test_predictions_raw.shape[0]*ALLgpr_test_predictions_raw.shape[1],ALLgpr_test_predictions_raw.shape[2]))
+	# plot KDE of ALL test sets vs ALL prediction
+	invdens_plotname = output_dir+'/invariant_density_TEST_ALL'
+	invariant_density_plot(test_data=ALLy_clean_test_raw, pred_data=ALLgpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
+
+
 	np.savetxt(output_dir+'/loss_vec_test.txt',loss_vec_test)
 	np.savetxt(output_dir+'/loss_vec_clean_test.txt',loss_vec_clean_test)
 	np.savetxt(output_dir+'/prediction_validity_time_test.txt',pred_validity_vec_test)
 	np.savetxt(output_dir+'/prediction_validity_time_clean_test.txt',pred_validity_vec_clean_test)
 	return
-
 
 
 def run_GP(y_clean_train, y_noisy_train,
@@ -949,6 +1038,8 @@ def run_GP(y_clean_train, y_noisy_train,
 
 	# loop over test sets
 	tspan = get_tspan(model_params)
+	ALLy_clean_test_raw = []
+	ALLgpr_test_predictions_raw = []
 	# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 	# pdb.set_trace()
 	for kkt in range(n_test_sets):
@@ -1049,6 +1140,24 @@ def run_GP(y_clean_train, y_noisy_train,
 		fig.suptitle('{0} Testing fit'.format(gp_nm.rstrip('_')))
 		fig.savefig(fname=output_dir+'/{0}fit_ode_TEST_{1}'.format(gp_nm,kkt))
 		plt.close(fig)
+
+		phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt))
+		phase_plot(data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_GPpredicted_TEST_{0}'.format(kkt))
+
+		# plot KDE of test data vs predictions
+		invdens_plotname = output_dir+'/invariant_density_TEST_{0}'.format(kkt)
+		invariant_density_plot(test_data=y_clean_test_raw, pred_data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
+
+		ALLy_clean_test_raw.append(y_clean_test_raw)
+		ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
+
+	ALLy_clean_test_raw = np.array(ALLy_clean_test_raw)
+	ALLgpr_test_predictions_raw = np.array(ALLgpr_test_predictions_raw)
+	ALLy_clean_test_raw = np.reshape(ALLy_clean_test_raw,(ALLy_clean_test_raw.shape[0]*ALLy_clean_test_raw.shape[1],ALLy_clean_test_raw.shape[2]))
+	ALLgpr_test_predictions_raw = np.reshape(ALLgpr_test_predictions_raw,(ALLgpr_test_predictions_raw.shape[0]*ALLgpr_test_predictions_raw.shape[1],ALLgpr_test_predictions_raw.shape[2]))
+	# plot KDE of ALL test sets vs ALL prediction
+	invdens_plotname = output_dir+'/invariant_density_TEST_ALL'
+	invariant_density_plot(test_data=ALLy_clean_test_raw, pred_data=ALLgpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
 
 	# pdb.set_trace()
 	# write pw losses to file
@@ -1816,6 +1925,8 @@ def train_chaosRNN(forward,
 
 
 			# now, loop over testing trajectories
+			ALLy_clean_test_raw = []
+			ALLgpr_test_predictions_raw = []
 			for kkt in range(n_test_sets):
 				y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
 				fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
@@ -1861,6 +1972,11 @@ def train_chaosRNN(forward,
 				fig.savefig(fname=output_dir+'/rnn_test_fit_ode_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
 				plt.close(fig)
 
+				## Plot phase plots
+				phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt))
+				phase_plot(data=predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_RNNpredicted_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
+
+
 				# plot dynamics of hidden state over TESTING set
 				n_hidden_plots = min(10, hidden_size)
 				fig, (ax_list) = plt.subplots(n_hidden_plots,1)
@@ -1880,31 +1996,20 @@ def train_chaosRNN(forward,
 				fig.savefig(fname=output_dir+'/rnn_test_hidden_states_ode_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
 				plt.close(fig)
 
-				# plot KDE of test data vs predictiosn
-				fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-				if not isinstance(ax_list,np.ndarray):
-					ax_list = [ax_list]
+				# plot KDE of test data vs predictions
+				invdens_plotname = output_dir+'/rnn_test_invDensity_iterEpochs{0}_test{1}'.format(i_epoch,kkt)
+				invariant_density_plot(test_data=y_clean_test_raw, pred_data=predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
 
-				for kk in range(len(ax_list)):
-					ax1 = ax_list[kk]
-					pk = plot_state_indices[kk]
-					try:
-						x_grid = np.linspace(min(y_clean_test_raw[:,pk]), max(y_clean_test_raw[:,pk]), 1000)
-						ax1.plot(x_grid, kde_func(y_clean_test_raw[:,pk], x_grid), label='clean data')
-					except:
-						pass
-					try:
-						x_grid = np.linspace(min(predictions_raw[:,pk]), max(predictions_raw[:,pk]), 1000)
-						ax1.plot(x_grid, kde_func(predictions_raw[:,pk], x_grid), label='RNN fit')
-					except:
-						pass
-					ax1.set_xlabel(model_params['state_names'][pk])
+				ALLy_clean_test_raw.append(y_clean_test_raw)
+				ALLgpr_test_predictions_raw.append(predictions_raw)
 
-				ax_list[0].legend()
-
-				fig.suptitle('Predictions of Invariant Density')
-				fig.savefig(fname=output_dir+'/rnn_test_invDensity_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
-				plt.close(fig)
+			ALLy_clean_test_raw = np.array(ALLy_clean_test_raw)
+			ALLgpr_test_predictions_raw = np.array(ALLgpr_test_predictions_raw)
+			ALLy_clean_test_raw = np.reshape(ALLy_clean_test_raw,(ALLy_clean_test_raw.shape[0]*ALLy_clean_test_raw.shape[1],ALLy_clean_test_raw.shape[2]))
+			ALLgpr_test_predictions_raw = np.reshape(ALLgpr_test_predictions_raw,(ALLgpr_test_predictions_raw.shape[0]*ALLgpr_test_predictions_raw.shape[1],ALLgpr_test_predictions_raw.shape[2]))
+			# plot KDE of ALL test sets vs ALL prediction
+			invdens_plotname = output_dir+'/rnn_test_invDensity_iterEpochs{0}_test_ALL'.format(i_epoch)
+			invariant_density_plot(test_data=ALLy_clean_test_raw, pred_data=ALLgpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
 
 
 	## save loss_vec
@@ -2014,6 +2119,8 @@ def train_chaosRNN(forward,
 
 
 	# NOW, show final testing fit
+	ALLy_clean_test_raw = []
+	ALLgpr_test_predictions_raw = []
 	for kkt in range(n_test_sets):
 		y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
 		fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
@@ -2059,31 +2166,26 @@ def train_chaosRNN(forward,
 		fig.savefig(fname=output_dir+'/rnn_fit_ode_TEST_{0}'.format(kkt))
 		plt.close(fig)
 
-		# plot KDE of test data vs predictiosn
-		fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-		if not isinstance(ax_list,np.ndarray):
-			ax_list = [ax_list]
+		## plot phase plots
+		phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt))
+		phase_plot(data=predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_finalRNNpredicted_TEST_{0}'.format(kkt))
 
-		for kk in range(len(ax_list)):
-			ax1 = ax_list[kk]
-			pk = plot_state_indices[kk]
-			try:
-				x_grid = np.linspace(min(y_clean_test_raw[:,pk]), max(y_clean_test_raw[:,pk]), 1000)
-				ax1.plot(x_grid, kde_func(y_clean_test_raw[:,pk], x_grid), label='clean data')
-			except:
-				pass
-			try:
-				x_grid = np.linspace(min(predictions_raw[:,pk]), max(predictions_raw[:,pk]), 1000)
-				ax1.plot(x_grid, kde_func(predictions_raw[:,pk], x_grid), label='RNN fit')
-			except:
-				pass
-			ax1.set_xlabel(model_params['state_names'][pk])
 
-		ax_list[0].legend()
+		# plot KDE of test data vs predictions
+		invdens_plotname = output_dir+'/rnn_invDensity_TEST_{0}'.format(kkt)
+		invariant_density_plot(test_data=y_clean_test_raw, pred_data=predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
 
-		fig.suptitle('Predictions of Invariant Density')
-		fig.savefig(fname=output_dir+'/rnn_invDensity_TEST_{0}'.format(kkt))
-		plt.close(fig)
+		ALLy_clean_test_raw.append(y_clean_test_raw)
+		ALLgpr_test_predictions_raw.append(predictions_raw)
+
+	ALLy_clean_test_raw = np.array(ALLy_clean_test_raw)
+	ALLgpr_test_predictions_raw = np.array(ALLgpr_test_predictions_raw)
+	ALLy_clean_test_raw = np.reshape(ALLy_clean_test_raw,(ALLy_clean_test_raw.shape[0]*ALLy_clean_test_raw.shape[1],ALLy_clean_test_raw.shape[2]))
+	ALLgpr_test_predictions_raw = np.reshape(ALLgpr_test_predictions_raw,(ALLgpr_test_predictions_raw.shape[0]*ALLgpr_test_predictions_raw.shape[1],ALLgpr_test_predictions_raw.shape[2]))
+	# plot KDE of ALL test sets vs ALL prediction
+	invdens_plotname = output_dir+'/rnn_invDensity_TEST_ALL'
+	invariant_density_plot(test_data=ALLy_clean_test_raw, pred_data=ALLgpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
+
 
 
 	# plot Train/Test curve
