@@ -31,9 +31,11 @@ parser.add_argument('--alpha', type=float, default=1e-10, help='Alpha parameter 
 parser.add_argument('--ode_int_method', type=str, default='RK45', help='See scipy solve_ivp documentation for options.')
 parser.add_argument('--ode_int_atol', type=float, default=1.5e-6, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
 parser.add_argument('--ode_int_rtol', type=float, default=1.5e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
-parser.add_argument('--datagen_ode_int_method', type=str, default='BDF', help='See scipy solve_ivp documentation for options.')
-parser.add_argument('--datagen_ode_int_atol', type=float, default=1.5e-8, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
-parser.add_argument('--datagen_ode_int_rtol', type=float, default=1.5e-8, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--ode_int_max_step', type=float, default=1.5e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--datagen_ode_int_method', type=str, default='Radau', help='See scipy solve_ivp documentation for options.')
+parser.add_argument('--datagen_ode_int_atol', type=float, default=1.5e-6, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--datagen_ode_int_rtol', type=float, default=1.5e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--datagen_ode_int_max_step', type=float, default=1.5e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
 parser.add_argument('--fix_seed', type=str2bool, default=False, help='Set to True if you want the call of this script to be reproducible (seed is set by last element of save_dir')
 parser.add_argument('--run_RNN', type=str2bool, default=False, help='Set to True if you want to train RNNs')
 parser.add_argument('--do_flow', type=str2bool, default=False, help='Set to True if you want to learn the vector field rhs of the ode')
@@ -95,7 +97,7 @@ def main():
 	i = 0
 	for state_init in my_state_inits:
 		i += 1
-		sim_model_params = {'state_names': state_names, 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':param_tuple, 'time_avg_norm':0.529, 'ode_int_method':FLAGS.datagen_ode_int_method, 'ode_int_rtol':FLAGS.datagen_ode_int_rtol, 'ode_int_atol':FLAGS.datagen_ode_int_atol, 'ode_int_max_step':np.inf}
+		sim_model_params = {'state_names': state_names, 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':param_tuple, 'time_avg_norm':0.529, 'ode_int_method':FLAGS.datagen_ode_int_method, 'ode_int_rtol':FLAGS.datagen_ode_int_rtol, 'ode_int_atol':FLAGS.datagen_ode_int_atol, 'ode_int_max_step':FLAGS.datagen_ode_int_max_step}
 		# rnn_model_params = {'state_names': state_names, 'state_init':state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':param_tuple, 'time_avg_norm':0.529, 'ode_int_method':FLAGS.ode_int_method, 'ode_int_rtol':FLAGS.ode_int_rtol, 'ode_int_atol':FLAGS.ode_int_atol, 'ode_int_max_step':np.inf}
 		all_dirs = []
 
@@ -210,7 +212,7 @@ def main():
 					rnn_state_init = state_init
 					rnn_sim_model = l96m_AVAIL.full
 
-				rnn_BAD_model_params = {'state_names': state_names, 'state_init':rnn_state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':param_tuple, 'time_avg_norm':0.529, 'ode_int_method':FLAGS.ode_int_method, 'ode_int_rtol':FLAGS.ode_int_rtol, 'ode_int_atol':FLAGS.ode_int_atol, 'ode_int_max_step':np.inf}
+				rnn_BAD_model_params = {'state_names': state_names, 'state_init':rnn_state_init, 'delta_t':delta_t, 'smaller_delta_t': min(delta_t, delta_t), 'ode_params':param_tuple, 'time_avg_norm':0.529, 'ode_int_method':FLAGS.ode_int_method, 'ode_int_rtol':FLAGS.ode_int_rtol, 'ode_int_atol':FLAGS.ode_int_atol, 'ode_int_max_step':FLAGS.ode_int_max_step}
 
 
 				# FIRST run bad ODE model alone
