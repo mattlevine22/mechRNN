@@ -40,7 +40,7 @@ parser.add_argument('--do_flow', type=str2bool, default=False, help='Set to True
 parser.add_argument('--K', type=int, default=L96Mdefault.K, help='Dimension of Slow Variables')
 parser.add_argument('--J', type=int, default=L96Mdefault.J, help='Dimension of Slow Variables')
 parser.add_argument('--F', type=float, default=L96Mdefault.F, help='Forcing of L96 vars')
-parser.add_argument('--hx', type=float, default=L96Mdefault.hx, help='coupling of slow vars to the fast vars')
+parser.add_argument('--hx', type=float, default=L96Mdefault.hx[0], help='coupling of slow vars to the fast vars')
 parser.add_argument('--eps_power', type=int, default=-7, help='eps=2**(eps_power)')
 parser.add_argument('--slow_only', type=str2bool, default=True, help='')
 
