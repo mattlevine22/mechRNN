@@ -2,7 +2,6 @@ from utils import *
 import numpy as np
 import torch
 import argparse
-import json
 from L96M import L96M #(from file import class)
 
 
@@ -118,22 +117,17 @@ def main():
 
 		# write settings file
 		main_dir = FLAGS.savedir[:FLAGS.savedir.rfind("/")]
+		my_ind = FLAGS.savedir.rfind("/")
+		if my_ind >= 0:
+			main_dir = main_dir[:my_ind]
 		try:
 			os.mkdir(main_dir)
 		except:
 			# file exists
 			pass
 
-		def getval(x):
-			try:
-				return getattr(x, '__dict__', str(x))
-			except:
-				return None
-
 		settings_fname = main_dir + '/run_settings.txt'
-		if not os.path.exists(settings_fname):
-			with open(settings_fname, 'w') as f:
-			    json.dump(FLAGS.__dict__, f, default=lambda x: getval(x) , indent=2)
+		write_settings(FLAGS, settings_fname)
 
 		# simulate clean and noisy data
 		(input_data_train, y_clean_train, y_noisy_train,
