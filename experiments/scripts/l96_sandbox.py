@@ -41,6 +41,7 @@ parser.add_argument('--K', type=int, default=L96Mdefault.K, help='Dimension of S
 parser.add_argument('--J', type=int, default=L96Mdefault.J, help='Dimension of Slow Variables')
 parser.add_argument('--F', type=float, default=L96Mdefault.F, help='Forcing of L96 vars')
 parser.add_argument('--hx', type=float, default=L96Mdefault.hx, help='coupling of slow vars to the fast vars')
+parser.add_argument('--eps_power', type=int, default=-7, help='eps=2**(eps_power)')
 parser.add_argument('--slow_only', type=str2bool, default=True, help='')
 
 FLAGS = parser.parse_args()
@@ -54,8 +55,8 @@ def main():
 
 	#python3 l96_sandbox.py --savedir ~/Downloads/l96_tests_v2/BDF_Init0 --delta_t 0.01 --t_train 10 --n_tests 1 --fix_seed True --t_test 10 --slow_only True
 	# initialize TRUE model
-	l96m_TRUE = L96M(K=K, J=J, F=FLAGS.F, hx=FLAGS.hx) # model used to generate Train/Test data
-	l96m_AVAIL = L96M(K=K, J=J, F=FLAGS.F, hx=FLAGS.hx) # model used as a predictor
+	l96m_TRUE = L96M(K=K, J=J, F=FLAGS.F, hx=FLAGS.hx, eps = 2**(FLAGS.eps_power)) # model used to generate Train/Test data
+	l96m_AVAIL = L96M(K=K, J=J, F=FLAGS.F, hx=FLAGS.hx, eps = 2**(FLAGS.eps_power)) # model used as a predictor
 
 	plot_state_indices_FULL=[0, K]
 	plot_state_indices_SLOW=[0, 1, K-2, K-1]
@@ -200,7 +201,7 @@ def main():
 		########## NOW start running RNN fits ############
 		#### run RNNs w/ SLOW system ###
 		for n in range(FLAGS.n_experiments):
-			for hidden_size in [50, 25, 100, 200]:
+			for hidden_size in [50, 25, 10, 100, 200]:
 				param_tuple = ()
 				if FLAGS.slow_only:
 					rnn_state_init = state_init[:K]
