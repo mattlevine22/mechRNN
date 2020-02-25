@@ -30,6 +30,8 @@ def run_ode_model(model, tspan, sim_model_params, output_dir=".", plot_slow_indi
 	ind_dict = {'slow': plot_slow_indices, 'fast': plot_fast_indices}
 	for ind_key in ind_dict:
 		plot_inds = ind_dict[ind_key]
+		if plot_inds is None:
+			continue
 		## Plot clean ODE simulation
 		fig, ax_list = plt.subplots(len(plot_inds),len(plot_inds), figsize=[11,11])
 		for i_y in range(len(plot_inds)):
@@ -57,11 +59,12 @@ def run_ode_model(model, tspan, sim_model_params, output_dir=".", plot_slow_indi
 	return y_clean
 
 
-def make_plots(output_dir='.', K=4, J=4, F=10, delta_t=0.01, T=10, decoupled=False):
+def make_plots(sim_model_params=dict(), output_dir='.', K=4, J=4, F=10, eps_power=-7, delta_t=0.01, T=10, decoupled=False):
 	# delta_t = 0.01 # output interval for ODE simulation
 	# T = 10 # Total length of ODE simulation
 	# K = 4
 	# J = 4
+	eps = 2**(eps_power)
 	if not os.path.exists(output_dir):
 		os.mkdir(output_dir)
 
@@ -74,13 +77,14 @@ def make_plots(output_dir='.', K=4, J=4, F=10, delta_t=0.01, T=10, decoupled=Fal
 	plot_fast_indices = [K, K+1, K+J-2, K+J-1]
 	plot_slow_indices = np.arange(K)
 
-	l96m = L96M(K=K, J=J, F=F)
+	l96m = L96M(K=K, J=J, F=F, eps=eps)
 	# establish initial conditions
 	state_init = np.squeeze(l96m.get_inits(n=1))
 
 	if decoupled:
 		state_init = state_init[K:] # only fast variables
 		sim_model = l96m.decoupled
+		plot_slow_indices = None
 	else:
 		sim_model = l96m.full
 
@@ -89,21 +93,39 @@ def make_plots(output_dir='.', K=4, J=4, F=10, delta_t=0.01, T=10, decoupled=Fal
 	for k in range(K):
 		state_names += ['Y_' + str(j+1) + ',' + str(k+1) for j in range(J)]
 
-	sim_model_params = {'state_names': state_names,
-						'state_init':state_init,
-						'ode_params': (),
-						'ode_int_method':'Radau',
-						'ode_int_rtol':1e-3,
-						'ode_int_atol':1e-6,
-						'ode_int_max_step':1e-3}
+	sim_model_params['state_names'] = state_names
+	sim_model_params['state_init'] = state_init
 
 	run_ode_model(sim_model, tspan, sim_model_params, output_dir=output_dir, plot_slow_indices=plot_slow_indices, plot_fast_indices=plot_fast_indices)
 	return
 
 if __name__ == '__main__':
-	# make_plots(output_dir='l96chaos_decoupled', delta_t=0.0001, T=0.2, decoupled=True)
-	# make_plots(output_dir='l96chaos_full', decoupled=False)
-	for F in [5,10,20,30,40,50]:
-		make_plots(output_dir='l96chaos_full_F{0}'.format(F), F=F, T=20, decoupled=False)
-		make_plots(output_dir='l96chaos_decoupled_F{0}'.format(F), delta_t=0.0001, T=0.2, decoupled=True)
+
+	sim_model_params = {'ode_params': (),
+						'ode_int_method':'Radau',
+						'ode_int_rtol':1e-3,
+						'ode_int_atol':1e-6,
+						'ode_int_max_step':1e-3}
+
+	main_dir = '/Users/matthewlevine/Downloads/l96_check_chaos_4'
+	if not os.path.exists(main_dir):
+		os.mkdir(main_dir)
+	T_list = [20,50]
+	F_list = [10,25,50,1,5,100]
+	eps_power_list = [-1, -3, -5, -7, -9]
+
+	for T in T_list:
+		print('T=',T)
+		for F in F_list: #[10,25,50]:
+			print('F=',F)
+			if T==T_list[0]:
+				output_dir = main_dir+'/l96chaos_decoupled_F{0}'.format(F)
+				if not os.path.exists(output_dir):
+					make_plots(sim_model_params=sim_model_params, output_dir=output_dir, F=F, delta_t=0.0001, T=0.2, decoupled=True)
+			for eps_power in eps_power_list:
+				print('eps_power=',eps_power)
+				output_dir = main_dir+'/l96chaos_full_F{0}_epsPower{1}_T{2}'.format(F,eps_power,T)
+				if not os.path.exists(output_dir):
+					make_plots(sim_model_params=sim_model_params, output_dir=output_dir, F=F, eps_power=eps_power, T=T, decoupled=False)
+
 
