@@ -185,7 +185,7 @@ def main():
 
 		########## NOW start running RNN fits ############
 		for n in range(FLAGS.n_experiments):
-			for hidden_size in [50]:
+			for hidden_size in [25, 50, 100]:
 				#### run vanilla RNN ####
 
 				# train on clean data
@@ -194,7 +194,7 @@ def main():
 				rnn_model_params['learn_residuals_rnn'] = learn_residuals
 
 				# model-free GPR
-				run_output_dir = output_dir + '/iter{0}'.format(n) + '/ModelFreeGPR_residual{1}_clean_hs{0}'.format(hidden_size, learn_residuals)
+				run_output_dir = output_dir + '/iter{0}'.format(n) + '/ModelFreeGPR_residual{0}_clean'.format(learn_residuals)
 				all_dirs.append(run_output_dir)
 				if not os.path.exists(run_output_dir+'/fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
 					# torch.manual_seed(0)
@@ -255,7 +255,7 @@ def main():
 							gp_list = [2,3]
 
 						for gp_style in gp_list:
-							run_output_dir = output_dir + '/iter{0}'.format(n) + '/hybridGPR{2}_residual{3}_learnflow{4}_epsBadness{0}_clean_hs{1}'.format(eps_badness, hidden_size, gp_style, learn_residuals, learn_flow)
+							run_output_dir = output_dir + '/iter{0}'.format(n) + '/hybridGPR{1}_residual{2}_learnflow{3}_epsBadness{0}_clean'.format(eps_badness, gp_style, learn_residuals, learn_flow)
 							all_dirs.append(run_output_dir)
 							if not os.path.exists(run_output_dir+'/fit_ode_TEST_{0}.png'.format(FLAGS.n_tests-1)):
 								# torch.manual_seed(0)
