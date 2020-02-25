@@ -2,6 +2,11 @@ import numpy as np
 from matplotlib import pyplot
 import pdb
 
+# Correspondence with Dima via Whatsapp on Feb 24, 2020:
+# RK45 (explicit) for slow-system-only
+# RK45 (implicit) aka Radau for multi-scale-system
+# In both cases, set abstol to 1e-6, reltol to 1e-3, dtmax to 1e-3
+
 class L96M:
   """
   A simple class that implements Lorenz '96M model w/ slow and fast variables
@@ -111,7 +116,7 @@ class L96M:
 
     return rhs
 
-  def decoupled(_s, t, z):
+  def decoupled(_s, z, t):
     ''' Only fast variables with fixed slow ones to verify ergodicity '''
     K = _s.K
     J = _s.J
@@ -206,7 +211,6 @@ class L96M:
     rhs += _s.F
 
     return rhs
-
 
   def regressed(_s, t, x):
     ''' Only slow variables with RHS learned from data '''
