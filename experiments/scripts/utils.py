@@ -834,6 +834,13 @@ def	run_ode_test(y_clean_test, y_noisy_test,
 		pred_validity_vec_test[0,kkt] = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
 		pred_validity_vec_clean_test[0,kkt] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
 
+		# protect against case where the model is perfect!
+		if pred_validity_vec_test[0,kkt]==0 and pw_loss_test[0]==0:
+			pred_validity_vec_test[0,kkt] = (1+len(pw_loss_test))*model_params['delta_t']
+
+		if pred_validity_vec_clean_test[0,kkt]==0 and pw_loss_clean_test[0]==0:
+			pred_validity_vec_clean_test[0,kkt] = (1+len(pw_loss_clean_test))*model_params['delta_t']
+
 		# plot forecast over test set
 		y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
 		gpr_test_predictions_raw = f_unNormalize_Y(normz_info,gpr_test_predictions)
@@ -1162,6 +1169,13 @@ def run_GP(y_clean_train, y_noisy_train,
 		loss_vec_clean_test[0,kkt] = total_loss_clean_test
 		pred_validity_vec_test[0,kkt] = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
 		pred_validity_vec_clean_test[0,kkt] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
+
+		# Protect against the case where the model is perfect
+		if pred_validity_vec_test[0,kkt]==0 and pw_loss_test[0]==0:
+			pred_validity_vec_test[0,kkt] = (1+len(pw_loss_clean_test))*model_params['delta_t']
+
+		if pred_validity_vec_clean_test[0,kkt]==0 and pw_loss_clean_test[0]==0:
+			pred_validity_vec_clean_test[0,kkt] = (1+len(pw_loss_clean_test))*model_params['delta_t']
 
 
 		# plot forecast over test set
@@ -1723,6 +1737,14 @@ def train_chaosRNN(forward,
 			perfect_pred_validity_vec_test[0,kkt] = np.argmax(perf_pw_loss_test > err_thresh)*model_params['delta_t']
 			perfect_pred_validity_vec_clean_test[0,kkt] = np.argmax(perf_pw_loss_clean_test > err_thresh)*model_params['delta_t']
 
+			# protect against case where the model is perfect!
+			if perfect_pred_validity_vec_test[0,kkt]==0 and perf_pw_loss_test[0]==0:
+				perfect_pred_validity_vec_test[0,kkt] = (1+len(perf_pw_loss_test))*model_params['delta_t']
+
+			if perfect_pred_validity_vec_clean_test[0,kkt]==0 and perf_pw_loss_clean_test[0]==0:
+				perfect_pred_validity_vec_clean_test[0,kkt] = (1+len(perf_pw_loss_clean_test))*model_params['delta_t']
+
+
 			# plot predictions vs truth
 			fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
 			if not isinstance(ax_list,np.ndarray):
@@ -1944,6 +1966,13 @@ def train_chaosRNN(forward,
 			loss_vec_clean_test[i_epoch,kkt] = total_loss_clean_test
 			pred_validity_vec_test[i_epoch,kkt] = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
 			pred_validity_vec_clean_test[i_epoch,kkt] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
+
+			# protect against case where the model is perfect!
+			if pred_validity_vec_test[i_epoch,kkt]==0 and pw_loss_test[0]==0:
+				pred_validity_vec_test[i_epoch,kkt] = (1+len(pw_loss_test))*model_params['delta_t']
+
+			if pred_validity_vec_clean_test[i_epoch,kkt]==0 and pw_loss_clean_test[0]==0:
+				pred_validity_vec_clean_test[i_epoch,kkt] = (1+len(pw_loss_clean_test))*model_params['delta_t']
 
 
 			# compute KL divergence between long predictions and whole test set:
