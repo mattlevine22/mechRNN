@@ -111,7 +111,7 @@ if __name__ == '__main__':
 	if not os.path.exists(main_dir):
 		os.mkdir(main_dir)
 	T_list = [20,50]
-	F_list = [10,25,50,1,5,100]
+	F_list = [18,22,10,15,25,50,1,5,100]
 	eps_power_list = [-1, -3, -5, -7, -9]
 
 	for T in T_list:
