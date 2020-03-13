@@ -705,8 +705,12 @@ def phase_plot(data, plot_inds, state_names, output_fname):
 			xx = plot_inds[i_x]
 
 			ax = ax_list[i_y][i_x]
-			if xx!=yy:
+			if xx<yy:
 				ax.plot(data[:,xx],data[:,yy])
+			elif xx==yy:
+				ax.plot(data[:,xx])
+			else:
+				ax.axis('off')
 			if bottom_x:
 				ax.set_xlabel(state_names[xx])
 			if left_y:
