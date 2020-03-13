@@ -2,7 +2,7 @@ from utils import *
 import numpy as np
 import torch
 import argparse
-from L96M import L96M #(from file import class)
+from odelibrary import L96M #(from file import class)
 
 
 L96Mdefault = L96M()

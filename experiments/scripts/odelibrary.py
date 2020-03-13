@@ -330,3 +330,53 @@ class L96M:
 ################################################################################
 # end of L96M ##################################################################
 ################################################################################
+
+
+class L63:
+  """
+  A simple class that implements Lorenz 63 model
+
+  The class computes RHS's to make use of scipy's ODE solvers.
+
+  Parameters:
+    a, b, c
+
+  """
+
+  def __init__(_s,
+      a = 10, b = 28, c = 8/3):
+    '''
+    Initialize an instance: setting parameters and xkstar
+    '''
+    _s.a = a
+    _s.b = b
+    _s.c = c
+
+  def get_inits(_s):
+    (xmin, xmax) = (-10,10)
+    (ymin, ymax) = (-20,30)
+    (zmin, zmax) = (10,40)
+
+    xrand = xmin+(xmax-xmin)*np.random.random()
+    yrand = ymin+(ymax-ymin)*np.random.random()
+    zrand = zmin+(zmax-zmin)*np.random.random()
+    state_inits = [xrand, yrand, zrand]
+    return state_inits
+
+  def full(_s, S, t):
+    ''' Full system RHS '''
+    a = _s.a
+    b = _s.b
+    c = _s.c
+    (x,y,z) = S
+
+    rhs = np.empty(3)
+    rhs[0] = -a*x + a*y
+    rhs[1] = b*x - y - x*z
+    rhs[2] = -c*z + x*y
+
+    return rhs
+
+################################################################################
+# end of L63 ##################################################################
+################################################################################

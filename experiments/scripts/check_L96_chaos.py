@@ -3,7 +3,7 @@
 # RK45 (implicit) aka Radau for multi-scale-system
 # In both cases, set abstol to 1e-6, reltol to 1e-3, dtmax to 1e-3
 
-from L96M import L96M #(from file import class)
+from odelibrary import L96M #(from file import class)
 import os
 import json
 import numpy as np

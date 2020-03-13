@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import argparse
 import json
-from L96M import L96M #(from file import class)
+from odelibrary import L96M #(from file import class)
 
 parser = argparse.ArgumentParser(description='mechRNN')
 parser.add_argument('--epoch', type=int, default=4, help='number of epochs')
