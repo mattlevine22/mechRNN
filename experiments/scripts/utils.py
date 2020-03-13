@@ -717,6 +717,41 @@ def phase_plot(data, plot_inds, state_names, output_fname):
 	plt.close(fig)
 	return
 
+def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, output_fname):
+	if len(yplot_inds)==1:
+		fig, ax_list = plt.subplots(len(yplot_inds),len(xplot_inds), figsize=[11,5], sharey=True)
+		ax_list = [ax_list]
+	else:
+		fig, ax_list = plt.subplots(len(yplot_inds),len(xplot_inds), figsize=[11,11])
+
+	for i_y in range(len(yplot_inds)):
+		yy = yplot_inds[i_y]
+		left_y = True
+		if yy == yplot_inds[-1]:
+			bottom_x = True
+		else:
+			bottom_x = False
+		for i_x in range(len(xplot_inds)):
+			ax = ax_list[i_y][i_x]
+			xx = xplot_inds[i_x]
+			ax.scatter(xdata[:,xx],ydata[:,yy],s=10,alpha=0.5)
+			if xx==yy and len(yplot_inds)>1:
+				ymin, ymax = ax.get_ylim()
+				xmin, xmax = ax.get_xlim()
+				if (0 > 0.8*ymin) and (0 < 1.2*ymax):
+					ax.hlines(y=0, xmin=xmin, xmax=xmax, colors='k')
+				if (0 > 0.8*xmin) and (0 < 1.2*xmax):
+					ax.vlines(x=0, ymin=ymin, ymax=ymax, colors='k')
+
+			if bottom_x:
+				ax.set_xlabel(xnames[xx])
+			if left_y:
+				ax.set_ylabel(ynames[yy])
+				left_y = False
+	fig.suptitle('GP input response')
+	fig.savefig(fname=output_fname)
+	plt.close(fig)
+	return
 
 def	run_ode_test(y_clean_test, y_noisy_test,
 				y_clean_testSynch, y_noisy_testSynch,
@@ -1040,6 +1075,8 @@ def run_GP(y_clean_train, y_noisy_train,
 	tspan = get_tspan(model_params)
 	ALLy_clean_test_raw = []
 	ALLgpr_test_predictions_raw = []
+	ALLgpr_inputs = []
+	ALLgpr_outputs = []
 	# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
 	# pdb.set_trace()
 	for kkt in range(n_test_sets):
@@ -1051,6 +1088,8 @@ def run_GP(y_clean_train, y_noisy_train,
 		pw_loss_test = np.zeros(test_seq_length)
 		pw_loss_clean_test = np.zeros(test_seq_length)
 		gpr_test_predictions = np.zeros([test_seq_length, output_size])
+		gp_input = np.zeros([test_seq_length, output_size*(1+(gp_style==2))])
+		gp_output = np.zeros([test_seq_length, output_size])
 		solver_failed = False
 		for j in range(test_seq_length):
 			target = y_noisy_test[kkt,j,:]
@@ -1095,7 +1134,16 @@ def run_GP(y_clean_train, y_noisy_train,
 					x = my_model_pred
 				elif gp_style==4:
 					x = pred
-				pred = do_resid*my_model_pred + gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
+
+				if gp_style==2:
+					gp_input[j,:] = np.concatenate((f_unNormalize_Y(normz_info, pred), f_unNormalize_Y(normz_info, my_model_pred)))
+				else:
+					gp_input[j,:] = f_unNormalize_Y(normz_info, x)
+
+				gpr_pred_val = gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
+				pred = do_resid*my_model_pred + gpr_pred_val
+
+				gp_output[j,:] = f_unNormalize_Y(normz_info, pred) - do_resid*f_unNormalize_Y(normz_info, my_model_pred)
 
 			# compute losses
 			j_loss = sum((pred - target)**2)
@@ -1150,11 +1198,48 @@ def run_GP(y_clean_train, y_noisy_train,
 
 		ALLy_clean_test_raw.append(y_clean_test_raw)
 		ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
+		ALLgpr_inputs.append(gp_input)
+		ALLgpr_outputs.append(gp_output)
 
+	ALLgpr_inputs = np.array(ALLgpr_inputs)
+	ALLgpr_outputs = np.array(ALLgpr_outputs)
 	ALLy_clean_test_raw = np.array(ALLy_clean_test_raw)
 	ALLgpr_test_predictions_raw = np.array(ALLgpr_test_predictions_raw)
+	ALLgpr_outputs = np.reshape(ALLgpr_outputs,(ALLgpr_outputs.shape[0]*ALLgpr_outputs.shape[1],ALLgpr_outputs.shape[2]))
+	ALLgpr_inputs = np.reshape(ALLgpr_inputs,(ALLgpr_inputs.shape[0]*ALLgpr_inputs.shape[1],ALLgpr_inputs.shape[2]))
 	ALLy_clean_test_raw = np.reshape(ALLy_clean_test_raw,(ALLy_clean_test_raw.shape[0]*ALLy_clean_test_raw.shape[1],ALLy_clean_test_raw.shape[2]))
 	ALLgpr_test_predictions_raw = np.reshape(ALLgpr_test_predictions_raw,(ALLgpr_test_predictions_raw.shape[0]*ALLgpr_test_predictions_raw.shape[1],ALLgpr_test_predictions_raw.shape[2]))
+
+	# plot GPR inputs vs outputs---empirical marginals using scatter plot
+	yplot_inds = plot_state_indices.copy()
+	xplot_inds = plot_state_indices.copy()
+	xnames = [foo + ' j-state' for foo in model_params['state_names']]
+	if gp_style==2:
+		xnames += [foo + ' j+1 ODE-pred' for foo in model_params['state_names']]
+		xplot_inds += [foo + len(plot_state_indices) for foo in plot_state_indices]
+
+	# GP input vs GP output
+	gpinout_fname = output_dir+'/GP_input_vs_output'
+	ynames = [foo + ' j+1 GP-output' for foo in model_params['state_names']]
+	gp_marginal_plot(xdata=ALLgpr_inputs, ydata=ALLgpr_outputs, xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
+
+	# GP input vs GP-corrected prediction
+	gpinout_fname = output_dir+'/GP_input_vs_prediction'
+	ynames = [foo + ' j+1 full-pred' for foo in model_params['state_names']]
+	gp_marginal_plot(xdata=ALLgpr_inputs, ydata=ALLgpr_test_predictions_raw, xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
+
+	# GP input vs norm of GP output
+	gpinout_fname = output_dir+'/GP_input_vs_outputNorm'
+	ynames = ['||u||_2']
+	yplot_inds = [0]
+	ydata = np.linalg.norm(ALLgpr_outputs, axis=1)
+	gp_marginal_plot(xdata=ALLgpr_inputs, ydata=ydata[:,None], xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
+
+	with open(output_dir+'/output_norm_mean.txt', 'w') as fh:
+		fh.writelines(str(np.mean(ydata)))
+	with open(output_dir+'/output_norm_std.txt', 'w') as fh:
+		fh.writelines(str(np.std(ydata)))
+
 	# plot KDE of ALL test sets vs ALL prediction
 	invdens_plotname = output_dir+'/invariant_density_TEST_ALL'
 	invariant_density_plot(test_data=ALLy_clean_test_raw, pred_data=ALLgpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
@@ -1175,6 +1260,25 @@ def run_GP(y_clean_train, y_noisy_train,
 	np.savetxt(output_dir+'/{0}loss_vec_clean_test.txt'.format(gp_nm),loss_vec_clean_test)
 	np.savetxt(output_dir+'/{0}prediction_validity_time_test.txt'.format(gp_nm),pred_validity_vec_test)
 	np.savetxt(output_dir+'/{0}prediction_validity_time_clean_test.txt'.format(gp_nm),pred_validity_vec_clean_test)
+
+	# if plot_empirical_GP_mean:
+	# 	# GP_box_settings = {'x': np.linspace(-10,10,10),
+	# 	# 					'y': np.linspace(-20,30,10),
+	# 	# 					'z': np.linspace(10,40,10)
+	# 	# 					}
+	#  #    keys, values = zip(*GP_box_settings.items())
+	#  #    list_of_vals = [dict(zip(keys, v)) for v in itertools.product(*values)]
+	# 	for hh in range(n_gp_grid):
+	# 		# y0 = [val[key] for key in model_params['state_names']]
+	# 		ya = f_normalize_minmax(normz_info, f_get_state_inits(n=1))
+	# 		if gp_style==2:
+	# 			yb = f_normalize_minmax(normz_info, f_get_state_inits(n=1))
+	# 			y0_normalized = np.concatenate((ya, yb))
+	# 		else:
+	# 			y0_normalized = ya
+
+
+
 
 	if GP_grid:
 		## Evaluate GP vs actual residuals on a BOX
@@ -1429,7 +1533,7 @@ def train_chaosRNN(forward,
 	n_plttest = min(max_plot,y_clean_test.shape[1])
 
 	if not plot_state_indices:
-		plot_state_indices = np.arange(y_clean_test.shape[2])
+		plot_state_indices = np.arange(y_clean_test.shape[2]).tolist()
 
 	if not model_params_TRUE:
 		model_params_TRUE = model_params.copy()
@@ -1545,8 +1649,8 @@ def train_chaosRNN(forward,
 					n_plttest,
 					n_test_sets,
 					err_thresh,
-					gp_style,
-					gp_only,
+					gp_style=gp_style,
+					gp_only=gp_only,
 					GP_grid = GP_grid,
 					alpha = alpha,
 					do_resid = gp_resid,
