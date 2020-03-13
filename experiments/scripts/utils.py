@@ -176,50 +176,6 @@ def lorenz63_perturbed(Y,t,a=10,b=28,c=8/3,gamma=1,delta=0):
 	dYdt = [dxdt, dydt, dzdt]
 	return dYdt
 
-# def lorenz96multiscale(Z, t, K=8, J=8, hx=-0.8, hy=1, eps=2**(-7), Fx=10):
-
-# 	hx = hx * np.ones(K) # can take this out of rhs loop for efficiency later
-#     rhs = np.empty(K + K*J)
-#     x = Z[:K]
-#     y = Z[K:]
-
-#     ### slow variables subsystem ###
-#     # compute Yk averages
-#     Yk = Z[K:].reshape( (J, K), order = 'F').sum(axis = 0) / J
-
-#     # three boundary cases
-#     rhs[0] =   -x[K-1] * (x[K-2] - x[1]) - x[0]
-#     rhs[1] =   -x[0]   * (x[K-1] - x[2]) - x[1]
-#     rhs[K-1] = -x[K-2] * (x[K-3] - x[0]) - x[K-1]
-
-#     # general case
-#     rhs[2:K-1] = -x[1:K-2] * (x[0:K-3] - x[3:K]) - x[2:K-1]
-
-#     # add forcing
-#     rhs[:K] += Fx
-
-#     # add coupling w/ fast variables via averages
-#     # XXX verify this (twice: sign and vector-vector multiplication)
-#     rhs[:K] += hx * Yk
-
-#     ### fast variables subsystem ###
-#     # three boundary cases
-#     rhs[K]  = -y[1]  * (y[2] - y[-1]) - y[0]
-#     rhs[-2] = -y[-1] * (y[0] - y[-3]) - y[-2]
-#     rhs[-1] = -y[0]  * (y[1] - y[-2]) - y[-1]
-
-#     # general case
-#     rhs[K+1:-2] = -y[2:-1] * (y[3:] - y[:-3]) - y[1:-2]
-
-#     # add coupling w/ slow variables
-#     for k in range(K):
-#       rhs[K + k*J : K + (k+1)*J] += hy * x[k]
-
-#     # divide by epsilon
-#     rhs[K:] /= eps
-
-#     return rhs
-
 def compute_lyapounov_time(model, model_params, Tdatagen=1000, Teval=10, Teval_step=0.01, burn_in_frac=0.5, output_dir=".", num_ics=500, eps=0.01):
 
 	# FIRST, get lots of data from the attractor
@@ -293,15 +249,13 @@ def generate_data(
 		ode_int_rtol=1.5e-8,
 		rng_seed=None,
 		savedir='default_data'):
-
 	'''To generate training data, set t_synch=0. For testing data, set t_synch>0.'''
 
-	if FLAGS.rng_seed:
-		np.random.seed(FLAGS.rng_seed)
+	if rng_seed:
+		np.random.seed(rng_seed)
 
-	delta_t = FLAGS.delta_t #0.01
 	t_eval = np.arange(0,(t_synch+t_length),delta_t)  #np.arange(0,10000,delta_t)
-	ntsynch = int(FLAGS.t_synch/delta_t)
+	ntsynch = int(t_synch/delta_t)
 
 	# Generate N data sets
 	for n in range(num_data_sets):
