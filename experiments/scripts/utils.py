@@ -277,6 +277,59 @@ def f_unNormalize_minmax(norm_dict,y_norm):
 	y = norm_dict['Ymin'] + y_norm * (norm_dict['Ymax'] - norm_dict['Ymin'])
 	return y
 
+
+def generate_data(
+		num_data_sets=2,
+		model_params=(10,28,8/3),
+		t_length=100,
+		t_synch=10,
+		delta_t=0.1,
+		savedir='.',
+		rhs=lorenz63,
+		random_state_inits=True,
+		noise_frac=0,
+		ode_int_method='RK45',
+		ode_int_atol=1.5e-8,
+		ode_int_rtol=1.5e-8,
+		rng_seed=None,
+		savedir='default_data'):
+
+	'''To generate training data, set t_synch=0. For testing data, set t_synch>0.'''
+
+	if FLAGS.rng_seed:
+		np.random.seed(FLAGS.rng_seed)
+
+	delta_t = FLAGS.delta_t #0.01
+	t_eval = np.arange(0,(t_synch+t_length),delta_t)  #np.arange(0,10000,delta_t)
+	ntsynch = int(FLAGS.t_synch/delta_t)
+
+	# Generate N data sets
+	for n in range(num_data_sets):
+		y0 = get_lorenz_inits(n=1).squeeze()
+		sol = solve_ivp(fun=lambda t, y: rhs(y, t, *model_params), t_span=(t_eval[0], t_eval[-1]), y0=np.array(y0).T, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
+		y_clean = sol.y.T
+		y_noisy = y_clean + noise_frac*(np.max(y_clean,0) - np.min(y_clean,0))*np.random.randn(len(y_clean),y_clean.shape[1])
+
+		if n==0:
+			y_clean_vec = np.zeros((n_sets,y_clean.shape[0]-ntsynch,y_clean.shape[1]))
+			y_noisy_vec = np.zeros((n_sets,y_noisy.shape[0]-ntsynch,y_noisy.shape[1]))
+			y_clean_synch_vec = np.zeros((n_sets,ntsynch,y_clean.shape[1]))
+			y_noisy_synch_vec = np.zeros((n_sets,ntsynch,y_noisy.shape[1]))
+		y_clean_vec[n,:,:] = y_clean[ntsynch:,:]
+		y_noisy_vec[n,:,:] = y_noisy[ntsynch:,:]
+		y_clean_synch_vec[n,:,:] = y_clean[:ntsynch,:]
+		y_noisy_synch_vec[n,:,:] = y_noisy[:ntsynch,:]
+
+	output_dict = {'normz_info': normz_info,
+					'y_clean_vec': y_clean_vec,
+					'y_noisy_vec': y_noisy_vec,
+					'y_clean_synch_vec': y_clean_synch_vec,
+					'y_noisy_synch_vec': y_noisy_synch_vec
+					}
+
+	return output_dict
+
+
 def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_dir=".", drive_system=True, plot_state_indices=None):
 	# time points
 	# tau = 50 # window length of persistence
