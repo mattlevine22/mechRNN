@@ -34,6 +34,7 @@ import json
 import pandas as pd
 import pdb
 
+from odelibrary import *
 
 LORENZ_DEFAULT_PARAMS = (10, 28, 8/3)
 
@@ -235,14 +236,13 @@ def f_unNormalize_minmax(norm_dict,y_norm):
 
 
 def generate_data(
-		num_data_sets=2,
-		model_params=(10,28,8/3),
+		num_data_sets=1,
 		t_length=100,
 		t_synch=10,
 		delta_t=0.1,
 		savedir='.',
-		rhs=lorenz63,
-		random_state_inits=True,
+		rhs=L63().full,
+		f_get_inits=L63().get_inits,
 		noise_frac=0,
 		ode_int_method='RK45',
 		ode_int_atol=1.5e-8,
@@ -259,8 +259,8 @@ def generate_data(
 
 	# Generate N data sets
 	for n in range(num_data_sets):
-		y0 = get_lorenz_inits(n=1).squeeze()
-		sol = solve_ivp(fun=lambda t, y: rhs(y, t, *model_params), t_span=(t_eval[0], t_eval[-1]), y0=np.array(y0).T, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
+		y0 = f_get_inits(n=1).squeeze()
+		sol = solve_ivp(fun=lambda t, y: rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=np.array(y0).T, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
 		y_clean = sol.y.T
 		y_noisy = y_clean + noise_frac*(np.max(y_clean,0) - np.min(y_clean,0))*np.random.randn(len(y_clean),y_clean.shape[1])
 
