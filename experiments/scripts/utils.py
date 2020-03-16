@@ -45,6 +45,12 @@ def getval(x):
 	except:
 		return None
 
+def dict_to_file(mydict, fname)
+	with open(fname, 'w') as f:
+		json.dump(mydict, f)
+	return
+
+
 def write_settings(FLAGS, settings_fname):
 	with open(settings_fname, 'w') as f:
 		json.dump(FLAGS.__dict__, f, default=lambda x: getval(x) , indent=2)
@@ -240,7 +246,6 @@ def generate_data(
 		t_length=100,
 		t_synch=10,
 		delta_t=0.1,
-		savedir='.',
 		rhs=L63().full,
 		f_get_inits=L63().get_inits,
 		noise_frac=0,
@@ -248,7 +253,7 @@ def generate_data(
 		ode_int_atol=1.5e-8,
 		ode_int_rtol=1.5e-8,
 		rng_seed=None,
-		savedir='default_data'):
+		output_path='default_data'):
 	'''To generate training data, set t_synch=0. For testing data, set t_synch>0.'''
 
 	if rng_seed:
@@ -274,14 +279,15 @@ def generate_data(
 		y_clean_synch_vec[n,:,:] = y_clean[:ntsynch,:]
 		y_noisy_synch_vec[n,:,:] = y_noisy[:ntsynch,:]
 
-	output_dict = {'normz_info': normz_info,
-					'y_clean_vec': y_clean_vec,
+	output_dict = {'y_clean_vec': y_clean_vec,
 					'y_noisy_vec': y_noisy_vec,
 					'y_clean_synch_vec': y_clean_synch_vec,
 					'y_noisy_synch_vec': y_noisy_synch_vec
 					}
 
-	return output_dict
+	np.savez(output_path, **output_dict)
+
+	return
 
 
 def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_dir=".", drive_system=True, plot_state_indices=None):
