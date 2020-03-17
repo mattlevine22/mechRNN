@@ -83,7 +83,6 @@ def main(output_dir=OUTPUT_DIR,
     gp_experiments=GP_EXPERIMENT_LIST,
     eps_badness_list=EPS_BADNESS_LIST):
 
-    pdb.set_trace()
     # Make top level directories
     mkdir_p(output_dir)
 
@@ -173,7 +172,7 @@ def main(output_dir=OUTPUT_DIR,
                     command_flag_dict = {'settings_path': pred_settings_path}
                     jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                        jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_name, n))
+                        jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_nm, n))
 
                 pred_settings['ode_only'] = False
                 pred_settings['gp_only'] = True
@@ -197,7 +196,7 @@ def main(output_dir=OUTPUT_DIR,
                         command_flag_dict = {'settings_path': pred_settings_path}
                         jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                             command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                            jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_name, n))
+                            jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_nm, n))
 
                 pred_settings['gp_only'] = False
                 for rnn_exp in rnn_experiments:
@@ -220,7 +219,7 @@ def main(output_dir=OUTPUT_DIR,
                         command_flag_dict = {'settings_path': pred_settings_path}
                         jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                             command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                            jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_name, n))
+                            jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_nm, n))
                     # train_chaosRNN_wrapper(**pred_settings)
 
                     # mechRNN
@@ -236,7 +235,7 @@ def main(output_dir=OUTPUT_DIR,
                         command_flag_dict = {'settings_path': pred_settings_path}
                         jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                             command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                            jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_name, n))
+                            jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_nm, n))
                         # train_chaosRNN_wrapper(**pred_settings)
 
     return
