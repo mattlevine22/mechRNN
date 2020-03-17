@@ -326,10 +326,10 @@ def generate_data(
 		y_noisy = y_clean + noise_frac*(np.max(y_clean,0) - np.min(y_clean,0))*np.random.randn(len(y_clean),y_clean.shape[1])
 
 		if n==0:
-			y_clean_vec = np.zeros((n_sets,y_clean.shape[0]-ntsynch,y_clean.shape[1]))
-			y_noisy_vec = np.zeros((n_sets,y_noisy.shape[0]-ntsynch,y_noisy.shape[1]))
-			y_clean_synch_vec = np.zeros((n_sets,ntsynch,y_clean.shape[1]))
-			y_noisy_synch_vec = np.zeros((n_sets,ntsynch,y_noisy.shape[1]))
+			y_clean_vec = np.zeros((num_data_sets,y_clean.shape[0]-ntsynch,y_clean.shape[1]))
+			y_noisy_vec = np.zeros((num_data_sets,y_noisy.shape[0]-ntsynch,y_noisy.shape[1]))
+			y_clean_synch_vec = np.zeros((num_data_sets,ntsynch,y_clean.shape[1]))
+			y_noisy_synch_vec = np.zeros((num_data_sets,ntsynch,y_noisy.shape[1]))
 		y_clean_vec[n,:,:] = y_clean[ntsynch:,:]
 		y_noisy_vec[n,:,:] = y_noisy[ntsynch:,:]
 		y_clean_synch_vec[n,:,:] = y_clean[:ntsynch,:]
