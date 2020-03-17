@@ -68,9 +68,9 @@ class L96M:
 
   def plot_state_indices(_s):
     if _s.slow_only:
-      return np.array([0, 1, K-1, K-2]) # return a 4 coupled slow variables
+      return [0, 1, K-1, K-2] # return a 4 coupled slow variables
     else:
-      return np.array([0, K]) # return 1st slow variable and 1st coupled fast variable
+      return [0, K] # return 1st slow variable and 1st coupled fast variable
 
   def set_predictor(_s, predictor):
     _s.predictor = predictor
@@ -388,7 +388,7 @@ class L63:
     return ['x','y','z']
 
   def plot_state_indices(_s):
-    return np.array([0,1,2])
+    return [0,1,2]
 
   def rhs(_s, S, t):
     ''' Full system RHS '''
