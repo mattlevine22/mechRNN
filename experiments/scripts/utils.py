@@ -1286,8 +1286,8 @@ def run_GP(y_clean_train, y_noisy_train,
 	ALLgpr_test_predictions_raw = np.reshape(ALLgpr_test_predictions_raw,(ALLgpr_test_predictions_raw.shape[0]*ALLgpr_test_predictions_raw.shape[1],ALLgpr_test_predictions_raw.shape[2]))
 
 	# plot GPR inputs vs outputs---empirical marginals using scatter plot
-	yplot_inds = plot_state_indices.copy()
-	xplot_inds = plot_state_indices.copy()
+	yplot_inds = plot_state_indices[:]
+	xplot_inds = plot_state_indices[:]
 	xnames = [foo + ' j-state' for foo in model_params['state_names']]
 	if gp_style==2:
 		xnames += [foo + ' j+1 ODE-pred' for foo in model_params['state_names']]
