@@ -1,5 +1,6 @@
 import argparse
 import json
+import numpy as np
 from utils import train_chaosRNN, f_normalize_minmax
 from pydoc import locate
 
