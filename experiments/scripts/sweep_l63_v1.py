@@ -159,6 +159,7 @@ def main(output_dir=OUTPUT_DIR,
 
         # generate a Test Data set
         testjob_ids = []
+        pdb.set_trace()
         for n in range(n_testing_sets):
             datagen_settings_TEST['savedir'] = os.path.join(testdir,'dataset_{0}'.format(n))
 
