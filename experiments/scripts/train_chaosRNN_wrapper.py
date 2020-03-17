@@ -54,10 +54,10 @@ def main(settings_path=FLAGS.settings_path):
 		setts['forward'] = None
 
 	# pick a random initial condition
+	pdb.set_trace()
 	setts['model_params']['state_init'] = locate('{0}.get_inits'.format(setts['odeclass']))()
 
 	# get state names
-	pdb.set_trace()
 	setts['model_params']['state_names'] = locate('{0}.get_state_names'.format(setts['odeclass']))()
 
 	# rnn_model_params = {'state_names': state_names,
