@@ -120,9 +120,8 @@ def main(output_dir=OUTPUT_DIR,
 
         # generate a Test Data set
         testjob_ids = []
-        pdb.set_trace()
         for n in range(n_testing_sets):
-            n_testpath = os.path.join(testdir,'dataset_{0}'.format(n))
+            n_testpath = os.path.join(testdir,'dataset_{0}.npz'.format(n))
 
             if os.path.exists(n_testpath):
                 print(n_testpath, 'already exists, so skipping.')
@@ -141,7 +140,7 @@ def main(output_dir=OUTPUT_DIR,
             mkdir_p(n_pred_dir)
 
             #this is for training data
-            n_trainpath = os.path.join(traindir,'dataset_{0}'.format(n))
+            n_trainpath = os.path.join(traindir,'dataset_{0}.npz'.format(n))
             if not os.path.exists(n_trainpath):
                 command_flag_dict = {'settings_path': train_settings_path, 'output_path': n_trainpath}
                 jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
