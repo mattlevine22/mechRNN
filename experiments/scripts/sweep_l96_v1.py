@@ -1,6 +1,5 @@
-import commands
 import os
-from utils import dict_combiner, mkdir_p, dict_to_file
+from utils import dict_combiner, mkdir_p, dict_to_file, make_and_deploy
 
 # Adapted from https://vsoch.github.io/lessons/sherlock-jobs/
 # python ../scripts/l96_sandbox.py
@@ -80,49 +79,6 @@ GP_EXPERIMENT_LIST = dict_combiner({'gp_style': [1,2,3],
                             }
                         )
 
-
-
-def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='../my_jobs', depending_jobs=None):
-    # build sbatch job script and write to file
-    job_directory = os.path.join(jobfile_dir,'.job')
-    out_directory = os.path.join(jobfile_dir,'.out')
-    mkdir_p(job_directory)
-    mkdir_p(out_directory)
-
-
-    job_file = os.path.join(job_directory,"{0}.job".format(nametag))
-
-    sbatch_str = ""
-    sbatch_str += "#!/bin/bash\n"
-    sbatch_str += "#SBATCH --account=astuart\n" # account name
-    sbatch_str += "#SBATCH --job-name=%s.job\n" % nametag
-    sbatch_str += "#SBATCH --output=%s.out\n" % os.path.join(out_directory,nametag)
-    sbatch_str += "#SBATCH --error=%s.err\n" % os.path.join(out_directory,nametag)
-    sbatch_str += "#SBATCH --time=48:00:00\n" # 48hr
-    sbatch_str += "#SBATCH --mail-type=ALL\n"
-    sbatch_str += "#SBATCH --mail-user=$USER@caltech.edu\n"
-    sbatch_str += bash_run_command
-    # sbatch_str += "python $HOME/mechRNN/experiments/scripts/run_fits.py"
-    for key in command_flag_dict:
-        sbatch_str += ' --{0} {1}'.format(key, command_flag_dict[key])
-    # sbatch_str += ' --output_path %s\n' % experiment_dir
-
-    with open(job_file, 'w') as fh:
-        fh.writelines(sbatch_str)
-
-    # run the sbatch job script
-    if depending_jobs:
-        depstr = ','.join(depending_jobs) #depending_jobs must be list of strings
-        cmd = "sbatch --dependency=after:{0} {1}".format(depstr, job_file)
-    else:
-        cmd = "sbatch %s" % job_file
-
-    status, jobnum = commands.getstatusoutput(cmd)
-
-    return status, jobnum
-
-
-
 def main(output_dir=OUTPUT_DIR,
     datagen_settings_TRAIN=DATAGEN_SETTINGS_TRAIN,
     datagen_settings_TEST=DATAGEN_SETTINGS_TEST,
@@ -184,7 +140,7 @@ def main(output_dir=OUTPUT_DIR,
 
             command_flag_dict = {'settings_path': test_settings_path}
             jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
-                command_flag_dict=command_flag_dict)
+                command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir)
             testjob_ids.append(jobnum)
             pred_settings['test_fname_list'].append(datagen_settings_TEST['savedir'])
             # generate_data(**datagen_settings_TEST)
@@ -198,7 +154,7 @@ def main(output_dir=OUTPUT_DIR,
             if not os.path.exists(datagen_settings_TRAIN['savedir']):
                 command_flag_dict = {'settings_path': train_settings_path}
                 jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
-                    command_flag_dict=command_flag_dict)
+                    command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir)
                 # generate_data(**datagen_settings_TRAIN)
                 depending_jobs = testjob_ids + [jobnum]
             else:
@@ -222,7 +178,8 @@ def main(output_dir=OUTPUT_DIR,
                 dict_to_file(mydict=pred_settings, fname=pred_settings_path)
                 command_flag_dict = {'settings_path': pred_settings_path}
                 jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
-                    command_flag_dict=command_flag_dict, depending_jobs=depending_jobs)
+                    command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
+                    jobfile_dir=experiment_dir)
 
             pred_settings['ode_only'] = False
             pred_settings['gp_only'] = True
@@ -245,7 +202,8 @@ def main(output_dir=OUTPUT_DIR,
                     dict_to_file(mydict=pred_settings, fname=pred_settings_path)
                     command_flag_dict = {'settings_path': pred_settings_path}
                     jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
-                        command_flag_dict=command_flag_dict, depending_jobs=depending_jobs)
+                        command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
+                        jobfile_dir=experiment_dir)
 
 
             pred_settings['gp_only'] = False
@@ -268,7 +226,8 @@ def main(output_dir=OUTPUT_DIR,
                     dict_to_file(mydict=pred_settings, fname=pred_settings_path)
                     command_flag_dict = {'settings_path': pred_settings_path}
                     jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
-                        command_flag_dict=command_flag_dict, depending_jobs=depending_jobs)
+                        command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
+                        jobfile_dir=experiment_dir)
                 # train_chaosRNN_wrapper(**pred_settings)
 
                 # mechRNN
@@ -283,7 +242,8 @@ def main(output_dir=OUTPUT_DIR,
                     dict_to_file(mydict=pred_settings, fname=pred_settings_path)
                     command_flag_dict = {'settings_path': pred_settings_path}
                     jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
-                        command_flag_dict=command_flag_dict, depending_jobs=depending_jobs)
+                        command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
+                        jobfile_dir=experiment_dir)
                     # train_chaosRNN_wrapper(**pred_settings)
 
     return
