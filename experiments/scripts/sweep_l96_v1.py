@@ -111,6 +111,7 @@ def main(output_dir=OUTPUT_DIR,
             nametag += "{0}{1}_".format(v,exp_dict[v])
         nametag = nametag.rstrip('_')
         experiment_dir = os.path.join(output_dir,nametag)
+        mkdir_p(experiment_dir)
 
         # create data-generation settings
         traindir = os.path.join(experiment_dir,'TRAIN_DATA')
