@@ -4,6 +4,8 @@ import numpy as np
 from utils import train_chaosRNN, f_normalize_minmax
 from pydoc import locate
 
+import pdb
+
 parser = argparse.ArgumentParser(description='mechRNN')
 parser.add_argument('--settings_path', type=str, default='datagen_settings.npz', help='pathname of numpy settings dictionary')
 FLAGS = parser.parse_args()
@@ -55,6 +57,7 @@ def main(settings_path=FLAGS.settings_path):
 	setts['model_params']['state_init'] = locate('{0}.get_inits'.format(setts['odeclass']))()
 
 	# get state names
+	pdb.set_trace()
 	setts['model_params']['state_names'] = locate('{0}.get_state_names'.format(setts['odeclass']))()
 
 	# rnn_model_params = {'state_names': state_names,
