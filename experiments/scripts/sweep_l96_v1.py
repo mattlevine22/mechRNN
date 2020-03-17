@@ -132,17 +132,18 @@ def main(output_dir=OUTPUT_DIR,
         # generate a Test Data set
         testjob_ids = []
         for n in range(n_testing_sets):
-            datagen_settings_TEST['savedir'] = os.path.join(testdir,'dataset_{0}'.format(n))
+            datagen_settings_TEST['output_path'] = os.path.join(testdir,'dataset_{0}'.format(n))
 
-            if os.path.exists(datagen_settings_TEST['savedir']):
-                print(datagen_settings_TEST['savedir'], 'already exists, so skipping.')
+            if os.path.exists(datagen_settings_TEST['output_path']):
+                print(datagen_settings_TEST['output_path'], 'already exists, so skipping.')
                 continue
 
             command_flag_dict = {'settings_path': test_settings_path}
             jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
-                command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir)
+                command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir,
+                jobname='testdatagen_{0}'.format(n))
             testjob_ids.append(jobnum)
-            pred_settings['test_fname_list'].append(datagen_settings_TEST['savedir'])
+            pred_settings['test_fname_list'].append(datagen_settings_TEST['output_path'])
             # generate_data(**datagen_settings_TEST)
 
         # generate a Train Data Set, then run fitting/prediction models
@@ -150,19 +151,20 @@ def main(output_dir=OUTPUT_DIR,
             n_pred_dir = os.path.join(experiment_dir,'Init{0}'.format(n)) # this is for the predictive model outputs
 
             #this is for training data
-            datagen_settings_TRAIN['savedir'] = os.path.join(traindir,'dataset_{0}'.format(n))
-            if not os.path.exists(datagen_settings_TRAIN['savedir']):
+            datagen_settings_TRAIN['output_path'] = os.path.join(traindir,'dataset_{0}'.format(n))
+            if not os.path.exists(datagen_settings_TRAIN['output_path']):
                 command_flag_dict = {'settings_path': train_settings_path}
                 jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
-                    command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir)
+                    command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir,
+                    jobname='traindatagen_{0}'.format(n))
                 # generate_data(**datagen_settings_TRAIN)
                 depending_jobs = testjob_ids + [jobnum]
             else:
                 depending_jobs = None
-                print(datagen_settings_TRAIN['savedir'], 'already exists, so skipping.')
+                print(datagen_settings_TRAIN['output_path'], 'already exists, so skipping.')
 
             # submit job to Train and evaluate model
-            pred_settings['train_fname'] = datagen_settings_TRAIN['savedir'] # each prediction run uses a single training set
+            pred_settings['train_fname'] = datagen_settings_TRAIN['output_path'] # each prediction run uses a single training set
 
             # GPR w/out residuals (learn_flow=False) gp_style 2 and 3
             pred_settings['plot_state_indices'] = plot_state_indices_SLOW
@@ -179,7 +181,8 @@ def main(output_dir=OUTPUT_DIR,
                 command_flag_dict = {'settings_path': pred_settings_path}
                 jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                     command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                    jobfile_dir=experiment_dir)
+                    jobfile_dir=experiment_dir,
+                    jobname='{0}_Init{1}'.format(run_nm, n))
 
             pred_settings['ode_only'] = False
             pred_settings['gp_only'] = True
@@ -203,7 +206,8 @@ def main(output_dir=OUTPUT_DIR,
                     command_flag_dict = {'settings_path': pred_settings_path}
                     jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                        jobfile_dir=experiment_dir)
+                        jobfile_dir=experiment_dir,
+                        jobname='{0}_Init{1}'.format(run_nm, n))
 
 
             pred_settings['gp_only'] = False
@@ -227,7 +231,8 @@ def main(output_dir=OUTPUT_DIR,
                     command_flag_dict = {'settings_path': pred_settings_path}
                     jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                        jobfile_dir=experiment_dir)
+                        jobfile_dir=experiment_dir,
+                        jobname='{0}_Init{1}'.format(run_nm, n))
                 # train_chaosRNN_wrapper(**pred_settings)
 
                 # mechRNN
@@ -243,7 +248,8 @@ def main(output_dir=OUTPUT_DIR,
                     command_flag_dict = {'settings_path': pred_settings_path}
                     jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                        jobfile_dir=experiment_dir)
+                        jobfile_dir=experiment_dir,
+                        jobname='{0}_Init{1}'.format(run_nm, n))
                     # train_chaosRNN_wrapper(**pred_settings)
 
     return
