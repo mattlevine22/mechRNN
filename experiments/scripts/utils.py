@@ -45,8 +45,11 @@ def mkdir_p(dir):
         os.mkdir(dir)
 
 def dict_combiner(mydict):
-	keys, values = zip(*mydict.items())
-	experiment_list = [dict(zip(keys, v)) for v in itertools.product(*values)]
+	if mydict:
+		keys, values = zip(*mydict.items())
+		experiment_list = [dict(zip(keys, v)) for v in itertools.product(*values)]
+	else:
+		experiment_list = [{}]
 	return experiment_list
 
 def getval(x):

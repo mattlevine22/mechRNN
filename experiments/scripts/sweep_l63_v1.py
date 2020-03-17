@@ -14,56 +14,46 @@ CMD_generate_data_wrapper = 'python $HOME/mechRNN/experiments/scripts/generate_d
 CMD_run_fits = 'python $HOME/mechRNN/experiments/scripts/train_chaosRNN_wrapper.py'
 
 N_TRAINING_SETS = 2
-N_TESTING_SETS = 2
+N_TESTING_SETS = 3
 
 OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/l96'
 
+EPS_BADNESS_LIST = [0, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0]
 
-ODE_PARAMETERS = {'F': [1,10],
-                'eps': [-1, -3],
-                'K': [4],
-                'J': [4]
-            }
+ODE_PARAMETERS = {'b': [28]}
 
-# ODE_PARAMETERS = {'F': [1,10,25,50],
-#                 'eps': [-1, -3, -5, -7],
-#                 'K': [4],
-#                 'J': [4]
-#             }
-
-
-DATAGEN_SETTINGS_TRAIN = {'odeclass': 'odelibrary.L96M',
-                        't_length': 5,
+DATAGEN_SETTINGS_TRAIN = {'odeclass': 'odelibrary.L63',
+                        't_length': 100,
                         't_synch': 0,
-                        'delta_t': 0.01,
-                        'ode_int_method': 'Radau',
-                        'ode_int_atol': 1.5e-6,
-                        'ode_int_rtol': 1.5e-3,
+                        'delta_t': 0.1,
+                        'ode_int_method': 'RK45',
+                        'ode_int_atol': 1.5e-8,
+                        'ode_int_rtol': 1.5e-8,
                         'ode_int_max_step': 1.5e-3,
                         'noise_frac': 0,
                         'rng_seed': None
                         }
 
-DATAGEN_SETTINGS_TEST = {'odeclass': 'odelibrary.L96M',
+DATAGEN_SETTINGS_TEST = {'odeclass': 'odelibrary.L63',
                         't_length': 5,
                         't_synch': 5,
-                        'delta_t': 0.01,
+                        'delta_t': 0.1,
                         'ode_int_method': 'Radau',
-                        'ode_int_atol': 1.5e-6,
-                        'ode_int_rtol': 1.5e-3,
+                        'ode_int_atol': 1.5e-8,
+                        'ode_int_rtol': 1.5e-8,
                         'ode_int_max_step': 1.5e-3,
                         'noise_frac': 0,
                         'rng_seed': None
                         }
 
-PRED_SETTINGS = {'odeclass': 'odelibrary.L96M',
+PRED_SETTINGS = {'odeclass': 'odelibrary.L63',
                         'model_params': {
                             'ode_params': (),
                             'time_avg_norm': 0.529,
-                            'delta_t': 0.01,
+                            'delta_t': 0.1,
                             'ode_int_method': 'RK45',
-                            'ode_int_atol': 1.5e-6,
-                            'ode_int_rtol': 1.5e-3,
+                            'ode_int_atol': 1.5e-8,
+                            'ode_int_rtol': 1.5e-8,
                             'ode_int_max_step': 1.5e-3
                         }
                 }
@@ -131,7 +121,8 @@ def main(output_dir=OUTPUT_DIR,
     n_testing_sets=N_TESTING_SETS,
     ode_parameters=ODE_PARAMETERS,
     rnn_experiments=RNN_EXPERIMENT_LIST,
-    gp_experiments=GP_EXPERIMENT_LIST):
+    gp_experiments=GP_EXPERIMENT_LIST,
+    eps_badness_list=EPS_BADNESS_LIST):
 
     # Make top level directories
     mkdir_p(output_dir)
@@ -143,11 +134,6 @@ def main(output_dir=OUTPUT_DIR,
     # loop over experimental conditions
     for exp_dict in experiments:
         datagen_param_dict = {key: exp_dict[key] for key in exp_dict.keys()}
-        datagen_param_dict['slow_only'] = False
-
-        pred_param_dict = {key: exp_dict[key] for key in exp_dict.keys()}
-        pred_param_dict['slow_only'] = True
-
 
         nametag = ""
         for v in var_names:
@@ -168,10 +154,6 @@ def main(output_dir=OUTPUT_DIR,
         test_settings_path = os.path.join(testdir,'settings')
         dict_to_file(mydict=datagen_settings_TEST, fname=test_settings_path)
 
-        # create prediction-step settings
-        pred_settings['param_dict'] = pred_param_dict
-        pred_settings['test_fname_list'] = []
-        pred_settings['train_fname'] = None
 
         # generate a Test Data set
         testjob_ids = []
@@ -205,86 +187,89 @@ def main(output_dir=OUTPUT_DIR,
                 depending_jobs = None
                 print(datagen_settings_TRAIN['savedir'], 'already exists, so skipping.')
 
-            # submit job to Train and evaluate model
-            pred_settings['train_fname'] = datagen_settings_TRAIN['savedir'] # each prediction run uses a single training set
+            for eps_badness in np.random.permutation(eps_badness_list):
+                # create prediction-step settings
 
-            # GPR w/out residuals (learn_flow=False) gp_style 2 and 3
-            pred_settings['plot_state_indices'] = plot_state_indices_SLOW
+                pred_settings['param_dict'] = {param_nm: exp_dict[param_nm]*(1+eps_badness) for param_nm in exp_dict}
+                pred_settings['test_fname_list'] = []
+                pred_settings['train_fname'] = None
 
-            # ODE only
-            run_nm = 'pureODE'
-            run_path = os.path.join(n_pred_dir, run_nm)
-            if not os.path.exists(run_path):
-                mkdir_p(run_path)
-                pred_settings['output_dir'] = run_path
-                pred_settings['ode_only'] = True
-                pred_settings_path = os.path.join(n_pred_dir, run_nm, 'prediction_settings.json')
-                dict_to_file(mydict=pred_settings, fname=pred_settings_path)
-                command_flag_dict = {'settings_path': pred_settings_path}
-                jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
-                    command_flag_dict=command_flag_dict, depending_jobs=depending_jobs)
+                # submit job to Train and evaluate model
+                pred_settings['train_fname'] = datagen_settings_TRAIN['savedir'] # each prediction run uses a single training set
 
-            pred_settings['ode_only'] = False
-            pred_settings['gp_only'] = True
-            for gp_exp in gp_experiments:
-                for key in gp_exp:
-                    pred_settings[key] = gp_exp[key] # gp_style, learn_residuals, learn flow
-                gp_style = pred_settings['gp_style']
-                learn_residuals = pred_settings['learn_residuals']
-                learn_flow = pred_settings['learn_flow']
-                if gp_stype==1 and not learn_residuals:
-                    run_nm = 'ModelFreeGPR_learnflow{0}'.format(learn_flow)
-                else:
-                    run_nm = 'hybridGPR{0}_residual{1}_learnflow{2}'.format(gp_style, learn_residuals, learn_flow)
-
+                # ODE only
+                run_nm = 'pureODE_epsBadness{0}'.format(eps_badness)
                 run_path = os.path.join(n_pred_dir, run_nm)
                 if not os.path.exists(run_path):
                     mkdir_p(run_path)
                     pred_settings['output_dir'] = run_path
+                    pred_settings['ode_only'] = True
                     pred_settings_path = os.path.join(n_pred_dir, run_nm, 'prediction_settings.json')
                     dict_to_file(mydict=pred_settings, fname=pred_settings_path)
                     command_flag_dict = {'settings_path': pred_settings_path}
                     jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs)
 
+                pred_settings['ode_only'] = False
+                pred_settings['gp_only'] = True
+                for gp_exp in gp_experiments:
+                    for key in gp_exp:
+                        pred_settings[key] = gp_exp[key] # gp_style, learn_residuals, learn flow
+                    gp_style = pred_settings['gp_style']
+                    learn_residuals = pred_settings['learn_residuals']
+                    learn_flow = pred_settings['learn_flow']
+                    if gp_stype==1 and not learn_residuals:
+                        run_nm = 'ModelFreeGPR_learnflow{0}_epsBadness{1}'.format(learn_flow, eps_badness)
+                    else:
+                        run_nm = 'hybridGPR{0}_residual{1}_learnflow{2}_epsBadness{3}'.format(gp_style, learn_residuals, learn_flow, eps_badness)
 
-            pred_settings['gp_only'] = False
-            for rnn_exp in rnn_experiments:
-                for key in rnn_exp:
-                    pred_settings[key] = rnn_exp[key] # hidden size, epoch, learn_residuals
+                    run_path = os.path.join(n_pred_dir, run_nm)
+                    if not os.path.exists(run_path):
+                        mkdir_p(run_path)
+                        pred_settings['output_dir'] = run_path
+                        pred_settings_path = os.path.join(n_pred_dir, run_nm, 'prediction_settings.json')
+                        dict_to_file(mydict=pred_settings, fname=pred_settings_path)
+                        command_flag_dict = {'settings_path': pred_settings_path}
+                        jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
+                            command_flag_dict=command_flag_dict, depending_jobs=depending_jobs)
 
-                learn_residuals = pred_settings['learn_residuals']
-                hidden_size = pred_settings['hidden_size']
+                pred_settings['gp_only'] = False
+                for rnn_exp in rnn_experiments:
+                    for key in rnn_exp:
+                        pred_settings[key] = rnn_exp[key] # hidden size, epoch, learn_residuals
 
-                # vanillaRNN
-                run_nm = 'vanillaRNN_residual{0}_hs{1}'.format(learn_residuals, hidden_size)
-                run_path = os.path.join(n_pred_dir, run_nm)
-                if not os.path.exists(run_path):
-                    mkdir_p(run_path)
-                    pred_settings['stack_hidden'] = False
-                    pred_settings['stack_output'] = False
-                    pred_settings['output_dir'] = run_path
-                    pred_settings_path = os.path.join(n_pred_dir, run_nm, 'prediction_settings.json')
-                    dict_to_file(mydict=pred_settings, fname=pred_settings_path)
-                    command_flag_dict = {'settings_path': pred_settings_path}
-                    jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
-                        command_flag_dict=command_flag_dict, depending_jobs=depending_jobs)
-                # train_chaosRNN_wrapper(**pred_settings)
+                    learn_residuals = pred_settings['learn_residuals']
+                    hidden_size = pred_settings['hidden_size']
 
-                # mechRNN
-                run_nm = 'mechRNN_residual{0}_hs{1}'.format(learn_residuals, hidden_size)
-                run_path = os.path.join(n_pred_dir, run_nm)
-                if not os.path.exists(run_path):
-                    mkdir_p(run_path)
-                    pred_settings['stack_hidden'] = True
-                    pred_settings['stack_output'] = True
-                    pred_settings['output_dir'] = run_path
-                    pred_settings_path = os.path.join(n_pred_dir, run_nm, 'prediction_settings.json')
-                    dict_to_file(mydict=pred_settings, fname=pred_settings_path)
-                    command_flag_dict = {'settings_path': pred_settings_path}
-                    jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
-                        command_flag_dict=command_flag_dict, depending_jobs=depending_jobs)
+                    # vanillaRNN
+                    run_nm = 'vanillaRNN_residual{0}_epsBadness{1}_hs{2}'.format(learn_residuals, eps_badness, hidden_size)
+                    run_path = os.path.join(n_pred_dir, run_nm)
+                    if not os.path.exists(run_path):
+                        mkdir_p(run_path)
+                        pred_settings['stack_hidden'] = False
+                        pred_settings['stack_output'] = False
+                        pred_settings['output_dir'] = run_path
+                        pred_settings_path = os.path.join(n_pred_dir, run_nm, 'prediction_settings.json')
+                        dict_to_file(mydict=pred_settings, fname=pred_settings_path)
+                        command_flag_dict = {'settings_path': pred_settings_path}
+                        jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
+                            command_flag_dict=command_flag_dict, depending_jobs=depending_jobs)
                     # train_chaosRNN_wrapper(**pred_settings)
+
+                    # mechRNN
+                    run_nm = 'mechRNN_residual{0}_epsBadness{1}_hs{2}'.format(learn_residuals, eps_badness, hidden_size)
+                    run_path = os.path.join(n_pred_dir, run_nm)
+                    if not os.path.exists(run_path):
+                        mkdir_p(run_path)
+                        pred_settings['stack_hidden'] = True
+                        pred_settings['stack_output'] = True
+                        pred_settings['output_dir'] = run_path
+                        pred_settings_path = os.path.join(n_pred_dir, run_nm, 'prediction_settings.json')
+                        dict_to_file(mydict=pred_settings, fname=pred_settings_path)
+                        command_flag_dict = {'settings_path': pred_settings_path}
+                        jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
+                            command_flag_dict=command_flag_dict, depending_jobs=depending_jobs)
+                        # train_chaosRNN_wrapper(**pred_settings)
 
     return
 
