@@ -25,7 +25,7 @@ ODE_PARAMETERS = {'b': [28]}
 
 DATAGEN_SETTINGS_TRAIN = {'odeclass': 'odelibrary.L63',
                         't_length': 100,
-                        't_synch': 0,
+                        't_synch': 0.1,
                         'delta_t': 0.1,
                         'ode_int_method': 'RK45',
                         'ode_int_atol': 1.5e-8,
@@ -61,7 +61,8 @@ PRED_SETTINGS = {'odeclass': 'odelibrary.L63',
 
 RNN_EXPERIMENT_LIST = dict_combiner({'hidden_size': [25, 50, 100],
                             'n_epochs': [1000],
-                            'learn_residuals': [True,False]
+                            'learn_residuals': [True,False],
+                            'lr': [0.05]
                             }
                         )
 

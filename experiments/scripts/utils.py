@@ -1591,6 +1591,7 @@ def train_chaosRNN(forward,
 			alpha_list = [1e-10],
 			ode_only=False):
 
+	pdb.set_trace()
 
 	model_params['smaller_delta_t'] = model_params['delta_t'] # later, need to remove smaller_delta_t as field
 

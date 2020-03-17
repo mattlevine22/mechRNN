@@ -66,6 +66,12 @@ class L96M:
         state_names += ['Y_' + str(j+1) + ',' + str(k+1) for j in range(_s.J)]
     return state_names
 
+  def plot_state_indices(_s):
+    if _s.slow_only:
+      return [0, 1, K-1, K-2] # return a 4 coupled slow variables
+    else:
+      return [0, K] # return 1st slow variable and 1st coupled fast variable
+
   def set_predictor(_s, predictor):
     _s.predictor = predictor
 
@@ -381,6 +387,8 @@ class L63:
   def get_state_names(_s):
     return ['x','y','z']
 
+  def plot_state_indices(_s):
+    return [0,1,2]
 
   def rhs(_s, S, t):
     ''' Full system RHS '''

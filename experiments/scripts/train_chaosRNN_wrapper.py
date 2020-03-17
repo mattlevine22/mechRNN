@@ -30,10 +30,12 @@ def main(settings_path=FLAGS.settings_path):
 				'Ysd': np.std(y_noisy_train)
 				}
 
-	pdb.set_trace()
+	setts['normz_info'] = normz_info
 
 	setts['y_clean_train'] = f_normalize_minmax(normz_info, y_clean_train)
 	setts['y_noisy_train'] = f_normalize_minmax(normz_info, y_noisy_train)
+	# setts['y_clean_trainSynch'] = f_normalize_minmax(normz_info, train_set['y_clean_synch'])
+	# setts['y_noisy_trainSynch'] = f_normalize_minmax(normz_info, train_set['y_noisy_synch'])
 
 	# read and normalize TEST data
 	y_clean_test = []
@@ -65,11 +67,13 @@ def main(settings_path=FLAGS.settings_path):
 		setts['forward'] = None
 
 	# pick a random initial condition
-	setts['model_params']['state_init'] = odeInst.get_inits()
-
+	# setts['model_params']['state_init'] = odeInst.get_inits()
 	# get state names
 	setts['model_params']['state_names'] = odeInst.get_state_names()
 
+	setts['model'] = odeInst.rhs
+
+	setts['plot_state_indices'] = odeInst.plot_state_indices()
 	# rnn_model_params = {'state_names': state_names,
 	# 					'state_init':state_init,
 	# 					'delta_t':delta_t,
