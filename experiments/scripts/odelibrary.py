@@ -375,7 +375,7 @@ class L63:
     xrand = xmin+(xmax-xmin)*np.random.random()
     yrand = ymin+(ymax-ymin)*np.random.random()
     zrand = zmin+(zmax-zmin)*np.random.random()
-    state_inits = [xrand, yrand, zrand]
+    state_inits = np.array([xrand, yrand, zrand])
     return state_inits
 
   def get_state_names(_s):
