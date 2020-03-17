@@ -52,7 +52,7 @@ def main(settings_path=FLAGS.settings_path):
 		setts['forward'] = None
 
 	# pick a random initial condition
-	setts['model_params']['state_init'] = locate('{0}.get_inits'.format(setts['odeclass']))(n=1)
+	setts['model_params']['state_init'] = locate('{0}.get_inits'.format(setts['odeclass']))()
 
 	# get state names
 	setts['model_params']['state_names'] = locate('{0}.get_state_names'.format(setts['odeclass']))()
