@@ -6,10 +6,11 @@ from pydoc import locate
 import pdb
 
 parser = argparse.ArgumentParser(description='mechRNN')
-parser.add_argument('--settings_path', type=str, default='datagen_settings.npz', help='pathname of numpy settings dictionary')
+parser.add_argument('--settings_path', type=str, default='datagen_settings.json', help='pathname of numpy settings dictionary')
+parser.add_argument('--output_path', type=str, default='default_dataset.npz', help='pathname of output data')
 FLAGS = parser.parse_args()
 
-def main(settings_path=FLAGS.settings_path):
+def main(settings_path=FLAGS.settings_path, output_path=FLAGS.output_path):
 	with open(settings_path) as f:
 	  setts = json.load(f)
 	# https://stackoverflow.com/questions/547829/how-to-dynamically-load-a-python-class
@@ -18,7 +19,7 @@ def main(settings_path=FLAGS.settings_path):
 	setts['ODE'] = my_class(**setts['param_dict'])
 	setts.pop('param_dict',None)
 	setts.pop('odeclass',None)
-	generate_data(**setts)
+	generate_data(output_path=output_path, **setts)
 
 if __name__ == '__main__':
 	main()
