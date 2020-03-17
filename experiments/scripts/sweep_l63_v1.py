@@ -182,7 +182,7 @@ def main(output_dir=OUTPUT_DIR,
                     gp_style = pred_settings['gp_style']
                     learn_residuals = pred_settings['learn_residuals']
                     learn_flow = pred_settings['learn_flow']
-                    if gp_stype==1 and not learn_residuals:
+                    if gp_style==1 and not learn_residuals:
                         run_nm = 'ModelFreeGPR_learnflow{0}_epsBadness{1}'.format(learn_flow, eps_badness)
                     else:
                         run_nm = 'hybridGPR{0}_residual{1}_learnflow{2}_epsBadness{3}'.format(gp_style, learn_residuals, learn_flow, eps_badness)
