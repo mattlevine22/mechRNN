@@ -30,6 +30,8 @@ def main(settings_path=FLAGS.settings_path):
 				'Ysd': np.std(y_noisy_train)
 				}
 
+	pdb.set_trace()
+
 	setts['y_clean_train'] = f_normalize_minmax(normz_info, y_clean_train)
 	setts['y_noisy_train'] = f_normalize_minmax(normz_info, y_noisy_train)
 
