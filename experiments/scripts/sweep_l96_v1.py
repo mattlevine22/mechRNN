@@ -175,7 +175,7 @@ def main(output_dir=OUTPUT_DIR,
 
         # generate a Test Data set
         testjob_ids = []
-        for n in n_testing_sets:
+        for n in range(n_testing_sets):
             datagen_settings_TEST['savedir'] = os.path.join(testdir,'dataset_{0}'.format(n))
 
             if os.path.exists(datagen_settings_TEST['savedir']):
@@ -190,7 +190,7 @@ def main(output_dir=OUTPUT_DIR,
             # generate_data(**datagen_settings_TEST)
 
         # generate a Train Data Set, then run fitting/prediction models
-        for n in n_training_sets:
+        for n in range(n_training_sets):
             n_pred_dir = os.path.join(experiment_dir,'Init{0}'.format(n)) # this is for the predictive model outputs
 
             #this is for training data
