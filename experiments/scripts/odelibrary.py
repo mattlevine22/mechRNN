@@ -1,7 +1,8 @@
 import numpy as np
 from matplotlib import pyplot
-import pdb
+from numba import jit
 
+import pdb
 # Correspondence with Dima via Whatsapp on Feb 24, 2020:
 # RK45 (explicit) for slow-system-only
 # RK45 (implicit) aka Radau for multi-scale-system
@@ -84,6 +85,7 @@ class L96M:
   def hit_value(_s, k, val):
     return lambda t, z: z[k] - val
 
+  @njit
   def rhs(_s, z, t):
     if _s.slow_only:
       foo_rhs = _s.slow(z, t)
@@ -390,6 +392,7 @@ class L63:
   def plot_state_indices(_s):
     return [0,1,2]
 
+  @njit
   def rhs(_s, S, t):
     ''' Full system RHS '''
     a = _s.a
