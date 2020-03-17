@@ -1,6 +1,6 @@
 import commands
 import os
-from utils import dict_combiner, mkdir_p
+from utils import dict_combiner, mkdir_p, dict_to_file
 
 # Adapted from https://vsoch.github.io/lessons/sherlock-jobs/
 # python ../scripts/l96_sandbox.py

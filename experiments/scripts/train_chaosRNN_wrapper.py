@@ -1,4 +1,5 @@
 import argparse
+import json
 from utils import train_chaosRNN, f_normalize_minmax
 from pydoc import locate
 
@@ -48,6 +49,9 @@ def main(settings_path=FLAGS.settings_path):
 
 	# pick a random initial condition
 	setts['model_params']['state_init'] = locate('{0}.get_inits'.format(setts['odeclass']))(n=1)
+
+	# get state names
+	setts['model_params']['state_names'] = locate('{0}.get_state_names'.format(setts['odeclass']))()
 
 	# rnn_model_params = {'state_names': state_names,
 	# 					'state_init':state_init,

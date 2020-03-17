@@ -1,7 +1,8 @@
 import commands
 import os
-from utils import dict_combiner, mkdir_p
+from utils import dict_combiner, mkdir_p, dict_to_file
 
+import pdb
 # Adapted from https://vsoch.github.io/lessons/sherlock-jobs/
 # python ../scripts/l96_sandbox.py
 # --savedir /groups/astuart/mlevine/writeup0/l96/F1_eps-7/Init0
@@ -124,6 +125,7 @@ def main(output_dir=OUTPUT_DIR,
     gp_experiments=GP_EXPERIMENT_LIST,
     eps_badness_list=EPS_BADNESS_LIST):
 
+    pdb.set_trace()
     # Make top level directories
     mkdir_p(output_dir)
 
