@@ -54,7 +54,7 @@ def dict_combiner(mydict):
 	return experiment_list
 
 
-def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='../my_jobs', depending_jobs=None):
+def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=None):
     # build sbatch job script and write to file
     job_directory = os.path.join(jobfile_dir,'.job')
     out_directory = os.path.join(jobfile_dir,'.out')
@@ -62,14 +62,14 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
     mkdir_p(out_directory)
 
 
-    job_file = os.path.join(job_directory,"{0}.job".format(nametag))
+    job_file = os.path.join(job_directory,"{0}.job".format(jobname))
 
     sbatch_str = ""
     sbatch_str += "#!/bin/bash\n"
     sbatch_str += "#SBATCH --account=astuart\n" # account name
-    sbatch_str += "#SBATCH --job-name=%s.job\n" % nametag
-    sbatch_str += "#SBATCH --output=%s.out\n" % os.path.join(out_directory,nametag)
-    sbatch_str += "#SBATCH --error=%s.err\n" % os.path.join(out_directory,nametag)
+    sbatch_str += "#SBATCH --job-name=%s.job\n" % jobname
+    sbatch_str += "#SBATCH --output=%s.out\n" % os.path.join(out_directory,jobname)
+    sbatch_str += "#SBATCH --error=%s.err\n" % os.path.join(out_directory,jobname)
     sbatch_str += "#SBATCH --time=48:00:00\n" # 48hr
     sbatch_str += "#SBATCH --mail-type=ALL\n"
     sbatch_str += "#SBATCH --mail-user=$USER@caltech.edu\n"

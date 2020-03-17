@@ -126,7 +126,7 @@ def main(output_dir=OUTPUT_DIR,
 
             command_flag_dict = {'settings_path': test_settings_path}
             jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
-                command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir)
+                command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir, jobname='testdatagen_{0}'.format(n))
             testjob_ids.append(jobnum)
             pred_settings['test_fname_list'].append(datagen_settings_TEST['savedir'])
             # generate_data(**datagen_settings_TEST)
@@ -140,7 +140,7 @@ def main(output_dir=OUTPUT_DIR,
             if not os.path.exists(datagen_settings_TRAIN['savedir']):
                 command_flag_dict = {'settings_path': train_settings_path}
                 jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
-                    command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir)
+                    command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir, jobname='traindatagen_{0}'.format(n))
                 # generate_data(**datagen_settings_TRAIN)
                 depending_jobs = testjob_ids + [jobnum]
             else:
@@ -169,7 +169,7 @@ def main(output_dir=OUTPUT_DIR,
                     command_flag_dict = {'settings_path': pred_settings_path}
                     jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                        jobfile_dir=experiment_dir)
+                        jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_name, n))
 
                 pred_settings['ode_only'] = False
                 pred_settings['gp_only'] = True
@@ -193,7 +193,7 @@ def main(output_dir=OUTPUT_DIR,
                         command_flag_dict = {'settings_path': pred_settings_path}
                         jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                             command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                            jobfile_dir=experiment_dir)
+                            jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_name, n))
 
                 pred_settings['gp_only'] = False
                 for rnn_exp in rnn_experiments:
@@ -216,7 +216,7 @@ def main(output_dir=OUTPUT_DIR,
                         command_flag_dict = {'settings_path': pred_settings_path}
                         jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                             command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                            jobfile_dir=experiment_dir)
+                            jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_name, n))
                     # train_chaosRNN_wrapper(**pred_settings)
 
                     # mechRNN
@@ -232,7 +232,7 @@ def main(output_dir=OUTPUT_DIR,
                         command_flag_dict = {'settings_path': pred_settings_path}
                         jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                             command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                            jobfile_dir=experiment_dir)
+                            jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_name, n))
                         # train_chaosRNN_wrapper(**pred_settings)
 
     return
