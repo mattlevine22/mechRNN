@@ -51,7 +51,8 @@ def main(settings_path=FLAGS.settings_path):
 	setts['y_noisy_testSynch'] = np.concatenate(y_noisy_testSynch)
 
 	setts.pop('test_fname_list',None) #now remove that field
-
+	setts.pop('train_fname',None) #now remove that field
+	setts.pop('odeclass',None) #now remove that field
 	# choose which RNN forward function to use
 	try:
 		setts['forward'] = locate(setts['forward'])
