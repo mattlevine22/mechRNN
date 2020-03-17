@@ -81,6 +81,7 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
 
     with open(job_file, 'w') as fh:
         fh.writelines(sbatch_str)
+        print(sbatch_str)
 
     # run the sbatch job script
     if depending_jobs:

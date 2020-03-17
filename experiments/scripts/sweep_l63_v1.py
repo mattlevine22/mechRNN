@@ -104,13 +104,13 @@ def main(output_dir=OUTPUT_DIR,
         traindir = os.path.join(experiment_dir,'TRAIN_DATA')
         mkdir_p(traindir)
         datagen_settings_TRAIN['param_dict'] = datagen_param_dict
-        train_settings_path = os.path.join(traindir,'settings')
+        train_settings_path = os.path.join(traindir,'settings.json')
         dict_to_file(mydict=datagen_settings_TRAIN, fname=train_settings_path)
 
         testdir = os.path.join(experiment_dir,'TEST_DATA')
         mkdir_p(testdir)
         datagen_settings_TEST['param_dict'] = datagen_param_dict
-        test_settings_path = os.path.join(testdir,'settings')
+        test_settings_path = os.path.join(testdir,'settings.json')
         dict_to_file(mydict=datagen_settings_TEST, fname=test_settings_path)
 
         # begin to prepare prediction settings
