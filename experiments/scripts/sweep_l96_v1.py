@@ -13,7 +13,7 @@ CMD_generate_data_wrapper = 'python $HOME/mechRNN/experiments/scripts/generate_d
 CMD_run_fits = 'python $HOME/mechRNN/experiments/scripts/train_chaosRNN_wrapper.py'
 
 N_TRAINING_SETS = 2
-N_TESTING_SETS = 2
+N_TESTING_SETS = 3
 
 OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/l96_TRIALS'
 
@@ -32,7 +32,7 @@ ODE_PARAMETERS = {'F': [1,10],
 
 
 DATAGEN_SETTINGS_TRAIN = {'odeclass': 'odelibrary.L96M',
-                        't_length': 5,
+                        't_length': 20,
                         't_synch': 0,
                         'delta_t': 0.01,
                         'ode_int_method': 'Radau',
@@ -44,7 +44,7 @@ DATAGEN_SETTINGS_TRAIN = {'odeclass': 'odelibrary.L96M',
                         }
 
 DATAGEN_SETTINGS_TEST = {'odeclass': 'odelibrary.L96M',
-                        't_length': 5,
+                        't_length': 20,
                         't_synch': 5,
                         'delta_t': 0.01,
                         'ode_int_method': 'Radau',
