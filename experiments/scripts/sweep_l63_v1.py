@@ -123,19 +123,17 @@ def main(output_dir=OUTPUT_DIR,
         testjob_ids = []
         pdb.set_trace()
         for n in range(n_testing_sets):
-            n_testdir = os.path.join(testdir,'dataset_{0}'.format(n))
+            n_testpath = os.path.join(testdir,'dataset_{0}'.format(n))
 
-            if os.path.exists(n_testdir):
-                print(n_testdir, 'already exists, so skipping.')
+            if os.path.exists(n_testpath):
+                print(n_testpath, 'already exists, so skipping.')
                 continue
-            else:
-                mkdir_p(n_testdir)
 
-            command_flag_dict = {'settings_path': test_settings_path, 'output_path': n_testdir}
+            command_flag_dict = {'settings_path': test_settings_path, 'output_path': n_testpath}
             jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
                 command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir, jobname='testdatagen_{0}'.format(n))
             testjob_ids.append(jobnum)
-            pred_settings['test_fname_list'].append(n_testdir)
+            pred_settings['test_fname_list'].append(n_testpath)
             # generate_data(**datagen_settings_TEST)
 
         # generate a Train Data Set, then run fitting/prediction models
@@ -144,16 +142,16 @@ def main(output_dir=OUTPUT_DIR,
             mkdir_p(n_pred_dir)
 
             #this is for training data
-            n_traindir = os.path.join(traindir,'dataset_{0}'.format(n))
-            if not os.path.exists(n_traindir):
-                command_flag_dict = {'settings_path': train_settings_path, 'output_path': n_traindir}
+            n_trainpath = os.path.join(traindir,'dataset_{0}'.format(n))
+            if not os.path.exists(n_trainpath):
+                command_flag_dict = {'settings_path': train_settings_path, 'output_path': n_trainpath}
                 jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
                     command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir, jobname='traindatagen_{0}'.format(n))
                 # generate_data(**datagen_settings_TRAIN)
                 depending_jobs = testjob_ids + [jobnum]
             else:
                 depending_jobs = None
-                print(n_traindir, 'already exists, so skipping.')
+                print(n_trainpath, 'already exists, so skipping.')
 
             for eps_badness in np.random.permutation(eps_badness_list):
                 # create prediction-step settings
@@ -161,7 +159,7 @@ def main(output_dir=OUTPUT_DIR,
                 pred_settings['param_dict'] = {param_nm: exp_dict[param_nm]*(1+eps_badness) for param_nm in exp_dict}
 
                 # submit job to Train and evaluate model
-                pred_settings['train_fname'] = n_traindir # each prediction run uses a single training set
+                pred_settings['train_fname'] = n_trainpath # each prediction run uses a single training set
 
                 # ODE only
                 run_nm = 'pureODE_epsBadness{0}'.format(eps_badness)
