@@ -3,6 +3,8 @@ import json
 from utils import generate_data
 from pydoc import locate
 
+import pdb
+
 parser = argparse.ArgumentParser(description='mechRNN')
 parser.add_argument('--settings_path', type=str, default='datagen_settings.npz', help='pathname of numpy settings dictionary')
 FLAGS = parser.parse_args()
