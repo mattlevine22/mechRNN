@@ -7,7 +7,6 @@
 # based off of code from https://www.cpuheater.com/deep-learning/introduction-to-recurrent-neural-networks-in-pytorch/
 import os
 import itertools
-import commands
 from time import time
 from datetime import timedelta
 import math
