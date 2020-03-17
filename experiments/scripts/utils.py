@@ -91,6 +91,7 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
         cmd = "sbatch %s" % job_file
 
     status, jobnum = commands.getstatusoutput(cmd)
+    jobnum = jobnum.split(' ')[-1] # sample jobnum output is 'Submitted batch job 9368990'
 
     return status, jobnum
 
