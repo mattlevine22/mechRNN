@@ -6,6 +6,7 @@
 
 # based off of code from https://www.cpuheater.com/deep-learning/introduction-to-recurrent-neural-networks-in-pytorch/
 import os
+import subprocess
 import itertools
 from time import time
 from datetime import timedelta
@@ -82,19 +83,16 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
         fh.writelines(sbatch_str)
 
     # run the sbatch job script
+    cmd = ['sbatch']
     if depending_jobs:
         depstr = ','.join(depending_jobs) #depending_jobs must be list of strings
-        cmd = "sbatch --dependency=after:{0} {1}".format(depstr, job_file)
+        cmd.append('--dependency=after:{0}'.format(depstr))
     else:
-        cmd = "sbatch %s" % job_file
+    cmd.append(job_file)
 
-    pdb.set_trace()
-    proc = subprocess.run(cmd, check=True, capture_output=True)
-    jobnum = proc.stdout.split(' ')[-1]
-    status = proc.return_code
-
-    # status, jobnum = commands.getstatusoutput(cmd)
-    # jobnum = jobnum.split(' ')[-1] # sample jobnum output is 'Submitted batch job 9368990'
+    proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    status = proc.returncode
+    jobnum = proc.stdout.strip().split(' ')[-1]
 
     return status, jobnum
 
