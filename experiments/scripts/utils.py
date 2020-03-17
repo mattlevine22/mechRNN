@@ -1583,7 +1583,7 @@ def train_chaosRNN(forward,
 			max_plot=None, n_param_saves=None,
 			err_thresh=0.4, plot_state_indices=None,
 			precompute_model=True, kde_func=kde_scipy,
-			compute_kl=False, gp_only=False, gp_style=2, gp_resid=True,
+			compute_kl=False, gp_only=False, gp_style=2, learn_residuals=False,
 			learn_flow = False,
 			save_iterEpochs=False,
 			model_params_TRUE=None,
@@ -1614,9 +1614,7 @@ def train_chaosRNN(forward,
 		model_params_TRUE = model_params.copy()
 		model_params_TRUE['ode_params'] = LORENZ_DEFAULT_PARAMS
 
-	# allow for backwards compatibility (ie if this setting is missing)
-	if 'learn_residuals_rnn' not in model_params:
-		model_params['learn_residuals_rnn'] = False
+	model_params['learn_residuals_rnn'] = learn_residuals
 
 	# keep_param_history = np.log10( n_epochs * y_clean_train.shape[0] * (hidden_size**2) ) < mem_thresh_order
 	# if not keep_param_history:
@@ -1728,7 +1726,7 @@ def train_chaosRNN(forward,
 					gp_only=gp_only,
 					GP_grid = GP_grid,
 					alpha = alpha,
-					do_resid = gp_resid,
+					do_resid = learn_residuals,
 					learn_flow = learn_flow)
 		# plot GP comparisons
 		if GP_grid:
