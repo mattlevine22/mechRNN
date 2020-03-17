@@ -15,7 +15,7 @@ CMD_generate_data_wrapper = 'python $HOME/mechRNN/experiments/scripts/generate_d
 CMD_run_fits = 'python $HOME/mechRNN/experiments/scripts/train_chaosRNN_wrapper.py'
 
 N_TRAINING_SETS = 2
-N_TESTING_SETS = 3
+N_TESTING_SETS = 4
 
 OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/l63_TRIALS'
 

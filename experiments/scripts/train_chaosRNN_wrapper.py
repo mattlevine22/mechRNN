@@ -45,11 +45,10 @@ def main(settings_path=FLAGS.settings_path):
 		y_clean_testSynch.append(f_normalize_minmax(normz_info, test_set['y_clean_synch']))
 		y_noisy_testSynch.append(f_normalize_minmax(normz_info, test_set['y_noisy_synch']))
 
-	setts['y_clean_test'] = np.concatenate(y_clean_test)
-	setts['y_noisy_test'] = np.concatenate(y_noisy_test)
-	setts['y_clean_testSynch'] = np.concatenate(y_clean_testSynch)
-	setts['y_noisy_testSynch'] = np.concatenate(y_noisy_testSynch)
-	pdb.set_trace()
+	setts['y_clean_test'] = np.stack(y_clean_test)
+	setts['y_noisy_test'] = np.stack(y_noisy_test)
+	setts['y_clean_testSynch'] = np.stack(y_clean_testSynch)
+	setts['y_noisy_testSynch'] = np.stack(y_noisy_testSynch)
 
 	setts.pop('test_fname_list',None) #now remove that field
 	setts.pop('train_fname',None) #now remove that field
