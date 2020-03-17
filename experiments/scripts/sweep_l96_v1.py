@@ -16,7 +16,7 @@ CMD_run_fits = 'python $HOME/mechRNN/experiments/scripts/train_chaosRNN_wrapper.
 N_TRAINING_SETS = 2
 N_TESTING_SETS = 2
 
-OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/l96'
+OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/l96_TRIALS'
 
 
 ODE_PARAMETERS = {'F': [1,10],
