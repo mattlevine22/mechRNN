@@ -17,7 +17,7 @@ CMD_run_fits = 'python3 $HOME/mechRNN/experiments/scripts/train_chaosRNN_wrapper
 N_TRAINING_SETS = 2
 N_TESTING_SETS = 4
 
-OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/numba_l63_trials_v2'
+OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/numba_l63_trials'
 
 EPS_BADNESS_LIST = [0, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0]
 
