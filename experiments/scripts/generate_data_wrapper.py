@@ -19,7 +19,6 @@ def main(settings_path=FLAGS.settings_path):
 	setts.pop('param_dict',None)
 	setts.pop('odeclass',None)
 	generate_data(**setts)
-	return
 
 if __name__ == '__main__':
 	main()

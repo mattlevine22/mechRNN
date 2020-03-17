@@ -123,11 +123,14 @@ def main(output_dir=OUTPUT_DIR,
         testjob_ids = []
         pdb.set_trace()
         for n in range(n_testing_sets):
-            datagen_settings_TEST['output_path'] = os.path.join(testdir,'dataset_{0}'.format(n))
+            n_testdir = os.path.join(testdir,'dataset_{0}'.format(n))
 
-            if os.path.exists(datagen_settings_TEST['output_path']):
+            if os.path.exists(n_testdir):
                 print(datagen_settings_TEST['output_path'], 'already exists, so skipping.')
                 continue
+            else:
+                mkdir_p(n_testdir)
+                datagen_settings_TEST['output_path'] = n_testdir
 
             command_flag_dict = {'settings_path': test_settings_path}
             jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
@@ -139,6 +142,7 @@ def main(output_dir=OUTPUT_DIR,
         # generate a Train Data Set, then run fitting/prediction models
         for n in range(n_training_sets):
             n_pred_dir = os.path.join(experiment_dir,'Init{0}'.format(n)) # this is for the predictive model outputs
+            mkdir_p(n_pred_dir)
 
             #this is for training data
             datagen_settings_TRAIN['output_path'] = os.path.join(traindir,'dataset_{0}'.format(n))
