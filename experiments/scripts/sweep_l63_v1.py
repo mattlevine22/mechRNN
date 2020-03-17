@@ -60,7 +60,7 @@ PRED_SETTINGS = {'odeclass': 'odelibrary.L63',
                 }
 
 RNN_EXPERIMENT_LIST = dict_combiner({'hidden_size': [25, 50, 100],
-                            'epoch': [1000],
+                            'n_epochs': [1000],
                             'learn_residuals': [True,False]
                             }
                         )
