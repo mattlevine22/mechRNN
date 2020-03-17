@@ -115,13 +115,13 @@ def main(output_dir=OUTPUT_DIR,
         traindir = os.path.join(experiment_dir,'TRAIN_DATA')
         mkdir_p(traindir)
         datagen_settings_TRAIN['param_dict'] = datagen_param_dict
-        train_settings_path = os.path.join(traindir,'settings')
+        train_settings_path = os.path.join(traindir,'settings.json')
         dict_to_file(mydict=datagen_settings_TRAIN, fname=train_settings_path)
 
         testdir = os.path.join(experiment_dir,'TEST_DATA')
         mkdir_p(testdir)
         datagen_settings_TEST['param_dict'] = datagen_param_dict
-        test_settings_path = os.path.join(testdir,'settings')
+        test_settings_path = os.path.join(testdir,'settings.json')
         dict_to_file(mydict=datagen_settings_TEST, fname=test_settings_path)
 
         # create prediction-step settings
@@ -139,14 +139,13 @@ def main(output_dir=OUTPUT_DIR,
                 continue
             else:
                 mkdir_p(n_testdir)
-                datagen_settings_TEST['output_path'] = n_testdir
 
-            command_flag_dict = {'settings_path': test_settings_path}
+            command_flag_dict = {'settings_path': test_settings_path, 'output_path': n_testdir}
             jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
                 command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir,
                 jobname='testdatagen_{0}'.format(n))
             testjob_ids.append(jobnum)
-            pred_settings['test_fname_list'].append(datagen_settings_TEST['output_path'])
+            pred_settings['test_fname_list'].append(n_testdir)
             # generate_data(**datagen_settings_TEST)
 
         # generate a Train Data Set, then run fitting/prediction models
@@ -155,9 +154,9 @@ def main(output_dir=OUTPUT_DIR,
             mkdir_p(n_pred_dir)
 
             #this is for training data
-            datagen_settings_TRAIN['output_path'] = os.path.join(traindir,'dataset_{0}'.format(n))
-            if not os.path.exists(datagen_settings_TRAIN['output_path']):
-                command_flag_dict = {'settings_path': train_settings_path}
+            n_traindir = os.path.join(traindir,'dataset_{0}'.format(n))
+            if not os.path.exists(n_traindir):
+                command_flag_dict = {'settings_path': train_settings_path, 'output_path': n_traindir}
                 jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
                     command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir,
                     jobname='traindatagen_{0}'.format(n))
@@ -165,10 +164,10 @@ def main(output_dir=OUTPUT_DIR,
                 depending_jobs = testjob_ids + [jobnum]
             else:
                 depending_jobs = None
-                print(datagen_settings_TRAIN['output_path'], 'already exists, so skipping.')
+                print(n_traindir, 'already exists, so skipping.')
 
             # submit job to Train and evaluate model
-            pred_settings['train_fname'] = datagen_settings_TRAIN['output_path'] # each prediction run uses a single training set
+            pred_settings['train_fname'] = n_traindir # each prediction run uses a single training set
 
             # GPR w/out residuals (learn_flow=False) gp_style 2 and 3
             pred_settings['plot_state_indices'] = plot_state_indices_SLOW
