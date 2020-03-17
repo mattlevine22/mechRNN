@@ -170,7 +170,6 @@ def main(output_dir=OUTPUT_DIR,
             pred_settings['train_fname'] = n_trainpath # each prediction run uses a single training set
 
             # GPR w/out residuals (learn_flow=False) gp_style 2 and 3
-            pred_settings['plot_state_indices'] = plot_state_indices_SLOW
 
             # ODE only
             run_nm = 'pureODE'
