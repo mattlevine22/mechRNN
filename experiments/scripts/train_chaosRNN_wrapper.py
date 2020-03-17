@@ -46,7 +46,10 @@ def main(settings_path=FLAGS.settings_path):
 	setts['y_noisy_testSynch'] = np.concatenate(y_noisy_testSynch)
 
 	# choose which RNN forward function to use
-	setts['forward'] = locate(setts['forward'])
+	try:
+		setts['forward'] = locate(setts['forward'])
+	except:
+		setts['forward'] = None
 
 	# pick a random initial condition
 	setts['model_params']['state_init'] = locate('{0}.get_inits'.format(setts['odeclass']))(n=1)

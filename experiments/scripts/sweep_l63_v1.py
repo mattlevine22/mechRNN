@@ -210,6 +210,7 @@ def main(output_dir=OUTPUT_DIR,
                     run_path = os.path.join(n_pred_dir, run_nm)
                     if not os.path.exists(run_path):
                         mkdir_p(run_path)
+                        pred_settings['forward'] = 'utils.forward_chaos_pureML'
                         pred_settings['stack_hidden'] = False
                         pred_settings['stack_output'] = False
                         pred_settings['output_dir'] = run_path
@@ -226,6 +227,7 @@ def main(output_dir=OUTPUT_DIR,
                     run_path = os.path.join(n_pred_dir, run_nm)
                     if not os.path.exists(run_path):
                         mkdir_p(run_path)
+                        pred_settings['forward'] = 'utils.forward_chaos_hybrid_full'
                         pred_settings['stack_hidden'] = True
                         pred_settings['stack_output'] = True
                         pred_settings['output_dir'] = run_path
