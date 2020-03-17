@@ -1592,6 +1592,8 @@ def train_chaosRNN(forward,
 			ode_only=False):
 
 
+	model_params['smaller_delta_t'] = model_params['delta_t'] # later, need to remove smaller_delta_t as field
+
 	t0 = time()
 
 	if torch.cuda.is_available():
@@ -1615,6 +1617,7 @@ def train_chaosRNN(forward,
 		model_params_TRUE['ode_params'] = LORENZ_DEFAULT_PARAMS
 
 	model_params['learn_residuals_rnn'] = learn_residuals
+
 
 	# keep_param_history = np.log10( n_epochs * y_clean_train.shape[0] * (hidden_size**2) ) < mem_thresh_order
 	# if not keep_param_history:
