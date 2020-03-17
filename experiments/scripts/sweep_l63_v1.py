@@ -113,6 +113,10 @@ def main(output_dir=OUTPUT_DIR,
         test_settings_path = os.path.join(testdir,'settings')
         dict_to_file(mydict=datagen_settings_TEST, fname=test_settings_path)
 
+        # begin to prepare prediction settings
+        pred_settings['test_fname_list'] = []
+        pred_settings['train_fname'] = None
+
 
         # generate a Test Data set
         testjob_ids = []
@@ -151,8 +155,6 @@ def main(output_dir=OUTPUT_DIR,
                 # create prediction-step settings
 
                 pred_settings['param_dict'] = {param_nm: exp_dict[param_nm]*(1+eps_badness) for param_nm in exp_dict}
-                pred_settings['test_fname_list'] = []
-                pred_settings['train_fname'] = None
 
                 # submit job to Train and evaluate model
                 pred_settings['train_fname'] = datagen_settings_TRAIN['savedir'] # each prediction run uses a single training set
