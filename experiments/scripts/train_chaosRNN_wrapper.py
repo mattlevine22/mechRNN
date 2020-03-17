@@ -16,7 +16,7 @@ def main(settings_path=FLAGS.settings_path):
 		setts = json.load(f)
 
 	# read in odeInstance
-	odeInst = locate(setts['odeclass'])()
+	odeInst = locate(setts['odeclass'])(**setts['param_dict'])
 
 	# read TRAIN data
 	train_set = np.load(setts['train_fname'])
@@ -53,6 +53,9 @@ def main(settings_path=FLAGS.settings_path):
 	setts.pop('test_fname_list',None) #now remove that field
 	setts.pop('train_fname',None) #now remove that field
 	setts.pop('odeclass',None) #now remove that field
+	setts.pop('param_dict',None) #now remove that field
+
+
 	# choose which RNN forward function to use
 	try:
 		setts['forward'] = locate(setts['forward'])
