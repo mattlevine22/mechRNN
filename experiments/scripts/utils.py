@@ -298,7 +298,6 @@ def f_unNormalize_minmax(norm_dict,y_norm):
 
 
 def generate_data(
-		num_data_sets=1,
 		t_length=100,
 		t_synch=10,
 		delta_t=0.1,
@@ -319,26 +318,15 @@ def generate_data(
 	ntsynch = int(t_synch/delta_t)
 
 	# Generate N data sets
-	for n in range(num_data_sets):
-		y0 = ODE.get_inits().squeeze()
-		sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=np.array(y0).T, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
-		y_clean = sol.y.T
-		y_noisy = y_clean + noise_frac*(np.max(y_clean,0) - np.min(y_clean,0))*np.random.randn(len(y_clean),y_clean.shape[1])
+	y0 = ODE.get_inits().squeeze()
+	sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=np.array(y0).T, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
+	y_clean = sol.y.T
+	y_noisy = y_clean + noise_frac*(np.max(y_clean,0) - np.min(y_clean,0))*np.random.randn(len(y_clean),y_clean.shape[1])
 
-		if n==0:
-			y_clean_vec = np.zeros((num_data_sets,y_clean.shape[0]-ntsynch,y_clean.shape[1]))
-			y_noisy_vec = np.zeros((num_data_sets,y_noisy.shape[0]-ntsynch,y_noisy.shape[1]))
-			y_clean_synch_vec = np.zeros((num_data_sets,ntsynch,y_clean.shape[1]))
-			y_noisy_synch_vec = np.zeros((num_data_sets,ntsynch,y_noisy.shape[1]))
-		y_clean_vec[n,:,:] = y_clean[ntsynch:,:]
-		y_noisy_vec[n,:,:] = y_noisy[ntsynch:,:]
-		y_clean_synch_vec[n,:,:] = y_clean[:ntsynch,:]
-		y_noisy_synch_vec[n,:,:] = y_noisy[:ntsynch,:]
-
-	output_dict = {'y_clean': y_clean_vec,
-					'y_noisy': y_noisy_vec,
-					'y_clean_synch': y_clean_synch_vec,
-					'y_noisy_synch': y_noisy_synch_vec
+	output_dict = {'y_clean': y_clean[ntsynch:,:],
+					'y_noisy': y_noisy[ntsynch:,:],
+					'y_clean_synch': y_clean[:ntsynch,:],
+					'y_noisy_synch': y_noisy[:ntsynch,:]
 					}
 
 	np.savez(file=output_path, **output_dict)
