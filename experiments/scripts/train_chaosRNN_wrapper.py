@@ -15,6 +15,9 @@ def main(settings_path=FLAGS.settings_path):
 	with open(settings_path) as f:
 		setts = json.load(f)
 
+	# read in odeInstance
+	odeInst = locate(setts['odeclass'])()
+
 	# read TRAIN data
 	train_set = np.load(setts['train_fname'])
 	y_clean_train = train_set['y_clean']
@@ -54,11 +57,10 @@ def main(settings_path=FLAGS.settings_path):
 		setts['forward'] = None
 
 	# pick a random initial condition
-	pdb.set_trace()
-	setts['model_params']['state_init'] = locate('{0}.get_inits'.format(setts['odeclass']))()
+	setts['model_params']['state_init'] = odeInst.get_inits()
 
 	# get state names
-	setts['model_params']['state_names'] = locate('{0}.get_state_names'.format(setts['odeclass']))()
+	setts['model_params']['state_names'] = odeInst.get_state_names()
 
 	# rnn_model_params = {'state_names': state_names,
 	# 					'state_init':state_init,
