@@ -21,7 +21,7 @@ class L96M:
   """
 
   def __init__(_s,
-      K = 9, J = 8, hx = -0.8, hy = 1, F = 10, eps = 2**(-7), k0 = 0):
+      K = 9, J = 8, hx = -0.8, hy = 1, F = 10, eps = 2**(-7), k0 = 0, slow_only=False):
     '''
     Initialize an instance: setting parameters and xkstar
     '''
@@ -30,6 +30,7 @@ class L96M:
     if hx.size != K:
       raise ValueError("'hx' must be a 1D-array of size 'K'")
     _s.predictor = None
+    _s.slow_only = slow_only
     _s.K = K
     _s.J = J
     _s.hx = hx
@@ -58,6 +59,13 @@ class L96M:
         z0[i, _s.K + k_*_s.J : _s.K + (k_+1)*_s.J] = z0[i, k_]
     return z0
 
+  def get_state_names(_s):
+    state_names = ['X_'+ str(k+1) for k in range(_s.K)]
+    if not _s.slow_only:
+      for k in range(_s.K):
+        state_names += ['Y_' + str(j+1) + ',' + str(k+1) for j in range(_s.J)]
+    return state_names
+
   def set_predictor(_s, predictor):
     _s.predictor = predictor
 
@@ -69,6 +77,13 @@ class L96M:
 
   def hit_value(_s, k, val):
     return lambda t, z: z[k] - val
+
+  def rhs(_s, z, t):
+    if _s.slow_only:
+      foo_rhs = _s.slow(z, t)
+    else:
+      foo_rhs = _s.full(z, t)
+    return foo_rhs
 
   def full(_s, z, t):
     ''' Full system RHS '''
@@ -363,19 +378,23 @@ class L63:
     state_inits = [xrand, yrand, zrand]
     return state_inits
 
-  def full(_s, S, t):
+  def get_state_names(_s):
+    return ['x','y','z']
+
+
+  def rhs(_s, S, t):
     ''' Full system RHS '''
     a = _s.a
     b = _s.b
     c = _s.c
     (x,y,z) = S
 
-    rhs = np.empty(3)
-    rhs[0] = -a*x + a*y
-    rhs[1] = b*x - y - x*z
-    rhs[2] = -c*z + x*y
+    foo_rhs = np.empty(3)
+    foo_rhs[0] = -a*x + a*y
+    foo_rhs[1] = b*x - y - x*z
+    foo_rhs[2] = -c*z + x*y
 
-    return rhs
+    return foo_rhs
 
 ################################################################################
 # end of L63 ##################################################################

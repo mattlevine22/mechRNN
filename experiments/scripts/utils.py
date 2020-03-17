@@ -6,6 +6,7 @@
 
 # based off of code from https://www.cpuheater.com/deep-learning/introduction-to-recurrent-neural-networks-in-pytorch/
 import os
+import itertools
 from time import time
 from datetime import timedelta
 import math
@@ -38,6 +39,15 @@ from odelibrary import *
 
 LORENZ_DEFAULT_PARAMS = (10, 28, 8/3)
 
+def mkdir_p(dir):
+    '''make a directory (dir) if it doesn't exist'''
+    if not os.path.exists(dir):
+        os.mkdir(dir)
+
+def dict_combiner(mydict):
+	keys, values = zip(*mydict.items())
+	experiment_list = [dict(zip(keys, v)) for v in itertools.product(*values)]
+	return experiment_list
 
 def getval(x):
 	try:
@@ -45,7 +55,7 @@ def getval(x):
 	except:
 		return None
 
-def dict_to_file(mydict, fname)
+def dict_to_file(mydict, fname):
 	with open(fname, 'w') as f:
 		json.dump(mydict, f)
 	return
@@ -246,8 +256,7 @@ def generate_data(
 		t_length=100,
 		t_synch=10,
 		delta_t=0.1,
-		rhs=L63().full,
-		f_get_inits=L63().get_inits,
+		ODE=L63(),
 		noise_frac=0,
 		ode_int_method='RK45',
 		ode_int_atol=1.5e-8,
@@ -264,8 +273,8 @@ def generate_data(
 
 	# Generate N data sets
 	for n in range(num_data_sets):
-		y0 = f_get_inits(n=1).squeeze()
-		sol = solve_ivp(fun=lambda t, y: rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=np.array(y0).T, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
+		y0 = ODE.get_inits(n=1).squeeze()
+		sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=np.array(y0).T, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
 		y_clean = sol.y.T
 		y_noisy = y_clean + noise_frac*(np.max(y_clean,0) - np.min(y_clean,0))*np.random.randn(len(y_clean),y_clean.shape[1])
 
@@ -279,10 +288,10 @@ def generate_data(
 		y_clean_synch_vec[n,:,:] = y_clean[:ntsynch,:]
 		y_noisy_synch_vec[n,:,:] = y_noisy[:ntsynch,:]
 
-	output_dict = {'y_clean_vec': y_clean_vec,
-					'y_noisy_vec': y_noisy_vec,
-					'y_clean_synch_vec': y_clean_synch_vec,
-					'y_noisy_synch_vec': y_noisy_synch_vec
+	output_dict = {'y_clean': y_clean_vec,
+					'y_noisy': y_noisy_vec,
+					'y_clean_synch': y_clean_synch_vec,
+					'y_noisy_synch': y_noisy_synch_vec
 					}
 
 	np.savez(output_path, **output_dict)
@@ -1544,7 +1553,7 @@ def train_chaosRNN(forward,
 			save_iterEpochs=False,
 			model_params_TRUE=None,
 			GP_grid = False,
-			alpha_list = [1e-10, 1e-8, 1e-6, 1e-4, 1e-2],
+			alpha_list = [1e-10],
 			ode_only=False):
 
 
