@@ -87,7 +87,7 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
     if depending_jobs:
         depstr = ','.join(depending_jobs) #depending_jobs must be list of strings
         cmd.append('--dependency=after:{0}'.format(depstr))
-    else:
+
     cmd.append(job_file)
 
     proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
