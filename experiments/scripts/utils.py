@@ -307,6 +307,7 @@ def generate_data(
 		ode_int_method='RK45',
 		ode_int_atol=1.5e-8,
 		ode_int_rtol=1.5e-8,
+		ode_int_max_step=1.5e-3,
 		rng_seed=None,
 		output_path='default_data'):
 	'''To generate training data, set t_synch=0. For testing data, set t_synch>0.'''

@@ -15,9 +15,9 @@ def main(settings_path=FLAGS.settings_path):
 	# https://stackoverflow.com/questions/547829/how-to-dynamically-load-a-python-class
 	pdb.set_trace()
 	my_class = locate(setts['odeclass']) #e.g. 'odelibrary.L96M'
-	my_class = my_class(**setts['param_dict'])
 	setts['ODE'] = my_class(**setts['param_dict'])
-	# setts['f_get_inits'] = getattr(my_class, 'get_inits')
+	setts.pop('param_dict',None)
+	setts.pop('odeclass',None)
 	generate_data(**setts)
 	return
 
