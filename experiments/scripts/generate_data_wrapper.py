@@ -14,7 +14,6 @@ def main(settings_path=FLAGS.settings_path, output_path=FLAGS.output_path):
 	with open(settings_path) as f:
 	  setts = json.load(f)
 	# https://stackoverflow.com/questions/547829/how-to-dynamically-load-a-python-class
-	pdb.set_trace()
 	my_class = locate(setts['odeclass']) #e.g. 'odelibrary.L96M'
 	setts['ODE'] = my_class(**setts['param_dict'])
 	setts.pop('param_dict',None)
