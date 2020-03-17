@@ -49,6 +49,7 @@ def main(settings_path=FLAGS.settings_path):
 	setts['y_noisy_test'] = np.concatenate(y_noisy_test)
 	setts['y_clean_testSynch'] = np.concatenate(y_clean_testSynch)
 	setts['y_noisy_testSynch'] = np.concatenate(y_noisy_testSynch)
+	pdb.set_trace()
 
 	setts.pop('test_fname_list',None) #now remove that field
 	setts.pop('train_fname',None) #now remove that field
