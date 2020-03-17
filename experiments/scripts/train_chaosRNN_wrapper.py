@@ -35,10 +35,10 @@ def main(settings_path=FLAGS.settings_path):
 	y_noisy_testSynch = []
 	for fnm in setts['test_fname_list']:
 		test_set = np.load(fnm)
-		y_clean_test+= f_normalize_minmax(normz_info, test_set['y_clean'])
-		y_noisy_test+= f_normalize_minmax(normz_info, test_set['y_noisy'])
-		y_clean_testSynch+= f_normalize_minmax(normz_info, test_set['y_clean_synch'])
-		y_noisy_testSynch+= f_normalize_minmax(normz_info, test_set['y_noisy_synch'])
+		y_clean_test.append(f_normalize_minmax(normz_info, test_set['y_clean']))
+		y_noisy_test.append(f_normalize_minmax(normz_info, test_set['y_noisy']))
+		y_clean_testSynch.append(f_normalize_minmax(normz_info, test_set['y_clean_synch']))
+		y_noisy_testSynch.append(f_normalize_minmax(normz_info, test_set['y_noisy_synch']))
 
 	setts['y_clean_test'] = np.concatenate(y_clean_test)
 	setts['y_noisy_test'] = np.concatenate(y_noisy_test)
