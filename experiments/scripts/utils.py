@@ -341,7 +341,7 @@ def generate_data(
 					'y_noisy_synch': y_noisy_synch_vec
 					}
 
-	np.savez(output_path, **output_dict)
+	np.savez(file=output_path, **output_dict)
 
 	return
 
