@@ -140,6 +140,9 @@ def main(output_dir=OUTPUT_DIR,
             testjob_ids.append(jobnum)
             pred_settings['test_fname_list'].append(n_testpath)
             # generate_data(**datagen_settings_TEST)
+            if jobstatus!=0:
+                print('Quitting because job failed!')
+                return
 
         # generate a Train Data Set, then run fitting/prediction models
         for n in range(n_training_sets):
@@ -153,6 +156,10 @@ def main(output_dir=OUTPUT_DIR,
                 jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
                     command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir,
                     jobname='traindatagen_{0}'.format(n))
+                if jobstatus!=0:
+                    print('Quitting because job failed!')
+                    return
+
                 # generate_data(**datagen_settings_TRAIN)
                 depending_jobs = testjob_ids + [jobnum]
             else:
@@ -178,6 +185,9 @@ def main(output_dir=OUTPUT_DIR,
                     command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
                     jobfile_dir=experiment_dir,
                     jobname='{0}_Init{1}'.format(run_nm, n))
+                if jobstatus!=0:
+                    print('Quitting because job failed!')
+                    return
 
             pred_settings['ode_only'] = False
             pred_settings['gp_only'] = True
@@ -203,6 +213,9 @@ def main(output_dir=OUTPUT_DIR,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
                         jobfile_dir=experiment_dir,
                         jobname='{0}_Init{1}'.format(run_nm, n))
+                    if jobstatus!=0:
+                        print('Quitting because job failed!')
+                        return
 
 
             pred_settings['gp_only'] = False
@@ -229,6 +242,9 @@ def main(output_dir=OUTPUT_DIR,
                         jobfile_dir=experiment_dir,
                         jobname='{0}_Init{1}'.format(run_nm, n))
                 # train_chaosRNN_wrapper(**pred_settings)
+                    if jobstatus!=0:
+                        print('Quitting because job failed!')
+                        return
 
                 # mechRNN
                 run_nm = 'mechRNN_residual{0}_hs{1}'.format(learn_residuals, hidden_size)
@@ -246,6 +262,9 @@ def main(output_dir=OUTPUT_DIR,
                         jobfile_dir=experiment_dir,
                         jobname='{0}_Init{1}'.format(run_nm, n))
                     # train_chaosRNN_wrapper(**pred_settings)
+                    if jobstatus!=0:
+                        print('Quitting because job failed!')
+                        return
 
     return
 

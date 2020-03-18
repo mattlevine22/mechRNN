@@ -90,8 +90,12 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
 
     cmd.append(job_file)
 
-    proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    # check for successful run and print the error
     status = proc.returncode
+    if status!=0:
+        print('Job submission FAILED:', proc.stdout)
+
     jobnum = proc.stdout.strip().split(' ')[-1]
 
     return status, jobnum
