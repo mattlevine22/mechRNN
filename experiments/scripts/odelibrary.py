@@ -70,9 +70,9 @@ class L96M:
 
   def plot_state_indices(_s):
     if _s.slow_only:
-      return [0, 1, K-1, K-2] # return a 4 coupled slow variables
+      return [0, 1, _s.K-1, _s.K-2] # return a 4 coupled slow variables
     else:
-      return [0, K] # return 1st slow variable and 1st coupled fast variable
+      return [0, _s.K] # return 1st slow variable and 1st coupled fast variable
 
   def set_predictor(_s, predictor):
     _s.predictor = predictor
