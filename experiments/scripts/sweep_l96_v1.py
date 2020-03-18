@@ -1,6 +1,6 @@
 import os, sys
 from utils import dict_combiner, mkdir_p, dict_to_file, make_and_deploy
-
+from time import sleep
 # Adapted from https://vsoch.github.io/lessons/sherlock-jobs/
 # python ../scripts/l96_sandbox.py
 # --savedir /groups/astuart/mlevine/writeup0/l96/F1_eps-7/Init0
@@ -83,6 +83,9 @@ def main(output_dir=OUTPUT_DIR,
     rnn_experiments=RNN_EXPERIMENT_LIST,
     gp_experiments=GP_EXPERIMENT_LIST):
 
+    # hasn't finished yet
+    submissions_complete = False
+
     # Make top level directories
     mkdir_p(output_dir)
 
@@ -148,7 +151,7 @@ def main(output_dir=OUTPUT_DIR,
             # generate_data(**datagen_settings_TEST)
             if jobstatus!=0:
                 print('Quitting because job failed!')
-                return
+                return submissions_complete
 
         # generate a Train Data Set, then run fitting/prediction models
         for n in range(n_training_sets):
@@ -168,7 +171,7 @@ def main(output_dir=OUTPUT_DIR,
                     pass
                 if jobstatus!=0:
                     print('Quitting because job failed!')
-                    return
+                    return submissions_complete
 
                 # generate_data(**datagen_settings_TRAIN)
                 depending_jobs = testjob_ids + [jobnum]
@@ -198,7 +201,7 @@ def main(output_dir=OUTPUT_DIR,
 
                 if jobstatus!=0:
                     print('Quitting because job failed!')
-                    return
+                    return submissions_complete
 
             pred_settings['ode_only'] = False
             pred_settings['gp_only'] = True
@@ -227,7 +230,7 @@ def main(output_dir=OUTPUT_DIR,
                         jobid_dir=run_path, master_job_file=master_job_file)
                     if jobstatus!=0:
                         print('Quitting because job failed!')
-                        return
+                        return submissions_complete
 
 
             pred_settings['gp_only'] = False
@@ -257,7 +260,7 @@ def main(output_dir=OUTPUT_DIR,
                 # train_chaosRNN_wrapper(**pred_settings)
                     if jobstatus!=0:
                         print('Quitting because job failed!')
-                        return
+                        return submissions_complete
 
                 # mechRNN
                 run_nm = 'mechRNN_residual{0}_hs{1}'.format(learn_residuals, hidden_size)
@@ -278,9 +281,10 @@ def main(output_dir=OUTPUT_DIR,
                     # train_chaosRNN_wrapper(**pred_settings)
                     if jobstatus!=0:
                         print('Quitting because job failed!')
-                        return
+                        return submissions_complete
 
-    return
+    submissions_complete = True
+    return submissions_complete
 
 if __name__ == '__main__':
     try:
@@ -288,5 +292,7 @@ if __name__ == '__main__':
     except:
         output_dir = OUTPUT_DIR
 
-    main(output_dir=output_dir)
+    while not submissions_complete:
+        submissions_complete = main(output_dir=output_dir)
+        print('Resubmit in', sleep(60))
 

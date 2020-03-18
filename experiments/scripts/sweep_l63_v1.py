@@ -84,6 +84,9 @@ def main(output_dir=OUTPUT_DIR,
     gp_experiments=GP_EXPERIMENT_LIST,
     eps_badness_list=EPS_BADNESS_LIST):
 
+    # hasn't finished yet
+    submissions_complete = False
+
     # Make top level directories
     mkdir_p(output_dir)
 
@@ -140,7 +143,7 @@ def main(output_dir=OUTPUT_DIR,
                 pass
             if jobstatus!=0:
                 print('Quitting because job failed!')
-                return
+                return submissions_complete
             testjob_ids.append(jobnum)
             # generate_data(**datagen_settings_TEST)
 
@@ -162,7 +165,7 @@ def main(output_dir=OUTPUT_DIR,
                     pass
                 if jobstatus!=0:
                     print('Quitting because job failed!')
-                    return
+                    return submissions_complete
                 # generate_data(**datagen_settings_TRAIN)
                 depending_jobs = testjob_ids + [jobnum]
             else:
@@ -192,7 +195,7 @@ def main(output_dir=OUTPUT_DIR,
                         jobid_dir=run_path, master_job_file=master_job_file)
                     if jobstatus!=0:
                         print('Quitting because job failed!')
-                        return
+                        return submissions_complete
 
                 pred_settings['ode_only'] = False
                 pred_settings['gp_only'] = True
@@ -220,7 +223,7 @@ def main(output_dir=OUTPUT_DIR,
                             jobid_dir=run_path, master_job_file=master_job_file)
                         if jobstatus!=0:
                             print('Quitting because job failed!')
-                            return
+                            return submissions_complete
 
                 pred_settings['gp_only'] = False
                 for rnn_exp in rnn_experiments:
@@ -248,7 +251,7 @@ def main(output_dir=OUTPUT_DIR,
                             jobid_dir=run_path, master_job_file=master_job_file)
                         if jobstatus!=0:
                             print('Quitting because job failed!')
-                            return
+                            return submissions_complete
 
                     # train_chaosRNN_wrapper(**pred_settings)
 
@@ -270,11 +273,11 @@ def main(output_dir=OUTPUT_DIR,
                             jobid_dir=run_path, master_job_file=master_job_file)
                         if jobstatus!=0:
                             print('Quitting because job failed!')
-                            return
+                            return submissions_complete
 
                         # train_chaosRNN_wrapper(**pred_settings)
 
-    return
+    return submissions_complete
 
 if __name__ == '__main__':
     try:
@@ -282,5 +285,7 @@ if __name__ == '__main__':
     except:
         output_dir = OUTPUT_DIR
 
-    main(output_dir=output_dir)
+    while not submissions_complete:
+        submissions_complete = main(output_dir=output_dir)
+        print('Resubmit in', sleep(60))
 

@@ -8,7 +8,7 @@
 import os
 import subprocess
 import itertools
-from time import time
+from time import time, sleep
 from datetime import timedelta
 import math
 import numpy as np
@@ -55,6 +55,8 @@ def dict_combiner(mydict):
 
 
 def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=None, jobid_dir=None, master_job_file=None, report_status=True):
+    sleep(0.2)
+
     # build sbatch job script and write to file
     job_directory = os.path.join(jobfile_dir,'.job')
     out_directory = os.path.join(jobfile_dir,'.out')
@@ -108,8 +110,6 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
         # write job_id to its target directory for easy checking later
         with open(os.path.join(jobid_dir,'{0}.id'.format(jobnum)), 'w') as fp:
             pass
-
-
 
     return status, jobnum
 
