@@ -292,6 +292,7 @@ if __name__ == '__main__':
     except:
         output_dir = OUTPUT_DIR
 
+    submissions_complete = False
     while not submissions_complete:
         submissions_complete = main(output_dir=output_dir)
         print('Resubmit in', sleep(60))
