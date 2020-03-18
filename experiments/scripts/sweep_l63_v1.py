@@ -87,6 +87,8 @@ def main(output_dir=OUTPUT_DIR,
     # Make top level directories
     mkdir_p(output_dir)
 
+    master_job_file = os.path.join(output_dir,'master_job_file.txt')
+
     # build list of experimental conditions
     var_names = [key for key in ode_parameters.keys() if len(ode_parameters[key]) > 1]# list of keys that are the experimental variables here
     experiments = dict_combiner(ode_parameters)
@@ -131,7 +133,8 @@ def main(output_dir=OUTPUT_DIR,
 
             command_flag_dict = {'settings_path': test_settings_path, 'output_path': n_testpath}
             jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
-                command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir, jobname='testdatagen_{0}'.format(n))
+                command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir, jobname='testdatagen_{0}'.format(n),
+                master_job_file=master_job_file)
             # write job_id to its target directory for easy checking later
             with open(os.path.join(testdir,'dataset_{0}_{1}.id'.format(n,jobnum)), 'w') as fp:
                 pass
@@ -152,7 +155,8 @@ def main(output_dir=OUTPUT_DIR,
             if not os.path.exists(n_trainpath):
                 command_flag_dict = {'settings_path': train_settings_path, 'output_path': n_trainpath}
                 jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
-                    command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir, jobname='traindatagen_{0}'.format(n))
+                    command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir, jobname='traindatagen_{0}'.format(n),
+                    master_job_file=master_job_file)
                 # write job_id to its target directory for easy checking later
                 with open(os.path.join(traindir,'dataset_{0}_{1}.id'.format(n,jobnum)), 'w') as fp:
                     pass
@@ -185,7 +189,7 @@ def main(output_dir=OUTPUT_DIR,
                     jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
                         jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_nm, n),
-                        jobid_dir=run_path)
+                        jobid_dir=run_path, master_job_file=master_job_file)
                     if jobstatus!=0:
                         print('Quitting because job failed!')
                         return
@@ -213,7 +217,7 @@ def main(output_dir=OUTPUT_DIR,
                         jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                             command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
                             jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_nm, n),
-                            jobid_dir=run_path)
+                            jobid_dir=run_path, master_job_file=master_job_file)
                         if jobstatus!=0:
                             print('Quitting because job failed!')
                             return
@@ -241,7 +245,7 @@ def main(output_dir=OUTPUT_DIR,
                         jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                             command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
                             jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_nm, n),
-                            jobid_dir=run_path)
+                            jobid_dir=run_path, master_job_file=master_job_file)
                         if jobstatus!=0:
                             print('Quitting because job failed!')
                             return
@@ -263,7 +267,7 @@ def main(output_dir=OUTPUT_DIR,
                         jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                             command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
                             jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_nm, n),
-                            jobid_dir=run_path)
+                            jobid_dir=run_path, master_job_file=master_job_file)
                         if jobstatus!=0:
                             print('Quitting because job failed!')
                             return

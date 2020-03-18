@@ -54,7 +54,7 @@ def dict_combiner(mydict):
     return experiment_list
 
 
-def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=None, jobid_dir=None):
+def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=None, jobid_dir=None, master_job_file=None):
     # build sbatch job script and write to file
     job_directory = os.path.join(jobfile_dir,'.job')
     out_directory = os.path.join(jobfile_dir,'.out')
@@ -97,6 +97,9 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
         print('Job submission FAILED:', proc.stdout, cmd)
 
     jobnum = proc.stdout.strip().split(' ')[-1]
+    if master_job_file:
+        with open(master_job_file, 'a') as f:
+            f.write('{0},{1}\n'.format(jobnum, ' '.join(cmd)))
 
     if jobid_dir:
         # write job_id to its target directory for easy checking later
