@@ -1,4 +1,4 @@
-import os
+import os, sys
 import numpy as np
 from utils import dict_combiner, mkdir_p, dict_to_file, make_and_deploy
 
@@ -273,5 +273,10 @@ def main(output_dir=OUTPUT_DIR,
     return
 
 if __name__ == '__main__':
-    main()
+    try:
+        output_dir = sys.argv[1]
+    except:
+        output_dir = OUTPUT_DIR
+
+    main(output_dir=output_dir)
 

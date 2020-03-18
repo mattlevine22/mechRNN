@@ -1,4 +1,4 @@
-import os
+import os, sys
 from utils import dict_combiner, mkdir_p, dict_to_file, make_and_deploy
 
 # Adapted from https://vsoch.github.io/lessons/sherlock-jobs/
@@ -15,7 +15,7 @@ CMD_run_fits = 'python3 $HOME/mechRNN/experiments/scripts/train_chaosRNN_wrapper
 N_TRAINING_SETS = 10
 N_TESTING_SETS = 10
 
-OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/l96_TRIALS'
+OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/l96_TRIALS_default_name'
 
 ODE_PARAMETERS = {'F': [1,10,25,50],
                 'eps': [-1, -3, -5, -7],
@@ -281,5 +281,10 @@ def main(output_dir=OUTPUT_DIR,
     return
 
 if __name__ == '__main__':
-    main()
+    try:
+        output_dir = sys.argv[1]
+    except:
+        output_dir = OUTPUT_DIR
+
+    main(output_dir=output_dir)
 
