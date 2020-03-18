@@ -9,8 +9,8 @@ from utils import dict_combiner, mkdir_p, dict_to_file, make_and_deploy
 # --slow_only True --epoch 1000 --ode_int_method RK45
 # --run_RNN True
 
-CMD_generate_data_wrapper = 'python $HOME/mechRNN/experiments/scripts/generate_data_wrapper.py'
-CMD_run_fits = 'python $HOME/mechRNN/experiments/scripts/train_chaosRNN_wrapper.py'
+CMD_generate_data_wrapper = 'python3 $HOME/mechRNN/experiments/scripts/generate_data_wrapper.py'
+CMD_run_fits = 'python3 $HOME/mechRNN/experiments/scripts/train_chaosRNN_wrapper.py'
 
 N_TRAINING_SETS = 10
 N_TESTING_SETS = 10
