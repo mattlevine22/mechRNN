@@ -133,7 +133,7 @@ def main(output_dir=OUTPUT_DIR,
             pred_settings['test_fname_list'].append(n_testpath)
 
             if os.path.exists(n_testpath):
-                print(n_testpath, 'already exists, so skipping.')
+                # print(n_testpath, 'already exists, so skipping.')
                 continue
 
             command_flag_dict = {'settings_path': test_settings_path, 'output_path': n_testpath}
@@ -174,7 +174,7 @@ def main(output_dir=OUTPUT_DIR,
                 depending_jobs = testjob_ids + [jobnum]
             else:
                 depending_jobs = None
-                print(n_trainpath, 'already exists, so skipping.')
+                # print(n_trainpath, 'already exists, so skipping.')
 
             # submit job to Train and evaluate model
 
