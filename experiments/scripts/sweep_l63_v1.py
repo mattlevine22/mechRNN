@@ -123,6 +123,7 @@ def main(output_dir=OUTPUT_DIR,
         testjob_ids = []
         for n in range(n_testing_sets):
             n_testpath = os.path.join(testdir,'dataset_{0}.npz'.format(n))
+            pred_settings['test_fname_list'].append(n_testpath)
 
             if os.path.exists(n_testpath):
                 print(n_testpath, 'already exists, so skipping.')
@@ -135,7 +136,6 @@ def main(output_dir=OUTPUT_DIR,
                 print('Quitting because job failed!')
                 return
             testjob_ids.append(jobnum)
-            pred_settings['test_fname_list'].append(n_testpath)
             # generate_data(**datagen_settings_TEST)
 
         # generate a Train Data Set, then run fitting/prediction models
@@ -145,6 +145,7 @@ def main(output_dir=OUTPUT_DIR,
 
             #this is for training data
             n_trainpath = os.path.join(traindir,'dataset_{0}.npz'.format(n))
+            pred_settings['train_fname'] = n_trainpath # each prediction run uses a single training set
             if not os.path.exists(n_trainpath):
                 command_flag_dict = {'settings_path': train_settings_path, 'output_path': n_trainpath}
                 jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
@@ -164,7 +165,6 @@ def main(output_dir=OUTPUT_DIR,
                 pred_settings['param_dict'] = {param_nm: exp_dict[param_nm]*(1+eps_badness) for param_nm in exp_dict}
 
                 # submit job to Train and evaluate model
-                pred_settings['train_fname'] = n_trainpath # each prediction run uses a single training set
 
                 # ODE only
                 run_nm = 'pureODE_epsBadness{0}'.format(eps_badness)
