@@ -132,6 +132,9 @@ def main(output_dir=OUTPUT_DIR,
             command_flag_dict = {'settings_path': test_settings_path, 'output_path': n_testpath}
             jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
                 command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir, jobname='testdatagen_{0}'.format(n))
+            # write job_id to its target directory for easy checking later
+            with open(os.path.join(testdir,'dataset_{0}_{1}.id'.format(n,jobnum)), 'w') as fp:
+                pass
             if jobstatus!=0:
                 print('Quitting because job failed!')
                 return
@@ -150,6 +153,9 @@ def main(output_dir=OUTPUT_DIR,
                 command_flag_dict = {'settings_path': train_settings_path, 'output_path': n_trainpath}
                 jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
                     command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir, jobname='traindatagen_{0}'.format(n))
+                # write job_id to its target directory for easy checking later
+                with open(os.path.join(traindir,'dataset_{0}_{1}.id'.format(n,jobnum)), 'w') as fp:
+                    pass
                 if jobstatus!=0:
                     print('Quitting because job failed!')
                     return
@@ -173,12 +179,13 @@ def main(output_dir=OUTPUT_DIR,
                     mkdir_p(run_path)
                     pred_settings['output_dir'] = run_path
                     pred_settings['ode_only'] = True
-                    pred_settings_path = os.path.join(n_pred_dir, run_nm, 'prediction_settings.json')
+                    pred_settings_path = os.path.join(run_path, 'prediction_settings.json')
                     dict_to_file(mydict=pred_settings, fname=pred_settings_path)
                     command_flag_dict = {'settings_path': pred_settings_path}
                     jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                        jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_nm, n))
+                        jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_nm, n),
+                        jobid_dir=run_path)
                     if jobstatus!=0:
                         print('Quitting because job failed!')
                         return
@@ -200,12 +207,13 @@ def main(output_dir=OUTPUT_DIR,
                     if not os.path.exists(run_path):
                         mkdir_p(run_path)
                         pred_settings['output_dir'] = run_path
-                        pred_settings_path = os.path.join(n_pred_dir, run_nm, 'prediction_settings.json')
+                        pred_settings_path = os.path.join(run_path, 'prediction_settings.json')
                         dict_to_file(mydict=pred_settings, fname=pred_settings_path)
                         command_flag_dict = {'settings_path': pred_settings_path}
                         jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                             command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                            jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_nm, n))
+                            jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_nm, n),
+                            jobid_dir=run_path)
                         if jobstatus!=0:
                             print('Quitting because job failed!')
                             return
@@ -227,12 +235,13 @@ def main(output_dir=OUTPUT_DIR,
                         pred_settings['stack_hidden'] = False
                         pred_settings['stack_output'] = False
                         pred_settings['output_dir'] = run_path
-                        pred_settings_path = os.path.join(n_pred_dir, run_nm, 'prediction_settings.json')
+                        pred_settings_path = os.path.join(run_path, 'prediction_settings.json')
                         dict_to_file(mydict=pred_settings, fname=pred_settings_path)
                         command_flag_dict = {'settings_path': pred_settings_path}
                         jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                             command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                            jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_nm, n))
+                            jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_nm, n),
+                            jobid_dir=run_path)
                         if jobstatus!=0:
                             print('Quitting because job failed!')
                             return
@@ -248,12 +257,13 @@ def main(output_dir=OUTPUT_DIR,
                         pred_settings['stack_hidden'] = True
                         pred_settings['stack_output'] = True
                         pred_settings['output_dir'] = run_path
-                        pred_settings_path = os.path.join(n_pred_dir, run_nm, 'prediction_settings.json')
+                        pred_settings_path = os.path.join(run_path, 'prediction_settings.json')
                         dict_to_file(mydict=pred_settings, fname=pred_settings_path)
                         command_flag_dict = {'settings_path': pred_settings_path}
                         jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
                             command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                            jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_nm, n))
+                            jobfile_dir=experiment_dir, jobname='{0}_Init{1}'.format(run_nm, n),
+                            jobid_dir=run_path)
                         if jobstatus!=0:
                             print('Quitting because job failed!')
                             return
