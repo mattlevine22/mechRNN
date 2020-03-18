@@ -100,7 +100,7 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
 
     if jobid_dir:
         # write job_id to its target directory for easy checking later
-        with open(os.path.join(jobi_dir,'{0}.id'.format(jobnum)), 'w') as fp:
+        with open(os.path.join(jobid_dir,'{0}.id'.format(jobnum)), 'w') as fp:
             pass
 
     return status, jobnum
