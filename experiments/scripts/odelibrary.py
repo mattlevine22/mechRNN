@@ -1,7 +1,7 @@
 import numpy as np
 from matplotlib import pyplot
-from numba import jitclass          # import the decorator
-from numba import int32, float32    # import the types
+# from numba import jitclass          # import the decorator
+# from numba import int32, float32    # import the types
 
 import pdb
 # Correspondence with Dima via Whatsapp on Feb 24, 2020:
@@ -359,7 +359,6 @@ spec = [
     ('array', float32[:]),          # an array field
 ]
 
-@jitclass(spec)
 class L63:
   """
   A simple class that implements Lorenz 63 model
