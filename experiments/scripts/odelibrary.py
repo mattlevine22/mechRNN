@@ -354,11 +354,6 @@ class L96M:
 # end of L96M ##################################################################
 ################################################################################
 
-spec = [
-    ('value', int32),               # a simple scalar field
-    ('array', float32[:]),          # an array field
-]
-
 class L63:
   """
   A simple class that implements Lorenz 63 model
