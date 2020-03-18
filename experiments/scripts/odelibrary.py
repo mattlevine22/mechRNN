@@ -1,6 +1,7 @@
 import numpy as np
 from matplotlib import pyplot
-from numba import jit
+from numba import jitclass          # import the decorator
+from numba import int32, float32    # import the types
 
 import pdb
 # Correspondence with Dima via Whatsapp on Feb 24, 2020:
@@ -85,7 +86,6 @@ class L96M:
   def hit_value(_s, k, val):
     return lambda t, z: z[k] - val
 
-  @njit
   def rhs(_s, z, t):
     if _s.slow_only:
       foo_rhs = _s.slow(z, t)
@@ -354,7 +354,12 @@ class L96M:
 # end of L96M ##################################################################
 ################################################################################
 
+spec = [
+    ('value', int32),               # a simple scalar field
+    ('array', float32[:]),          # an array field
+]
 
+@jitclass(spec)
 class L63:
   """
   A simple class that implements Lorenz 63 model
@@ -392,13 +397,14 @@ class L63:
   def plot_state_indices(_s):
     return [0,1,2]
 
-  @njit
   def rhs(_s, S, t):
     ''' Full system RHS '''
     a = _s.a
     b = _s.b
     c = _s.c
-    (x,y,z) = S
+    x = S[0]
+    y = S[1]
+    z = S[2]
 
     foo_rhs = np.empty(3)
     foo_rhs[0] = -a*x + a*y
