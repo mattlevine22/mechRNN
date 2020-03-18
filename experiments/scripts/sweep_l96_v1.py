@@ -12,23 +12,16 @@ from utils import dict_combiner, mkdir_p, dict_to_file, make_and_deploy
 CMD_generate_data_wrapper = 'python $HOME/mechRNN/experiments/scripts/generate_data_wrapper.py'
 CMD_run_fits = 'python $HOME/mechRNN/experiments/scripts/train_chaosRNN_wrapper.py'
 
-N_TRAINING_SETS = 2
-N_TESTING_SETS = 3
+N_TRAINING_SETS = 10
+N_TESTING_SETS = 10
 
 OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/l96_TRIALS'
 
-
-ODE_PARAMETERS = {'F': [1,10],
-                'eps': [-1, -3],
+ODE_PARAMETERS = {'F': [1,10,25,50],
+                'eps': [-1, -3, -5, -7],
                 'K': [4],
                 'J': [4]
             }
-
-# ODE_PARAMETERS = {'F': [1,10,25,50],
-#                 'eps': [-1, -3, -5, -7],
-#                 'K': [4],
-#                 'J': [4]
-#             }
 
 
 DATAGEN_SETTINGS_TRAIN = {'odeclass': 'odelibrary.L96M',
@@ -68,7 +61,7 @@ PRED_SETTINGS = {'odeclass': 'odelibrary.L96M',
                 }
 
 RNN_EXPERIMENT_LIST = dict_combiner({'hidden_size': [25, 50, 100],
-                            'n_epochs': [1000],
+                            'n_epochs': [1000, 10000],
                             'learn_residuals': [True,False],
                             'lr': [0.05]
                             }

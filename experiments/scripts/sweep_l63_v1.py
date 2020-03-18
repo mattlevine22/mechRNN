@@ -14,10 +14,10 @@ import pdb
 CMD_generate_data_wrapper = 'python3 $HOME/mechRNN/experiments/scripts/generate_data_wrapper.py'
 CMD_run_fits = 'python3 $HOME/mechRNN/experiments/scripts/train_chaosRNN_wrapper.py'
 
-N_TRAINING_SETS = 2
-N_TESTING_SETS = 4
+N_TRAINING_SETS = 10
+N_TESTING_SETS = 10
 
-OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/numba_l63_trials'
+OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/l63_TRIALS'
 
 EPS_BADNESS_LIST = [0, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0]
 
@@ -60,7 +60,7 @@ PRED_SETTINGS = {'odeclass': 'odelibrary.L63',
                 }
 
 RNN_EXPERIMENT_LIST = dict_combiner({'hidden_size': [50],
-                            'n_epochs': [100],
+                            'n_epochs': [1000, 10000],
                             'learn_residuals': [True,False],
                             'lr': [0.05]
                             }
