@@ -53,6 +53,10 @@ def dict_combiner(mydict):
         experiment_list = [{}]
     return experiment_list
 
+def make_cmd(cmd='echo $Home', command_flag_dict={}):
+    for key in command_flag_dict:
+        cmd += ' --{0} {1}'.format(key, command_flag_dict[key])
+    return cmd
 
 def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=None, jobid_dir=None, master_job_file=None, report_status=True):
     sleep(0.2)
