@@ -1,31 +1,27 @@
 import os, sys
-from utils import dict_combiner, mkdir_p, dict_to_file, make_and_deploy
+from utils import dict_combiner, mkdir_p, dict_to_file, make_cmd
 from time import sleep
+import pandas as pd
+
+import pdb
 # Adapted from https://vsoch.github.io/lessons/sherlock-jobs/
-# python ../scripts/l96_sandbox.py
-# --savedir /groups/astuart/mlevine/writeup0/l96/F1_eps-7/Init0
-# --F 1 --eps -7 --K 4 --J 4 --delta_t 0.01 --t_train 20
-# --n_tests 3 --fix_seed True --t_test 20 --t_test_synch 5
-# --slow_only True --epoch 1000 --ode_int_method RK45
-# --run_RNN True
 
 CMD_generate_data_wrapper = 'python3 $HOME/mechRNN/experiments/scripts/generate_data_wrapper.py'
 CMD_run_fits = 'python3 $HOME/mechRNN/experiments/scripts/train_chaosRNN_wrapper.py'
 
-N_TRAINING_SETS = 10
-N_TESTING_SETS = 10
+N_TRAINING_SETS = 2
+N_TESTING_SETS = 3
 
 OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/l96_TRIALS_default_name'
 
-ODE_PARAMETERS = {'F': [1,10,25,50],
-                'eps': [-1, -3, -5, -7],
+ODE_PARAMETERS = {'F': [1,10],
+                'eps': [-1, -3],
                 'K': [4],
                 'J': [4]
             }
 
-
 DATAGEN_SETTINGS_TRAIN = {'odeclass': 'odelibrary.L96M',
-                        't_length': 20,
+                        't_length': 5,
                         't_synch': 0,
                         'delta_t': 0.01,
                         'ode_int_method': 'Radau',
@@ -37,7 +33,7 @@ DATAGEN_SETTINGS_TRAIN = {'odeclass': 'odelibrary.L96M',
                         }
 
 DATAGEN_SETTINGS_TEST = {'odeclass': 'odelibrary.L96M',
-                        't_length': 20,
+                        't_length': 5,
                         't_synch': 5,
                         'delta_t': 0.01,
                         'ode_int_method': 'Radau',
@@ -60,8 +56,8 @@ PRED_SETTINGS = {'odeclass': 'odelibrary.L96M',
                         }
                 }
 
-RNN_EXPERIMENT_LIST = dict_combiner({'hidden_size': [25, 50, 100],
-                            'n_epochs': [1000, 10000],
+RNN_EXPERIMENT_LIST = dict_combiner({'hidden_size': [25],
+                            'n_epochs': [10],
                             'learn_residuals': [True,False],
                             'lr': [0.05]
                             }
@@ -156,12 +152,12 @@ def main(output_dir=OUTPUT_DIR,
             command_flag_dict = {'settings_path': test_settings_path, 'output_path': n_testpath}
             array_num += 1
             cmd = make_cmd(cmd=CMD_generate_data_wrapper, command_flag_dict=command_flag_dict)
-            master_list.append({'array_num': array_num, 'cmd': cmd, 'dependencies': []})
+            master_list.append({'array_num': array_num, 'cmd': cmd, 'dependencies': ''})
             testjob_ids.append(array_num)
 
-        # write job_id to its target directory for easy checking later
-        with open(os.path.join(testdir,'dataset_{0}_{1}.id'.format(n,jobnum)), 'w') as fp:
-            pass
+        # # write job_id to its target directory for easy checking later
+        # with open(os.path.join(testdir,'dataset_{0}_{1}.id'.format(n,jobnum)), 'w') as fp:
+        #     pass
 
         # generate a Train Data Set, then run fitting/prediction models
         for n in range(n_training_sets):
@@ -176,14 +172,14 @@ def main(output_dir=OUTPUT_DIR,
                 array_num += 1
                 command_flag_dict = {'settings_path': train_settings_path, 'output_path': n_trainpath}
                 cmd = make_cmd(cmd=CMD_generate_data_wrapper, command_flag_dict=command_flag_dict)
-                master_list.append({'array_num': array_num, 'cmd': cmd, 'dependencies': []})
+                master_list.append({'array_num': array_num, 'cmd': cmd, 'dependencies': ''})
                 depending_jobs.append(array_num)
 
                 # write job_id to its target directory for easy checking later
-                with open(os.path.join(traindir,'dataset_{0}_{1}.id'.format(n,jobnum)), 'w') as fp:
-                    pass
+                # with open(os.path.join(traindir,'dataset_{0}_{1}.id'.format(n,jobnum)), 'w') as fp:
+                #     pass
 
-
+            depending_jobs_str = ','.join([str(z) for z in depending_jobs])
             # submit job to Train and evaluate model
 
             # ODE only
@@ -198,7 +194,7 @@ def main(output_dir=OUTPUT_DIR,
                 dict_to_file(mydict=pred_settings, fname=pred_settings_path)
                 command_flag_dict = {'settings_path': pred_settings_path}
                 cmd = make_cmd(cmd=CMD_run_fits, command_flag_dict=command_flag_dict)
-                master_list.append({'array_num': array_num, 'cmd': cmd, 'dependencies': depending_jobs})
+                master_list.append({'array_num': array_num, 'cmd': cmd, 'dependencies': depending_jobs_str})
 
 
             pred_settings['ode_only'] = False
@@ -223,7 +219,7 @@ def main(output_dir=OUTPUT_DIR,
                     dict_to_file(mydict=pred_settings, fname=pred_settings_path)
                     command_flag_dict = {'settings_path': pred_settings_path}
                     cmd = make_cmd(cmd=CMD_run_fits, command_flag_dict=command_flag_dict)
-                    master_list.append({'array_num': array_num, 'cmd': cmd, 'dependencies': depending_jobs})
+                    master_list.append({'array_num': array_num, 'cmd': cmd, 'dependencies': depending_jobs_str})
 
 
             pred_settings['gp_only'] = False
@@ -247,7 +243,7 @@ def main(output_dir=OUTPUT_DIR,
                     dict_to_file(mydict=pred_settings, fname=pred_settings_path)
                     command_flag_dict = {'settings_path': pred_settings_path}
                     cmd = make_cmd(cmd=CMD_run_fits, command_flag_dict=command_flag_dict)
-                    master_list.append({'array_num': array_num, 'cmd': cmd, 'dependencies': depending_jobs})
+                    master_list.append({'array_num': array_num, 'cmd': cmd, 'dependencies': depending_jobs_str})
 
                 # mechRNN
                 run_nm = 'mechRNN_residual{0}_hs{1}'.format(learn_residuals, hidden_size)
@@ -262,7 +258,15 @@ def main(output_dir=OUTPUT_DIR,
                     dict_to_file(mydict=pred_settings, fname=pred_settings_path)
                     command_flag_dict = {'settings_path': pred_settings_path}
                     cmd = make_cmd(cmd=CMD_run_fits, command_flag_dict=command_flag_dict)
-                    master_list.append({'array_num': array_num, 'cmd': cmd, 'dependencies': depending_jobs})
+                    master_list.append({'array_num': array_num, 'cmd': cmd, 'dependencies': depending_jobs_str})
+
+    # write list of jobs to file
+    df = pd.DataFrame(master_list).sort_values(by=['array_num'])
+    df.to_csv(os.path.join(output_dir,'master_job_list.txt'), quoting=None, index=False, sep='|')
+
+    pdb.set_trace()
+    df[df.dependencies=='',['array_num','cmd']].to_csv(os.path.join(output_dir,'independent_job_list.txt'), quoting=None, index=False, sep='|')
+    df[df.dependencies!=''].to_csv(os.path.join(output_dir,'dependent_job_list.txt'), quoting=None, index=False, sep='|')
 
     return
 

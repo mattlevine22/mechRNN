@@ -59,7 +59,6 @@ def make_cmd(cmd='echo $Home', command_flag_dict={}):
     return cmd
 
 def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=None, jobid_dir=None, master_job_file=None, report_status=True):
-    sleep(0.2)
 
     # build sbatch job script and write to file
     job_directory = os.path.join(jobfile_dir,'.job')
@@ -77,8 +76,6 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
     sbatch_str += "#SBATCH --output=%s.out\n" % os.path.join(out_directory,jobname)
     sbatch_str += "#SBATCH --error=%s.err\n" % os.path.join(out_directory,jobname)
     sbatch_str += "#SBATCH --time=48:00:00\n" # 48hr
-    sbatch_str += "#SBATCH --mail-type=ALL\n"
-    sbatch_str += "#SBATCH --mail-user=$USER@caltech.edu\n"
     sbatch_str += bash_run_command
     # sbatch_str += "python $HOME/mechRNN/experiments/scripts/run_fits.py"
     for key in command_flag_dict:

@@ -17,15 +17,15 @@ N_TESTING_SETS = 10
 
 OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/l96_TRIALS_default_name'
 
-ODE_PARAMETERS = {'F': [1,10,25,50],
-                'eps': [-1, -3, -5, -7],
+ODE_PARAMETERS = {'F': [10,25,50],
+                'eps': [-3, -5, -7],
                 'K': [4],
                 'J': [4]
             }
 
 
 DATAGEN_SETTINGS_TRAIN = {'odeclass': 'odelibrary.L96M',
-                        't_length': 20,
+                        't_length': 5,
                         't_synch': 0,
                         'delta_t': 0.01,
                         'ode_int_method': 'Radau',
@@ -37,7 +37,7 @@ DATAGEN_SETTINGS_TRAIN = {'odeclass': 'odelibrary.L96M',
                         }
 
 DATAGEN_SETTINGS_TEST = {'odeclass': 'odelibrary.L96M',
-                        't_length': 20,
+                        't_length': 5,
                         't_synch': 5,
                         'delta_t': 0.01,
                         'ode_int_method': 'Radau',
@@ -60,8 +60,8 @@ PRED_SETTINGS = {'odeclass': 'odelibrary.L96M',
                         }
                 }
 
-RNN_EXPERIMENT_LIST = dict_combiner({'hidden_size': [25, 50, 100],
-                            'n_epochs': [1000, 10000],
+RNN_EXPERIMENT_LIST = dict_combiner({'hidden_size': [50],
+                            'n_epochs': [1000],
                             'learn_residuals': [True,False],
                             'lr': [0.05]
                             }
@@ -292,8 +292,5 @@ if __name__ == '__main__':
     except:
         output_dir = OUTPUT_DIR
 
-    submissions_complete = False
-    while not submissions_complete:
-        submissions_complete = main(output_dir=output_dir)
-        print('Resubmit in', sleep(60))
+    main(output_dir=output_dir)
 
