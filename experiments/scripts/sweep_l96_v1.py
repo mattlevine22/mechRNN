@@ -242,6 +242,7 @@ def main(output_dir=OUTPUT_DIR,
                 hidden_size = pred_settings['hidden_size']
 
                 # vanillaRNN
+                pred_settings['forward'] = 'utils.forward_chaos_pureML'
                 run_nm = 'vanillaRNN_residual{0}_hs{1}'.format(learn_residuals, hidden_size)
                 run_path = os.path.join(n_pred_dir, run_nm)
                 if not os.path.exists(run_path):
@@ -263,6 +264,7 @@ def main(output_dir=OUTPUT_DIR,
                         return submissions_complete
 
                 # mechRNN
+                pred_settings['forward'] = 'utils.forward_chaos_hybrid_full'
                 run_nm = 'mechRNN_residual{0}_hs{1}'.format(learn_residuals, hidden_size)
                 run_path = os.path.join(n_pred_dir, run_nm)
                 if not os.path.exists(run_path):
