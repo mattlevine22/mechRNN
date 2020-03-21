@@ -1957,7 +1957,7 @@ def train_chaosRNN(forward,
             cc += 1
             target = output_train[j+1,None]
             target_clean = output_clean_train[j+1,None]
-            # pdb.set_trace()
+            pdb.set_trace()
             (pred, hidden_state, solver_failed) = forward(output_train[j,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[j], solver_failed=solver_failed)
             # (pred, hidden_state) = forward(pred.detach(), hidden_state, A,B,C,a,b, normz_info, model, model_params)
             loss = (pred.squeeze() - target.squeeze()).pow(2).sum()
