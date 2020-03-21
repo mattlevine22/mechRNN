@@ -1679,7 +1679,6 @@ def train_chaosRNN(forward,
             tspan = get_tspan(model_params)
             # tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
             # unnormalize model_input so that it can go through the ODE solver
-            pdb.set_trace()
             y0 = f_unNormalize_minmax(normz_info, output_train[j,:].numpy())
             sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
 

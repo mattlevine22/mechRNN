@@ -67,9 +67,12 @@ class L96M:
   def get_inits(_s, sigma = 15, mu = -5):
     z0 = np.zeros((_s.K + _s.K * _s.J))
     z0[:_s.K] = mu + np.random.rand(_s.K) * sigma
-    for k_ in range(_s.K):
-      z0[_s.K + k_*_s.J : _s.K + (k_+1)*_s.J] = z0[k_]
-    return z0
+    if _s.slow_only:
+      return z0[:_s.K]
+    else:
+      for k_ in range(_s.K):
+        z0[_s.K + k_*_s.J : _s.K + (k_+1)*_s.J] = z0[k_]
+      return z0
 
   def get_state_names(_s):
     state_names = ['X_'+ str(k+1) for k in range(_s.K)]
