@@ -242,11 +242,11 @@ def main(output_dir=OUTPUT_DIR,
                 hidden_size = pred_settings['hidden_size']
 
                 # vanillaRNN
-                pred_settings['forward'] = 'utils.forward_chaos_pureML'
                 run_nm = 'vanillaRNN_residual{0}_hs{1}'.format(learn_residuals, hidden_size)
                 run_path = os.path.join(n_pred_dir, run_nm)
                 if not os.path.exists(run_path):
                     mkdir_p(run_path)
+                    pred_settings['forward'] = 'utils.forward_chaos_pureML'
                     pred_settings['stack_hidden'] = False
                     pred_settings['stack_output'] = False
                     pred_settings['output_dir'] = run_path
@@ -264,11 +264,11 @@ def main(output_dir=OUTPUT_DIR,
                         return submissions_complete
 
                 # mechRNN
-                pred_settings['forward'] = 'utils.forward_chaos_hybrid_full'
                 run_nm = 'mechRNN_residual{0}_hs{1}'.format(learn_residuals, hidden_size)
                 run_path = os.path.join(n_pred_dir, run_nm)
                 if not os.path.exists(run_path):
                     mkdir_p(run_path)
+                    pred_settings['forward'] = 'utils.forward_chaos_hybrid_full'
                     pred_settings['stack_hidden'] = True
                     pred_settings['stack_output'] = True
                     pred_settings['output_dir'] = run_path
