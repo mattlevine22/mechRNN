@@ -1,14 +1,26 @@
 import numpy as np
 from matplotlib import pyplot
 # from numba import jitclass          # import the decorator
-# from numba import int32, float32    # import the types
+# from numba import boolean, int64, float32, float64    # import the types
 
 import pdb
 # Correspondence with Dima via Whatsapp on Feb 24, 2020:
 # RK45 (explicit) for slow-system-only
 # RK45 (implicit) aka Radau for multi-scale-system
 # In both cases, set abstol to 1e-6, reltol to 1e-3, dtmax to 1e-3
+L96spec = [
+    ('K', int64),               # a simple scalar field
+    ('J', int64),               # a simple scalar field
+    ('hx', float64[:]),               # a simple scalar field
+    ('hy', float64),               # a simple scalar field
+    ('F', float64),               # a simple scalar field
+    ('eps', float64),               # a simple scalar field
+    ('k0', float64),               # a simple scalar field
+    ('slow_only', boolean),               # a simple scalar field
+    ('xk_star', float64[:])               # a simple scalar field
+]
 
+# @jitclass(L96spec)
 class L96M:
   """
   A simple class that implements Lorenz '96M model w/ slow and fast variables
@@ -27,11 +39,10 @@ class L96M:
     '''
     Initialize an instance: setting parameters and xkstar
     '''
-    if not isinstance(hx, np.ndarray):
-      hx = hx * np.ones(K)
+    hx = hx * np.ones(K)
     if hx.size != K:
       raise ValueError("'hx' must be a 1D-array of size 'K'")
-    _s.predictor = None
+    # _s.predictor = 0
     _s.slow_only = slow_only
     _s.K = K
     _s.J = J
@@ -53,12 +64,11 @@ class L96M:
     _s.xk_star[1] = 5
     _s.xk_star[-1] = 5
 
-  def get_inits(_s, sigma = 15, mu = -5, n=1):
-    z0 = np.zeros((n, _s.K + _s.K * _s.J))
-    for i in range(n):
-      z0[i, :_s.K] = mu + np.random.rand(_s.K) * sigma
-      for k_ in range(_s.K):
-        z0[i, _s.K + k_*_s.J : _s.K + (k_+1)*_s.J] = z0[i, k_]
+  def get_inits(_s, sigma = 15, mu = -5):
+    z0 = np.zeros((_s.K + _s.K * _s.J))
+    z0[:_s.K] = mu + np.random.rand(_s.K) * sigma
+    for k_ in range(_s.K):
+      z0[_s.K + k_*_s.J : _s.K + (k_+1)*_s.J] = z0[k_]
     return z0
 
   def get_state_names(_s):
@@ -353,7 +363,13 @@ class L96M:
 ################################################################################
 # end of L96M ##################################################################
 ################################################################################
+L63spec = [
+    ('a', float32),               # a simple scalar field
+    ('b', float32),               # a simple scalar field
+    ('c', float32),               # a simple scalar field
+]
 
+# @jitclass(L63spec)
 class L63:
   """
   A simple class that implements Lorenz 63 model

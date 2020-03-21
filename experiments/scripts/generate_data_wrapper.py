@@ -2,6 +2,7 @@ import argparse
 import json
 from utils import generate_data
 from pydoc import locate
+from time import time
 
 import pdb
 
@@ -18,7 +19,9 @@ def main(settings_path=FLAGS.settings_path, output_path=FLAGS.output_path):
 	setts['ODE'] = my_class(**setts['param_dict'])
 	setts.pop('param_dict',None)
 	setts.pop('odeclass',None)
+	t0 = time()
 	generate_data(output_path=output_path, **setts)
+	print('Generated data in:', time()-t0)
 
 if __name__ == '__main__':
 	main()
