@@ -286,5 +286,5 @@ if __name__ == '__main__':
     except:
         output_dir = OUTPUT_DIR
 
-        main(output_dir=output_dir)
+    main(output_dir=output_dir)
 

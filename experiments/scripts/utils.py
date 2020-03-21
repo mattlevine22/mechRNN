@@ -340,9 +340,7 @@ def generate_data(
 
     # Generate N data sets
     y0 = ODE.get_inits().squeeze()
-    t0 = time()
     sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=np.array(y0).T, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
-    print('Generated data in:', time()-t0)
     y_clean = sol.y.T
     y_noisy = y_clean + noise_frac*(np.max(y_clean,0) - np.min(y_clean,0))*np.random.randn(len(y_clean),y_clean.shape[1])
 
@@ -353,7 +351,6 @@ def generate_data(
                     }
 
     np.savez(file=output_path, **output_dict)
-
 
     return
 
