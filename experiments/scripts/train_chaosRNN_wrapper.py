@@ -62,7 +62,6 @@ def main(settings_path=FLAGS.settings_path):
 
 	# choose which RNN forward function to use
 	try:
-		pdb.set_trace()
 		setts['forward'] = locate(setts['forward'])
 	except:
 		setts['forward'] = None
