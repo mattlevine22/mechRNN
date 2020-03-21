@@ -8,17 +8,17 @@ import pdb
 # RK45 (explicit) for slow-system-only
 # RK45 (implicit) aka Radau for multi-scale-system
 # In both cases, set abstol to 1e-6, reltol to 1e-3, dtmax to 1e-3
-L96spec = [
-    ('K', int64),               # a simple scalar field
-    ('J', int64),               # a simple scalar field
-    ('hx', float64[:]),               # a simple scalar field
-    ('hy', float64),               # a simple scalar field
-    ('F', float64),               # a simple scalar field
-    ('eps', float64),               # a simple scalar field
-    ('k0', float64),               # a simple scalar field
-    ('slow_only', boolean),               # a simple scalar field
-    ('xk_star', float64[:])               # a simple scalar field
-]
+# L96spec = [
+#     ('K', int64),               # a simple scalar field
+#     ('J', int64),               # a simple scalar field
+#     ('hx', float64[:]),               # a simple scalar field
+#     ('hy', float64),               # a simple scalar field
+#     ('F', float64),               # a simple scalar field
+#     ('eps', float64),               # a simple scalar field
+#     ('k0', float64),               # a simple scalar field
+#     ('slow_only', boolean),               # a simple scalar field
+#     ('xk_star', float64[:])               # a simple scalar field
+# ]
 
 # @jitclass(L96spec)
 class L96M:
@@ -363,11 +363,11 @@ class L96M:
 ################################################################################
 # end of L96M ##################################################################
 ################################################################################
-L63spec = [
-    ('a', float32),               # a simple scalar field
-    ('b', float32),               # a simple scalar field
-    ('c', float32),               # a simple scalar field
-]
+# L63spec = [
+#     ('a', float32),               # a simple scalar field
+#     ('b', float32),               # a simple scalar field
+#     ('c', float32),               # a simple scalar field
+# ]
 
 # @jitclass(L63spec)
 class L63:
