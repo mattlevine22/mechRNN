@@ -328,7 +328,7 @@ def generate_data(
         ode_int_rtol=1.5e-8,
         ode_int_max_step=1.5e-3,
         rng_seed=None,
-        output_path='default_data'):
+        output_path='default_data.npz'):
     '''To generate training data, set t_synch=0. For testing data, set t_synch>0.'''
 
 
@@ -344,13 +344,26 @@ def generate_data(
     y_clean = sol.y.T
     y_noisy = y_clean + noise_frac*(np.max(y_clean,0) - np.min(y_clean,0))*np.random.randn(len(y_clean),y_clean.shape[1])
 
-    output_dict = {'y_clean': y_clean[ntsynch:,:],
+    output_dict_all = {'y_clean': y_clean[ntsynch:,:],
                     'y_noisy': y_noisy[ntsynch:,:],
                     'y_clean_synch': y_clean[:ntsynch,:],
                     'y_noisy_synch': y_noisy[:ntsynch,:]
                     }
 
-    np.savez(file=output_path, **output_dict)
+    if ODE.K==y_clean.shape[1]:
+        #only considering slow system anyway, so output every state
+        np.savez(file=output_path, **output_dict_all)
+    else:
+        output_dict_slow_only = {'y_clean': y_clean[ntsynch:,:ODE.K],
+                'y_noisy': y_noisy[ntsynch:,:ODE.K],
+                'y_clean_synch': y_clean[:ntsynch,:ODE.K],
+                'y_noisy_synch': y_noisy[:ntsynch,:ODE.K]
+                }
+        np.savez(file=output_path, **output_dict_slow_only)
+
+        # also save full slow/fast data
+        (base_path, ext) = os.path.splitext(output_path)
+        np.savez(file=os.path.join(base_path+'_FastAndSlow',ext), **output_dict_all)
 
     return
 

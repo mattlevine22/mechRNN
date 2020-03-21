@@ -392,6 +392,8 @@ class L63:
     _s.a = a
     _s.b = b
     _s.c = c
+    _s.K = 3 # state dims
+    _s.slow_only = False
 
   def get_inits(_s):
     (xmin, xmax) = (-10,10)
