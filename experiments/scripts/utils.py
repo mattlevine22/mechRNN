@@ -352,12 +352,12 @@ def generate_data(
 
     pdb.set_trace()
     (base_path, ext) = os.path.splitext(output_path)
-    # save phase plot
-    phase_plot(data=y_clean, plot_inds=ODE.plot_state_indices(), state_names=ODE.get_state_names(), output_fname=base_path+'phase_plot')
 
     if ODE.K==y_clean.shape[1]:
         #only considering slow system anyway, so output every state
         np.savez(file=output_path, **output_dict_all)
+        # save phase plot
+        phase_plot(data=y_clean, plot_inds=ODE.plot_state_indices(), state_names=ODE.get_state_names(), output_fname=base_path+'phase_plot', delta_t=delta_t)
     else:
         output_dict_slow_only = {'y_clean': y_clean[ntsynch:,:ODE.K],
                 'y_noisy': y_noisy[ntsynch:,:ODE.K],
@@ -367,11 +367,15 @@ def generate_data(
         np.savez(file=output_path, **output_dict_slow_only)
 
         # also save full slow/fast data
-        np.savez(file=os.path.join(base_path+'_FastAndSlow',ext), **output_dict_all)
+        np.savez(file=base_path+'_FastAndSlow'+ext, **output_dict_all)
 
         # save fast phase plot
-        plot_inds = np.arange(ODE.K, ODE.K+ODE.J)
-        phase_plot(data=y_clean[:,plot_inds], plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True)[plot_inds], output_fname=base_path+'phase_plot_fast')
+        plot_inds = np.arange(ODE.K, ODE.K+ODE.J).tolist()
+        phase_plot(data=y_clean, plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True), output_fname=base_path+'phase_plot_fast', delta_t=delta_t)
+
+        # save slow phase plot
+        plot_inds = np.arange(ODE.K).tolist()
+        phase_plot(data=y_clean, plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True), output_fname=base_path+'phase_plot_slow', delta_t=delta_t)
 
     return
 
@@ -791,7 +795,7 @@ def invariant_density_plot(test_data, pred_data, plot_inds, state_names, output_
     return
 
 
-def phase_plot(data, plot_inds, state_names, output_fname):
+def phase_plot(data, plot_inds, state_names, output_fname, delta_t=1):
     fig, ax_list = plt.subplots(len(plot_inds),len(plot_inds), figsize=[11,11])
     for i_y in range(len(plot_inds)):
         yy = plot_inds[i_y]
@@ -807,7 +811,7 @@ def phase_plot(data, plot_inds, state_names, output_fname):
             if xx<yy:
                 ax.plot(data[:,xx],data[:,yy])
             elif xx==yy:
-                ax.plot(data[:,xx])
+                ax.plot(delta_t*np.arange(data.shape[0]), data[:,xx])
             else:
                 ax.axis('off')
             if bottom_x:
@@ -970,8 +974,8 @@ def run_ode_test(y_clean_test, y_noisy_test,
         plt.close(fig)
 
         ## Plot phase plot
-        phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt))
-        phase_plot(data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_AvailableODE_TEST_{0}'.format(kkt))
+        phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt), delta_t=model_params['delta_t'])
+        phase_plot(data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_AvailableODE_TEST_{0}'.format(kkt), delta_t=model_params['delta_t'])
 
         # plot KDE of test data vs predictions
         invdens_plotname = output_dir+'/invariant_density_TEST_{0}'.format(kkt)
@@ -1306,8 +1310,8 @@ def run_GP(y_clean_train, y_noisy_train,
         fig.savefig(fname=output_dir+'/{0}fit_ode_TEST_{1}'.format(gp_nm,kkt))
         plt.close(fig)
 
-        phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt))
-        phase_plot(data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_GPpredicted_TEST_{0}'.format(kkt))
+        phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt), delta_t=model_params['delta_t'])
+        phase_plot(data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_GPpredicted_TEST_{0}'.format(kkt), delta_t=model_params['delta_t'])
 
         # plot KDE of test data vs predictions
         invdens_plotname = output_dir+'/invariant_density_TEST_{0}'.format(kkt)
@@ -2209,8 +2213,8 @@ def train_chaosRNN(forward,
                 plt.close(fig)
 
                 ## Plot phase plots
-                phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt))
-                phase_plot(data=predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_RNNpredicted_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
+                phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt), delta_t=model_params['delta_t'])
+                phase_plot(data=predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_RNNpredicted_iterEpochs{0}_test{1}'.format(i_epoch,kkt), delta_t=model_params['delta_t'])
 
 
                 # plot dynamics of hidden state over TESTING set
@@ -2403,8 +2407,8 @@ def train_chaosRNN(forward,
         plt.close(fig)
 
         ## plot phase plots
-        phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt))
-        phase_plot(data=predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_finalRNNpredicted_TEST_{0}'.format(kkt))
+        phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt), delta_t=model_params['delta_t'])
+        phase_plot(data=predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_finalRNNpredicted_TEST_{0}'.format(kkt), delta_t=model_params['delta_t'])
 
 
         # plot KDE of test data vs predictions
