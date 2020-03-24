@@ -58,7 +58,7 @@ def make_cmd(cmd='echo $Home', command_flag_dict={}):
         cmd += ' --{0} {1}'.format(key, command_flag_dict[key])
     return cmd
 
-def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=None, jobid_dir=None, master_job_file=None, report_status=True):
+def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=None, jobid_dir=None, master_job_file=None, report_status=True, exclusive=False):
 
     # build sbatch job script and write to file
     job_directory = os.path.join(jobfile_dir,'.job')
@@ -76,6 +76,8 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
     sbatch_str += "#SBATCH --output=%s.out\n" % os.path.join(out_directory,jobname)
     sbatch_str += "#SBATCH --error=%s.err\n" % os.path.join(out_directory,jobname)
     sbatch_str += "#SBATCH --time=48:00:00\n" # 48hr
+    if exclusive:
+        sbatch_str += "#SBATCH --exclusive\n" # exclusive use of a node for the submitted job
     sbatch_str += bash_run_command
     # sbatch_str += "python $HOME/mechRNN/experiments/scripts/run_fits.py"
     for key in command_flag_dict:
