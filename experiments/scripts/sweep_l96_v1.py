@@ -142,7 +142,8 @@ def main(output_dir=OUTPUT_DIR,
             command_flag_dict = {'settings_path': test_settings_path, 'output_path': n_testpath}
             jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
                 command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir,
-                jobname='testdatagen_{0}'.format(n), master_job_file=master_job_file)
+                jobname='testdatagen_{0}'.format(n), master_job_file=master_job_file,
+                exclusive=True)
             testjob_ids.append(jobnum)
             # write job_id to its target directory for easy checking later
             with open(os.path.join(testdir,'dataset_{0}_{1}.id'.format(n,jobnum)), 'w') as fp:
@@ -165,7 +166,8 @@ def main(output_dir=OUTPUT_DIR,
                 command_flag_dict = {'settings_path': train_settings_path, 'output_path': n_trainpath}
                 jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
                     command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir,
-                    jobname='traindatagen_{0}'.format(n), master_job_file=master_job_file)
+                    jobname='traindatagen_{0}'.format(n), master_job_file=master_job_file,
+                    exclusive=True)
                 # write job_id to its target directory for easy checking later
                 with open(os.path.join(traindir,'dataset_{0}_{1}.id'.format(n,jobnum)), 'w') as fp:
                     pass
