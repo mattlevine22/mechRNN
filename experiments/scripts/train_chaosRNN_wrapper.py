@@ -3,6 +3,7 @@ import json
 import numpy as np
 from utils import train_chaosRNN, f_normalize_minmax
 from pydoc import locate
+from time import time
 
 import pdb
 
@@ -11,7 +12,7 @@ parser.add_argument('--settings_path', type=str, default='datagen_settings.npz',
 FLAGS = parser.parse_args()
 
 def main(settings_path=FLAGS.settings_path):
-
+	t0 = time()
 	with open(settings_path) as f:
 		setts = json.load(f)
 
@@ -76,6 +77,7 @@ def main(settings_path=FLAGS.settings_path):
 	setts['plot_state_indices'] = odeInst.plot_state_indices()
 
 	train_chaosRNN(**setts)
+	print('Ran training in:', time()-t0)
 
 if __name__ == '__main__':
 	main()
