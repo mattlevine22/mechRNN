@@ -353,7 +353,7 @@ def generate_data(
     pdb.set_trace()
     (base_path, ext) = os.path.splitext(output_path)
     # save phase plot
-    phase_plot(data=y_clean, plot_inds=ODE.plot_state_indices(), state_names=ODE.get_state_names(), output_fname=os.path.join(base_path+'phase_plot',ext))
+    phase_plot(data=y_clean, plot_inds=ODE.plot_state_indices(), state_names=ODE.get_state_names(), output_fname=base_path+'phase_plot')
 
     if ODE.K==y_clean.shape[1]:
         #only considering slow system anyway, so output every state
@@ -371,7 +371,7 @@ def generate_data(
 
         # save fast phase plot
         plot_inds = np.arange(ODE.K, ODE.K+ODE.J)
-        phase_plot(data=y_clean[:,plot_inds], plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True)[plot_inds], output_fname=os.path.join(base_path+'phase_plot_fast',ext))
+        phase_plot(data=y_clean[:,plot_inds], plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True)[plot_inds], output_fname=base_path+'phase_plot_fast')
 
     return
 
