@@ -350,7 +350,6 @@ def generate_data(
                     'y_noisy_synch': y_noisy[:ntsynch,:]
                     }
 
-    pdb.set_trace()
     (base_path, ext) = os.path.splitext(output_path)
 
     if ODE.K==y_clean.shape[1]:
