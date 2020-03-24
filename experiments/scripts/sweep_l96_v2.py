@@ -15,7 +15,7 @@ N_TESTING_SETS = 3
 OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/l96_TRIALS_default_name'
 
 ODE_PARAMETERS = {'F': [1,10],
-                'eps': [-1, -3],
+                'eps': [2**(-1), 2**(-3)],
                 'K': [4],
                 'J': [4]
             }
