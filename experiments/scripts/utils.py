@@ -350,6 +350,11 @@ def generate_data(
                     'y_noisy_synch': y_noisy[:ntsynch,:]
                     }
 
+    pdb.set_trace()
+    (base_path, ext) = os.path.splitext(output_path)
+    # save phase plot
+    phase_plot(data=y_clean, plot_inds=ODE.plot_state_indices(), state_names=ODE.get_state_names(), output_fname=os.path.join(base_path+'phase_plot',ext))
+
     if ODE.K==y_clean.shape[1]:
         #only considering slow system anyway, so output every state
         np.savez(file=output_path, **output_dict_all)
@@ -362,8 +367,11 @@ def generate_data(
         np.savez(file=output_path, **output_dict_slow_only)
 
         # also save full slow/fast data
-        (base_path, ext) = os.path.splitext(output_path)
         np.savez(file=os.path.join(base_path+'_FastAndSlow',ext), **output_dict_all)
+
+        # save fast phase plot
+        plot_inds = np.arange(ODE.K, ODE.K+ODE.J)
+        phase_plot(data=y_clean[:,plot_inds], plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True)[plot_inds], output_fname=os.path.join(base_path+'phase_plot_fast',ext))
 
     return
 

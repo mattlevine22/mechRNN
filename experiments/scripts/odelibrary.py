@@ -74,12 +74,24 @@ class L96M:
         z0[_s.K + k_*_s.J : _s.K + (k_+1)*_s.J] = z0[k_]
       return z0
 
-  def get_state_names(_s):
-    state_names = ['X_'+ str(k+1) for k in range(_s.K)]
-    if not _s.slow_only:
-      for k in range(_s.K):
-        state_names += ['Y_' + str(j+1) + ',' + str(k+1) for j in range(_s.J)]
+  def get_fast_state_names(_s):
+    state_names = []
+    for k in range(_s.K):
+      state_names += ['Y_' + str(j+1) + ',' + str(k+1) for j in range(_s.J)]
     return state_names
+
+  def get_slow_state_names(_s):
+    state_names = ['X_'+ str(k+1) for k in range(_s.K)]
+    return state_names
+
+  def get_state_names(_s, get_all=False):
+    state_names = _s.get_slow_state_names()
+    if get_all or not _s.slow_only:
+      state_names += _s.get_fast_state_names()
+    return state_names
+
+  def get_fast_state_indices(_s):
+    return np.arange(_s.K, _s.K + _s.K * _s.J)
 
   def plot_state_indices(_s):
     if _s.slow_only:
