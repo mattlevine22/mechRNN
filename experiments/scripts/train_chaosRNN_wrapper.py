@@ -74,47 +74,8 @@ def main(settings_path=FLAGS.settings_path):
 	setts['model'] = odeInst.rhs
 
 	setts['plot_state_indices'] = odeInst.plot_state_indices()
-	# rnn_model_params = {'state_names': state_names,
-	# 					'state_init':state_init,
-	# 					'delta_t':delta_t,
-	# 					'ode_params':param_tuple,
-	# 					'time_avg_norm':0.529,
-	# 					'ode_int_method':FLAGS.ode_int_method,
-	# 					'ode_int_rtol':FLAGS.ode_int_rtol,
-	# 					'ode_int_atol':FLAGS.ode_int_atol,
-	# 					'ode_int_max_step':np.inf}
 
 	train_chaosRNN(**setts)
-	# train_chaosRNN(forward,
-	# 			y_clean_train, y_noisy_train,
-	# 			y_clean_test, y_noisy_test,
-	# 			y_clean_testSynch, y_noisy_testSynch,
-	# 			model_params,
-	# 			hidden_size=6,
-	# 			n_epochs=100,
-	# 			lr=0.05,
-	# 			output_dir='.',
-	# 			normz_info=None,
-	# 			model=None,
-	# 			stack_hidden=True,
-	# 			stack_output=True,
-	# 			precompute_model=True, kde_func=kde_scipy,
-	# 			compute_kl=False,
-	# 			gp_only=False,
-	# 			gp_style=2,
-	# 			gp_resid=True,
-	# 			learn_flow = False,
-	# 			alpha_list = [1e-10, 1e-8, 1e-6, 1e-4, 1e-2],
-	# 			ode_only=False):
-
-	# train_chaosRNN(forward_chaos_hybrid_full,
-	# 	y_clean_train_norm, y_noisy_train_norm,
-	# 	y_clean_test_vec_norm, y_noisy_test_vec_norm,
-	# 	y_clean_testSynch_vec_norm, y_noisy_testSynch_vec_norm,
-	# 	rnn_BAD_model_params, hidden_size, n_epochs, lr,
-	# 	run_output_dir, normz_info, rnn_sim_model,
-	# 	compute_kl=FLAGS.compute_kl, alpha_list=[FLAGS.alpha],
-	# 	plot_state_indices=plot_state_indices_SLOW)
 
 if __name__ == '__main__':
 	main()
