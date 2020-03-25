@@ -827,6 +827,11 @@ def phase_plot(data, plot_inds, state_names, output_fname, delta_t=1):
     return
 
 def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, output_fname, xmin=None, xmax=None):
+
+    pdb.set_trace()
+    if xmax is not None and xmin is not None:
+        xdata = xdata[xdata>=xmin & xdata<=xmax,:]
+
     if len(yplot_inds)==1:
         fig, ax_list = plt.subplots(len(yplot_inds),len(xplot_inds), figsize=[11,5], sharey=True)
         ax_list = [ax_list]
@@ -844,8 +849,6 @@ def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, outpu
             ax = ax_list[i_y][i_x]
             xx = xplot_inds[i_x]
             ax.scatter(xdata[:,xx],ydata[:,yy],s=10,alpha=0.5)
-            if xmax is not None and xmin is not None:
-                ax.set_xlim((xmin[xx],xmax[xx]))
             if xx==yy and len(yplot_inds)>1:
                 yminfoo, ymaxfoo = ax.get_ylim()
                 xminfoo, xmaxfoo = ax.get_xlim()
@@ -1678,7 +1681,7 @@ def train_chaosRNN(forward,
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    print('Starting RNN training for: ', output_dir)
+    print('Starting training for: ', output_dir)
 
     output_train = torch.FloatTensor(y_noisy_train).type(dtype)
     output_clean_train = torch.FloatTensor(y_clean_train).type(dtype)
