@@ -848,12 +848,12 @@ def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, outpu
             if xmax is not None and xmin is not None:
                 ax.set_xlim((xmin[xx],xmax[xx]))
             if xx==yy and len(yplot_inds)>1:
-                ymin, ymax = ax.get_ylim()
-                xmin, xmax = ax.get_xlim()
-                if (0 > 0.8*ymin) and (0 < 1.2*ymax):
-                    ax.hlines(y=0, xmin=xmin, xmax=xmax, colors='k')
-                if (0 > 0.8*xmin) and (0 < 1.2*xmax):
-                    ax.vlines(x=0, ymin=ymin, ymax=ymax, colors='k')
+                yminfoo, ymaxfoo = ax.get_ylim()
+                xminfoo, xmaxfoo = ax.get_xlim()
+                if (0 > 0.8*yminfoo) and (0 < 1.2*ymaxfoo):
+                    ax.hlines(y=0, xmin=xminfoo, xmax=xmaxfoo, colors='k')
+                if (0 > 0.8*xminfoo) and (0 < 1.2*xmaxfoo):
+                    ax.vlines(x=0, ymin=yminfoo, ymax=ymaxfoo, colors='k')
 
             if bottom_x:
                 ax.set_xlabel(xnames[xx])
