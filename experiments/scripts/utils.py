@@ -826,7 +826,7 @@ def phase_plot(data, plot_inds, state_names, output_fname, delta_t=1):
     plt.close(fig)
     return
 
-def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, output_fname, xmin=[], xmax=[]):
+def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, output_fname, xmin=None, xmax=None):
     if len(yplot_inds)==1:
         fig, ax_list = plt.subplots(len(yplot_inds),len(xplot_inds), figsize=[11,5], sharey=True)
         ax_list = [ax_list]
@@ -844,7 +844,7 @@ def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, outpu
             ax = ax_list[i_y][i_x]
             xx = xplot_inds[i_x]
             ax.scatter(xdata[:,xx],ydata[:,yy],s=10,alpha=0.5)
-            if len(xmax) and len(xmin):
+            if xmax is not None and xmin is not None:
                 ax.set_xlim((xmin[xx],xmax[xx]))
             if xx==yy and len(yplot_inds)>1:
                 ymin, ymax = ax.get_ylim()
