@@ -894,7 +894,7 @@ def timeseries_Ybar_error(Ybar_true, Ybar_inferred, output_fname, delta_t):
     fig, ax_list = plt.subplots(K, 1, figsize=[11,11], sharey=True, sharex=True)
     for k in range(K):
         pdb.set_trace()
-        k_err = np.linalg.norm(, Ybar_true[:,k], Ybar_inferred[:,k])
+        k_err = np.linalg.norm(Ybar_true[:,k], Ybar_inferred[:,k])
         ax_list[k].plot(delta_t*np.arange(Ybar_true.shape[0]), k_err)
         ax_list[k].set_xlabel('Time')
         ax_list[k].set_xlabel('Error')
