@@ -879,7 +879,7 @@ def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, outpu
 
 def plot_Ybar(Ybar_true, Ybar_inferred, output_fname):
     K = Ybar_true.shape[1]
-    fig, ax_list = plt.subplots(1, K, figsize=[10,3], sharey=True, sharex=True)
+    fig, ax_list = plt.subplots(1, K, figsize=[11,5], sharey=True, sharex=True)
     for k in range(K):
         ax_list[k].scatter(Ybar_true[:,k], Ybar_inferred[:,k])
         ax_list[k].set_xlabel(r'True $\bar{Y}_%d$' % k)
