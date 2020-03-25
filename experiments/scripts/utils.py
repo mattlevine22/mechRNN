@@ -84,6 +84,7 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
         sbatch_str += ' --{0} {1}'.format(key, command_flag_dict[key])
     # sbatch_str += ' --output_path %s\n' % experiment_dir
 
+    sbatch_str += '\n'
     with open(job_file, 'w') as fh:
         fh.writelines(sbatch_str)
 
@@ -1345,22 +1346,22 @@ def run_GP(y_clean_train, y_noisy_train,
     # GP input vs GP output
     gpinout_fname = output_dir+'/GP_input_vs_output'
     ynames = [foo + ' j+1 GP-output' for foo in model_params['state_names']]
-    # insert Xlim based on normzinfo
-    gp_marginal_plot(xdata=ALLgpr_inputs, xmin=normzinfo['Ymin'], xmax=normzinfo['Ymax'], ydata=ALLgpr_outputs, xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
+    # insert Xlim based on normz_info
+    gp_marginal_plot(xdata=ALLgpr_inputs, xmin=normz_info['Ymin'], xmax=normz_info['Ymax'], ydata=ALLgpr_outputs, xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
 
     # GP input vs GP-corrected prediction
     gpinout_fname = output_dir+'/GP_input_vs_prediction'
     ynames = [foo + ' j+1 full-pred' for foo in model_params['state_names']]
-    # insert Xlim based on normzinfo
-    gp_marginal_plot(xdata=ALLgpr_inputs, xmin=normzinfo['Ymin'], xmax=normzinfo['Ymax'], ydata=ALLgpr_test_predictions_raw, xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
+    # insert Xlim based on normz_info
+    gp_marginal_plot(xdata=ALLgpr_inputs, xmin=normz_info['Ymin'], xmax=normz_info['Ymax'], ydata=ALLgpr_test_predictions_raw, xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
 
     # GP input vs norm of GP output
     gpinout_fname = output_dir+'/GP_input_vs_outputNorm'
     ynames = ['||u||_2']
     yplot_inds = [0]
     ydata = np.linalg.norm(ALLgpr_outputs, axis=1)
-    # insert Xlim based on normzinfo
-    gp_marginal_plot(xdata=ALLgpr_inputs, xmin=normzinfo['Ymin'], xmax=normzinfo['Ymax'], ydata=ydata[:,None], xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
+    # insert Xlim based on normz_info
+    gp_marginal_plot(xdata=ALLgpr_inputs, xmin=normz_info['Ymin'], xmax=normz_info['Ymax'], ydata=ydata[:,None], xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
 
     with open(output_dir+'/output_norm_mean.txt', 'w') as fh:
         fh.writelines(str(np.mean(ydata)))
