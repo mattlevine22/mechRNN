@@ -1051,7 +1051,8 @@ def run_GP(y_clean_train, y_noisy_train,
             do_resid=True,
             learn_flow=True,
             y_fast_test=None,
-            y_fast_train=None):
+            y_fast_train=None,
+            ODE=None):
 
     y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
     y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
@@ -1677,7 +1678,8 @@ def train_chaosRNN(forward,
             alpha_list = [1e-10],
             ode_only=False,
             y_fast_train=None,
-            y_fast_test=None):
+            y_fast_test=None,
+            ODE=None):
 
     model_params['smaller_delta_t'] = model_params['delta_t'] # later, need to remove smaller_delta_t as field
 
@@ -1819,7 +1821,8 @@ def train_chaosRNN(forward,
                     do_resid = learn_residuals,
                     learn_flow = learn_flow,
                     y_fast_test=y_fast_test,
-                    y_fast_train=y_fast_train)
+                    y_fast_train=y_fast_train,
+                    ODE=ODE)
         # plot GP comparisons
         if GP_grid:
             style_list = [1,2,3]

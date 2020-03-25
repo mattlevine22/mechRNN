@@ -99,6 +99,8 @@ def main(settings_path=FLAGS.settings_path):
 
 	setts['plot_state_indices'] = odeInst.plot_state_indices()
 
+	setts['ODE'] = odeInst
+
 	train_chaosRNN(**setts)
 	print('Ran training in:', time()-t0)
 
