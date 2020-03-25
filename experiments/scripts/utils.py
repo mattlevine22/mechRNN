@@ -882,9 +882,9 @@ def plot_Ybar(Ybar_true, Ybar_inferred, output_fname):
     fig, ax_list = plt.subplots(1, K, figsize=[11,5], sharey=True, sharex=True)
     for k in range(K):
         ax_list[k].scatter(Ybar_true[:,k], Ybar_inferred[:,k])
-        ax_list[k].set_xlabel(r'True \bar{Y}_k')
-        ax_list[k].set_ylabel(r'Inferred \bar{Y}_k')
-    fig.suptitle(r'Compare True vs Inferred \bar{Y}_k')
+        ax_list[k].set_xlabel(r'True \\bar{Y}_{0}'.format(k))
+        ax_list[k].set_ylabel(r'Inferred \\bar{Y}_{0}'.format(k))
+    fig.suptitle(r'Compare True vs Inferred \\bar{Y}_k')
     fig.savefig(fname=output_fname)
     plt.close(fig)
     return
