@@ -877,7 +877,7 @@ def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, outpu
     plt.close(fig)
     return
 
-def plot_Ybar(Ybar_true, Ybar_inferred, output_fname):
+def scatter_Ybar(Ybar_true, Ybar_inferred, output_fname):
     K = Ybar_true.shape[1]
     fig, ax_list = plt.subplots(1, K, figsize=[11,5], sharey=True, sharex=True)
     for k in range(K):
@@ -888,6 +888,21 @@ def plot_Ybar(Ybar_true, Ybar_inferred, output_fname):
     fig.savefig(fname=output_fname)
     plt.close(fig)
     return
+
+def timeseries_Ybar_error(Ybar_true, Ybar_inferred, output_fname, delta_t):
+    K = Ybar_true.shape[1]
+    fig, ax_list = plt.subplots(K, 1, figsize=[11,11], sharey=True, sharex=True)
+    for k in range(K):
+        pdb.set_trace()
+        k_err = np.linalg.norm(, Ybar_true[:,k], Ybar_inferred[:,k])
+        ax_list[k].plot(delta_t*np.arange(Ybar_true.shape[0]), k_err)
+        ax_list[k].set_xlabel('Time')
+        ax_list[k].set_xlabel('Error')
+        ax_list[k].set_title('k={0}'.format(k))
+    fig.suptitle(r'$|| True $\bar{Y}_k$ - Inferred $\bar{Y}_k ||$')
+    fig.savefig(fname=output_fname)
+    plt.close(fig)
+
 
 def run_ode_test(y_clean_test, y_noisy_test,
                 y_clean_testSynch, y_noisy_testSynch,
@@ -1352,9 +1367,10 @@ def run_GP(y_clean_train, y_noisy_train,
         if y_fast_test is not None:
             Ybar_inferred = ODE.implied_Ybar(X=gpr_test_predictions_raw, delta_t=model_params['delta_t'])
             Ybar_true = y_fast_test[kkt,:,:].reshape( (y_fast_test.shape[1], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
-            plot_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_TEST_{0}.png'.format(kkt))
+            timeseries_Ybar_error(delta_t=model_params['delta_t'], Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_timeseries_TEST_{0}.png'.format(kkt))
+            scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_TEST_{0}.png'.format(kkt))
             n_short = int(0.2/model_params['delta_t'])
-            plot_Ybar(Ybar_true=Ybar_true[:n_short,:], Ybar_inferred=Ybar_inferred[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}.png'.format(kkt,n_short*model_params['delta_t']))
+            scatter_Ybar(Ybar_true=Ybar_true[:n_short,:], Ybar_inferred=Ybar_inferred[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}.png'.format(kkt,n_short*model_params['delta_t']))
 
         ALLy_clean_test_raw.append(y_clean_test_raw)
         ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
