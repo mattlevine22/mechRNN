@@ -826,7 +826,7 @@ def phase_plot(data, plot_inds, state_names, output_fname, delta_t=1):
     plt.close(fig)
     return
 
-def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, output_fname, xmin=None, xmax=None):
+def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, output_fname, xmin=[], xmax=[]):
     if len(yplot_inds)==1:
         fig, ax_list = plt.subplots(len(yplot_inds),len(xplot_inds), figsize=[11,5], sharey=True)
         ax_list = [ax_list]
