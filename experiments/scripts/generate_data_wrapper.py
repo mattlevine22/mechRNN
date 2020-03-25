@@ -12,7 +12,7 @@ parser.add_argument('--slow_name', type=str, default='slow_data.npz', help='path
 parser.add_argument('--fast_name', type=str, default='fast_data.npz', help='pathname of output data')
 FLAGS = parser.parse_args()
 
-def main(settings_path=FLAGS.settings_path, output_path=FLAGS.output_path):
+def main(settings_path=FLAGS.settings_path, slow_name=FLAGS.slow_name, fast_name=FLAGS.fast_name):
 	with open(settings_path) as f:
 	  setts = json.load(f)
 	# https://stackoverflow.com/questions/547829/how-to-dynamically-load-a-python-class
@@ -21,7 +21,7 @@ def main(settings_path=FLAGS.settings_path, output_path=FLAGS.output_path):
 	setts.pop('param_dict',None)
 	setts.pop('odeclass',None)
 	t0 = time()
-	generate_data(output_path=output_path, **setts)
+	generate_data(slow_name=slow_name, fast_name=fast_name, **setts)
 	print('Generated data in:', time()-t0)
 
 if __name__ == '__main__':
