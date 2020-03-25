@@ -825,7 +825,7 @@ def phase_plot(data, plot_inds, state_names, output_fname, delta_t=1):
     plt.close(fig)
     return
 
-def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, output_fname):
+def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, output_fname, xmin=None, xmax=None):
     if len(yplot_inds)==1:
         fig, ax_list = plt.subplots(len(yplot_inds),len(xplot_inds), figsize=[11,5], sharey=True)
         ax_list = [ax_list]
@@ -843,6 +843,8 @@ def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, outpu
             ax = ax_list[i_y][i_x]
             xx = xplot_inds[i_x]
             ax.scatter(xdata[:,xx],ydata[:,yy],s=10,alpha=0.5)
+            if xmax and xmin:
+                ax.set_xlim((xmin[xx],xmax[xx]))
             if xx==yy and len(yplot_inds)>1:
                 ymin, ymax = ax.get_ylim()
                 xmin, xmax = ax.get_xlim()
@@ -1343,19 +1345,22 @@ def run_GP(y_clean_train, y_noisy_train,
     # GP input vs GP output
     gpinout_fname = output_dir+'/GP_input_vs_output'
     ynames = [foo + ' j+1 GP-output' for foo in model_params['state_names']]
-    gp_marginal_plot(xdata=ALLgpr_inputs, ydata=ALLgpr_outputs, xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
+    # insert Xlim based on normzinfo
+    gp_marginal_plot(xdata=ALLgpr_inputs, xmin=normzinfo['Ymin'], xmax=normzinfo['Ymax'], ydata=ALLgpr_outputs, xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
 
     # GP input vs GP-corrected prediction
     gpinout_fname = output_dir+'/GP_input_vs_prediction'
     ynames = [foo + ' j+1 full-pred' for foo in model_params['state_names']]
-    gp_marginal_plot(xdata=ALLgpr_inputs, ydata=ALLgpr_test_predictions_raw, xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
+    # insert Xlim based on normzinfo
+    gp_marginal_plot(xdata=ALLgpr_inputs, xmin=normzinfo['Ymin'], xmax=normzinfo['Ymax'], ydata=ALLgpr_test_predictions_raw, xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
 
     # GP input vs norm of GP output
     gpinout_fname = output_dir+'/GP_input_vs_outputNorm'
     ynames = ['||u||_2']
     yplot_inds = [0]
     ydata = np.linalg.norm(ALLgpr_outputs, axis=1)
-    gp_marginal_plot(xdata=ALLgpr_inputs, ydata=ydata[:,None], xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
+    # insert Xlim based on normzinfo
+    gp_marginal_plot(xdata=ALLgpr_inputs, xmin=normzinfo['Ymin'], xmax=normzinfo['Ymax'], ydata=ydata[:,None], xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
 
     with open(output_dir+'/output_norm_mean.txt', 'w') as fh:
         fh.writelines(str(np.mean(ydata)))
