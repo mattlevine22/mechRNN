@@ -68,7 +68,7 @@ def main(settings_path=FLAGS.settings_path):
 
 	# try to read in fast train data
 	try:
-		setts['y_fast_train'] = np.load(setts['train_fast_fname'])
+		setts['y_fast_train'] = np.load(setts['train_fast_fname'])['y_clean']
 	except:
 		print('Couldnt read and save fast train data, skipping that part.')
 		pass
