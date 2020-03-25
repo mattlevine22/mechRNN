@@ -890,8 +890,9 @@ def scatter_Ybar(Ybar_true, Ybar_inferred, output_fname):
     return
 
 def timeseries_Ybar_plots(Ybar_true, Ybar_inferred, output_fname, delta_t):
-    timeseries_Ybar_k_error(Ybar_true, Ybar_inferred, output_fname+'kspecific', delta_t):
-    timeseries_Ybar_normed_error(Ybar_true, Ybar_inferred, output_fname+'normed', delta_t):
+    timeseries_Ybar_k_error(Ybar_true, Ybar_inferred, output_fname+'kspecific', delta_t)
+    timeseries_Ybar_normed_error(Ybar_true, Ybar_inferred, output_fname+'normed', delta_t)
+    return
 
 def timeseries_Ybar_k_error(Ybar_true, Ybar_inferred, output_fname, delta_t):
     K = Ybar_true.shape[1]
