@@ -844,7 +844,6 @@ def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, outpu
             ax = ax_list[i_y][i_x]
             xx = xplot_inds[i_x]
             ax.scatter(xdata[:,xx],ydata[:,yy],s=10,alpha=0.5)
-            pdb.set_trace()
             if xmax is not None and xmin is not None:
                 ax.set_xlim((xmin[xx],xmax[xx]))
             if xx==yy and len(yplot_inds)>1:
