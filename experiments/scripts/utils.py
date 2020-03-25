@@ -878,7 +878,6 @@ def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, outpu
     return
 
 def plot_Ybar(Ybar_true, Ybar_inferred, output_fname):
-    pdb.set_trace()
     K = Ybar_true.shape[1]
     fig, ax_list = plt.subplots(1, K, figsize=[11,11], sharey=True, sharex=True)
     for k in range(K):
@@ -1353,10 +1352,9 @@ def run_GP(y_clean_train, y_noisy_train,
         if y_fast_test is not None:
             Ybar_inferred = ODE.implied_Ybar(X=gpr_test_predictions_raw, delta_t=model_params['delta_t'])
             Ybar_true = y_fast_test[kkt,:,:].reshape( (y_fast_test.shape[1], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
-            plot_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_TEST_{0}'.format(kkt))
-            n_short = int(2/model_params['delta_t'])
-            pdb.set_trace()
-            plot_Ybar(Ybar_true=Ybar_true[:n_short,:], Ybar_inferred=Ybar_inferred[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}'.format(kkt,n_short*model_params['delta_t']))
+            plot_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_TEST_{0}.png'.format(kkt))
+            n_short = int(0.2/model_params['delta_t'])
+            plot_Ybar(Ybar_true=Ybar_true[:n_short,:], Ybar_inferred=Ybar_inferred[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}.png'.format(kkt,n_short*model_params['delta_t']))
 
         ALLy_clean_test_raw.append(y_clean_test_raw)
         ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
