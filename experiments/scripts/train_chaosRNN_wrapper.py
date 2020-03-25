@@ -57,11 +57,12 @@ def main(settings_path=FLAGS.settings_path):
 
 
 	# check for fast test data and read that in
+	pdb.set_trace()
 	if 'test_fast_fname_list' in setts and setts['test_fast_fname_list']:
 		y_fast_test = []
 		for fnm in setts['test_fast_fname_list']:
 			test_set = np.load(fnm)
-			y_fast_test.append(test_set)
+			y_fast_test.append(test_set['y_clean'])
 		setts['y_fast_test'] = np.stack(y_fast_test)
 		setts.pop('test_fast_fname_list',None) #now remove that field
 
