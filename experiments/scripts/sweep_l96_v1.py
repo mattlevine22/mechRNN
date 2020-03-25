@@ -168,7 +168,7 @@ def main(output_dir=OUTPUT_DIR,
             n_trainpath_fast = os.path.join(traindir,'fast_data_{0}.npz'.format(n))
             pred_settings['train_fname'] = n_trainpath_slow # each prediction run uses a single training set
             pred_settings['train_fast_fname'] = n_trainpath_fast # each prediction run uses a single training set
-            if not os.path.exists(n_trainpath):
+            if not os.path.exists(n_trainpath_slow):
                 command_flag_dict = {'settings_path': train_settings_path, 'slow_name': n_trainpath_slow, 'fast_name': n_trainpath_fast}
                 jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
                     command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir,
