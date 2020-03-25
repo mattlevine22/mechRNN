@@ -1349,9 +1349,10 @@ def run_GP(y_clean_train, y_noisy_train,
         invariant_density_plot(test_data=y_clean_test_raw, pred_data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
 
         # plot inferred Ybar vs true Ybar
+        pdb.set_trace()
         if y_fast_test is not None:
             Ybar_inferred = ODE.implied_Ybar(X=gpr_test_predictions_raw, delta_t=model_params['delta_t'])
-            plot_Ybar(Ybar_true=y_fast_test[kkt,:,:], Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_TEST_{0}'.format(kkt))
+            plot_Ybar(Ybar_true=y_fast_test[kkt,:-1,:], Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_TEST_{0}'.format(kkt))
             n_short = 2/model_params['delta_t']
             plot_Ybar(Ybar_true=y_fast_test[kkt,:n_short,:], Ybar_inferred=Ybar_inferred[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}'.format(kkt,n_short*model_params['delta_t']))
 

@@ -356,7 +356,7 @@ class L96M:
 
   def implied_Ybar(_s, X, delta_t):
     pdb.set_trace()
-    Ybar = np.zeros( (X.shape[0], _s.K*_s.J) )
+    Ybar = np.zeros( (X.shape[0], _s.K) )
     for j in range(X.shape[0]-1):
       Ybar[j,:] = _s.single_step_implied_Ybar(Xnow=X[j,:], Xnext=X[j+1,:], delta_t=delta_t)
     # note that we don't have an estimate of Ybar[K*J,:] because Xnext is not available
