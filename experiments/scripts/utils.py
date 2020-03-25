@@ -919,7 +919,7 @@ def timeseries_Ybar_normed_error(Ybar_true, Ybar_inferred, output_fname, delta_t
     ax.plot(delta_t*np.arange(Ybar_true.shape[0]), k_err)
     ax.set_ylabel('Error')
     ax.set_xlabel('Time')
-    ax.title(r'$||$ True $\bar{Y}^{(t)}$ - Inferred $\bar{Y}^{(t)} ||$')
+    ax.set_title(r'$||$ True $\bar{Y}^{(t)}$ - Inferred $\bar{Y}^{(t)} ||$')
     fig.savefig(fname=output_fname)
 
     ax.set_yscale('log')
