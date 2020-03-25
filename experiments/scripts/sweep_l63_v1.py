@@ -134,7 +134,7 @@ def main(output_dir=OUTPUT_DIR,
                 # print(n_testpath, 'already exists, so skipping.')
                 continue
 
-            command_flag_dict = {'settings_path': test_settings_path, 'output_path': n_testpath}
+            command_flag_dict = {'settings_path': test_settings_path, 'slow_name': n_testpath}
             jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
                 command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir, jobname='testdatagen_{0}'.format(n),
                 master_job_file=master_job_file)
@@ -156,7 +156,7 @@ def main(output_dir=OUTPUT_DIR,
             n_trainpath = os.path.join(traindir,'dataset_{0}.npz'.format(n))
             pred_settings['train_fname'] = n_trainpath # each prediction run uses a single training set
             if not os.path.exists(n_trainpath):
-                command_flag_dict = {'settings_path': train_settings_path, 'output_path': n_trainpath}
+                command_flag_dict = {'settings_path': train_settings_path, 'slow_name': n_trainpath}
                 jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
                     command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir, jobname='traindatagen_{0}'.format(n),
                     master_job_file=master_job_file)

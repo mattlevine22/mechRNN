@@ -55,6 +55,29 @@ def main(settings_path=FLAGS.settings_path):
 	setts['y_clean_testSynch'] = np.stack(y_clean_testSynch)
 	setts['y_noisy_testSynch'] = np.stack(y_noisy_testSynch)
 
+
+	# check for fast test data and read that in
+	if 'test_fast_fname_list' in setts and setts['test_fast_fname_list']:
+		y_fast_test = []
+		for fnm in setts['test_fast_fname_list']:
+			test_set = np.load(fnm)
+			y_fast_test.append(test_set)
+		setts['y_fast_test'] = np.stack(y_fast_test)
+		setts.pop('test_fast_fname_list',None) #now remove that field
+
+	# try to read in fast train data
+	try:
+		setts['y_fast_train'] = np.load(setts['train_fast_fname'])
+	except:
+		print('Couldnt read and save fast train data, skipping that part.')
+		pass
+
+	try:
+		setts.pop('train_fast_fname',None) #now remove that field
+	except:
+		# not a key
+		pass
+
 	setts.pop('test_fname_list',None) #now remove that field
 	setts.pop('train_fname',None) #now remove that field
 	setts.pop('odeclass',None) #now remove that field

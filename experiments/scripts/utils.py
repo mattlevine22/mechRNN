@@ -331,7 +331,8 @@ def generate_data(
         ode_int_rtol=1.5e-8,
         ode_int_max_step=1.5e-3,
         rng_seed=None,
-        output_path='default_data.npz'):
+        slow_name='slow_data.npz',
+        fast_name='fast_data.npz'):
     '''To generate training data, set t_synch=0. For testing data, set t_synch>0.'''
 
 
@@ -353,11 +354,10 @@ def generate_data(
                     'y_noisy_synch': y_noisy[:ntsynch,:]
                     }
 
-    (base_path, ext) = os.path.splitext(output_path)
 
     if ODE.K==y_clean.shape[1]:
         #only considering slow system anyway, so output every state
-        np.savez(file=output_path, **output_dict_all)
+        np.savez(file=slow_name, **output_dict_all)
         # save phase plot
         phase_plot(data=y_clean, plot_inds=ODE.plot_state_indices(), state_names=ODE.get_state_names(), output_fname=base_path+'phase_plot', delta_t=delta_t)
     else:
@@ -366,18 +366,27 @@ def generate_data(
                 'y_clean_synch': y_clean[:ntsynch,:ODE.K],
                 'y_noisy_synch': y_noisy[:ntsynch,:ODE.K]
                 }
-        np.savez(file=output_path, **output_dict_slow_only)
+
+        output_dict_fast_only = {'y_clean': y_clean[ntsynch:,ODE.K:],
+                'y_noisy': y_noisy[ntsynch:,ODE.K:],
+                'y_clean_synch': y_clean[:ntsynch,ODE.K:],
+                'y_noisy_synch': y_noisy[:ntsynch,ODE.K:]
+                }
+
+        np.savez(file=slow_name, **output_dict_slow_only)
 
         # also save full slow/fast data
-        np.savez(file=base_path+'_FastAndSlow'+ext, **output_dict_all)
+        np.savez(file=fast_name, **output_dict_fast_only)
 
         # save fast phase plot
+        (base_path, ext) = os.path.splitext(fast_name)
         plot_inds = np.arange(ODE.K, ODE.K+ODE.J).tolist()
-        phase_plot(data=y_clean, plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True), output_fname=base_path+'phase_plot_fast', delta_t=delta_t)
+        phase_plot(data=y_clean, plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True), output_fname=base_path+'phase_plot', delta_t=delta_t)
 
         # save slow phase plot
+        (base_path, ext) = os.path.splitext(slow_name)
         plot_inds = np.arange(ODE.K).tolist()
-        phase_plot(data=y_clean, plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True), output_fname=base_path+'phase_plot_slow', delta_t=delta_t)
+        phase_plot(data=y_clean, plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True), output_fname=base_path+'phase_plot', delta_t=delta_t)
 
     return
 
@@ -868,6 +877,18 @@ def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, outpu
     plt.close(fig)
     return
 
+def plot_Ybar(Ybar_true, Ybar_inferred, output_fname):
+    K = Ybar_true.shape[1]
+    fig, ax_list = plt.subplots(1, K, figsize=[11,11], sharey=True, sharex=True)
+    for k in range(K):
+        ax_list[k].scatter(Ybar_true[:,k], Ybar_inferred[:,k])
+        ax_list[k].set_xlabel(r'True \bar{Y}_k')
+        ax_list[k].set_ylabel(r'Inferred \bar{Y}_k')
+    fig.suptitle(r'Compare True vs Inferred \bar{Y}_k')
+    fig.savefig(fname=output_fname)
+    plt.close(fig)
+    return
+
 def run_ode_test(y_clean_test, y_noisy_test,
                 y_clean_testSynch, y_noisy_testSynch,
                 model,f_unNormalize_Y,
@@ -1028,11 +1049,12 @@ def run_GP(y_clean_train, y_noisy_train,
             GP_grid = False,
             alpha=1e-10,
             do_resid=True,
-            learn_flow=True):
+            learn_flow=True,
+            y_fast_test=None,
+            y_fast_train=None):
 
     y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
     y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
-
 
     if gp_only:
         gp_nm = ''
@@ -1324,6 +1346,13 @@ def run_GP(y_clean_train, y_noisy_train,
         # plot KDE of test data vs predictions
         invdens_plotname = output_dir+'/invariant_density_TEST_{0}'.format(kkt)
         invariant_density_plot(test_data=y_clean_test_raw, pred_data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
+
+        # plot inferred Ybar vs true Ybar
+        if y_fast_test is not None:
+            Ybar_inferred = ODE.implied_Ybar(X=gpr_test_predictions_raw, delta_t=model_params['delta_t'])
+            plot_Ybar(Ybar_true=y_fast_test[kkt,:,:], Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_TEST_{0}'.format(kkt))
+            n_short = 2/model_params['delta_t']
+            plot_Ybar(Ybar_true=y_fast_test[kkt,:n_short,:], Ybar_inferred=Ybar_inferred[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}'.format(kkt,n_short*model_params['delta_t']))
 
         ALLy_clean_test_raw.append(y_clean_test_raw)
         ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
@@ -1646,7 +1675,9 @@ def train_chaosRNN(forward,
             model_params_TRUE=None,
             GP_grid = False,
             alpha_list = [1e-10],
-            ode_only=False):
+            ode_only=False,
+            y_fast_train=None,
+            y_fast_test=None):
 
     model_params['smaller_delta_t'] = model_params['delta_t'] # later, need to remove smaller_delta_t as field
 
@@ -1786,7 +1817,9 @@ def train_chaosRNN(forward,
                     GP_grid = GP_grid,
                     alpha = alpha,
                     do_resid = learn_residuals,
-                    learn_flow = learn_flow)
+                    learn_flow = learn_flow,
+                    y_fast_test=y_fast_test,
+                    y_fast_train=y_fast_train)
         # plot GP comparisons
         if GP_grid:
             style_list = [1,2,3]

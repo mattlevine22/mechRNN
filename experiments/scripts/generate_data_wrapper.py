@@ -8,7 +8,8 @@ import pdb
 
 parser = argparse.ArgumentParser(description='mechRNN')
 parser.add_argument('--settings_path', type=str, default='datagen_settings.json', help='pathname of numpy settings dictionary')
-parser.add_argument('--output_path', type=str, default='default_dataset.npz', help='pathname of output data')
+parser.add_argument('--slow_name', type=str, default='slow_data.npz', help='pathname of output data')
+parser.add_argument('--fast_name', type=str, default='fast_data.npz', help='pathname of output data')
 FLAGS = parser.parse_args()
 
 def main(settings_path=FLAGS.settings_path, output_path=FLAGS.output_path):

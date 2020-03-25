@@ -345,6 +345,22 @@ class L96M:
   def simulate(_s, slow):
     return np.reshape(_s.predictor(_s.apply_stencil(slow)), (-1,))
 
+  def single_step_implied_Ybar(_s, Xnow, Xnext, delta_t):
+    # use an euler scheme to back-out the implied avg Ybar_t from X_t and X_t+1
+    Ybar = (Xnext - Xnow)/delta_t - _s.slow(x=Xnow, t=None)
+
+    # divide by hx
+    Ybar /= _s.hx
+
+    return Ybar
+
+  def implied_Ybar(_s, X, delta_t):
+    Ybar = np.zeros( (X.shape[0], _s.K*_s.J) )
+    for j in range(X.shape[0]-1):
+      Ybar[j,:] = _s.single_step_implied_Ybar(Xnow=X[j,:], Xnext=X[j+1,:], delta_t=delta_t)
+    # note that we don't have an estimate of Ybar[K*J,:] because Xnext is not available
+    return Ybar
+
   def compute_Yk(_s, z):
     return z[_s.K:].reshape( (_s.J, _s.K), order = 'F').sum(axis = 0) / _s.J
     # TODO delete these two lines after testing
