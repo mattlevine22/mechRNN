@@ -878,6 +878,7 @@ def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, outpu
     return
 
 def plot_Ybar(Ybar_true, Ybar_inferred, output_fname):
+    pdb.set_trace()
     K = Ybar_true.shape[1]
     fig, ax_list = plt.subplots(1, K, figsize=[11,11], sharey=True, sharex=True)
     for k in range(K):
