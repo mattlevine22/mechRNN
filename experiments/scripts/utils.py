@@ -830,7 +830,7 @@ def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, outpu
 
     pdb.set_trace()
     if xmax is not None and xmin is not None:
-        my_inds = np.where((xdata>=xmin).all(axis=1) & (xdata<=xmax).all(axis=1))
+        my_inds = np.where((xdata>=xmin).all(axis=1) & (xdata<=xmax).all(axis=1))[0]
         xdata = xdata[my_inds,:]
         ydata = ydata[my_inds,:]
 
