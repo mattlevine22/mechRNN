@@ -889,7 +889,11 @@ def scatter_Ybar(Ybar_true, Ybar_inferred, output_fname):
     plt.close(fig)
     return
 
-def timeseries_Ybar_error(Ybar_true, Ybar_inferred, output_fname, delta_t):
+def timeseries_Ybar_plots(Ybar_true, Ybar_inferred, output_fname, delta_t):
+    timeseries_Ybar_k_error(Ybar_true, Ybar_inferred, output_fname+'kspecific', delta_t):
+    timeseries_Ybar_normed_error(Ybar_true, Ybar_inferred, output_fname+'normed', delta_t):
+
+def timeseries_Ybar_k_error(Ybar_true, Ybar_inferred, output_fname, delta_t):
     K = Ybar_true.shape[1]
     fig, ax_list = plt.subplots(K, 1, figsize=[11,11], sharey=True, sharex=True)
     for k in range(K):
@@ -903,6 +907,21 @@ def timeseries_Ybar_error(Ybar_true, Ybar_inferred, output_fname, delta_t):
 
     for k in range(K):
         ax_list[k].set_yscale('log')
+    fig.savefig(fname=output_fname+'_log')
+
+    plt.close(fig)
+
+def timeseries_Ybar_normed_error(Ybar_true, Ybar_inferred, output_fname, delta_t):
+    K = Ybar_true.shape[1]
+    fig, ax_list = plt.subplots(1, 1, figsize=[11,11], sharey=True, sharex=True)
+    k_err = np.linalg.norm(Ybar_true - Ybar_inferred, axis=1)
+    ax_list[0].plot(delta_t*np.arange(Ybar_true.shape[0]), k_err)
+    ax_list[0].set_ylabel('Error')
+    ax_list[0].set_xlabel('Time')
+    ax_list[0].title(r'$||$ True $\bar{Y}^{(t)}$ - Inferred $\bar{Y}^{(t)} ||$')
+    fig.savefig(fname=output_fname)
+
+    ax_list[0].set_yscale('log')
     fig.savefig(fname=output_fname+'_log')
 
     plt.close(fig)
@@ -1371,7 +1390,7 @@ def run_GP(y_clean_train, y_noisy_train,
         if y_fast_test is not None:
             Ybar_inferred = ODE.implied_Ybar(X=gpr_test_predictions_raw, delta_t=model_params['delta_t'])
             Ybar_true = y_fast_test[kkt,:,:].reshape( (y_fast_test.shape[1], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
-            timeseries_Ybar_error(delta_t=model_params['delta_t'], Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_timeseries_TEST_{0}'.format(kkt))
+            timeseries_Ybar_plots(delta_t=model_params['delta_t'], Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_timeseries_TEST_{0}'.format(kkt))
             scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_TEST_{0}.png'.format(kkt))
             n_short = int(0.2/model_params['delta_t'])
             scatter_Ybar(Ybar_true=Ybar_true[:n_short,:], Ybar_inferred=Ybar_inferred[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}.png'.format(kkt,n_short*model_params['delta_t']))
