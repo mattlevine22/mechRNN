@@ -914,15 +914,15 @@ def timeseries_Ybar_k_error(Ybar_true, Ybar_inferred, output_fname, delta_t):
 
 def timeseries_Ybar_normed_error(Ybar_true, Ybar_inferred, output_fname, delta_t):
     K = Ybar_true.shape[1]
-    fig, ax_list = plt.subplots(1, 1, figsize=[11,11], sharey=True, sharex=True)
+    fig, ax = plt.subplots(1, 1, figsize=[11,11], sharey=True, sharex=True)
     k_err = np.linalg.norm(Ybar_true - Ybar_inferred, axis=1)
-    ax_list[0].plot(delta_t*np.arange(Ybar_true.shape[0]), k_err)
-    ax_list[0].set_ylabel('Error')
-    ax_list[0].set_xlabel('Time')
-    ax_list[0].title(r'$||$ True $\bar{Y}^{(t)}$ - Inferred $\bar{Y}^{(t)} ||$')
+    ax.plot(delta_t*np.arange(Ybar_true.shape[0]), k_err)
+    ax.set_ylabel('Error')
+    ax.set_xlabel('Time')
+    ax.title(r'$||$ True $\bar{Y}^{(t)}$ - Inferred $\bar{Y}^{(t)} ||$')
     fig.savefig(fname=output_fname)
 
-    ax_list[0].set_yscale('log')
+    ax.set_yscale('log')
     fig.savefig(fname=output_fname+'_log')
 
     plt.close(fig)
