@@ -895,11 +895,16 @@ def timeseries_Ybar_error(Ybar_true, Ybar_inferred, output_fname, delta_t):
     for k in range(K):
         k_err = np.linalg.norm(Ybar_true[:,k,None] - Ybar_inferred[:,k,None], axis=1)
         ax_list[k].plot(delta_t*np.arange(Ybar_true.shape[0]), k_err)
-        ax_list[k].set_xlabel('Time')
-        ax_list[k].set_xlabel('Error')
+        ax_list[k].set_ylabel('Error')
         ax_list[k].set_title('k={0}'.format(k))
-    fig.suptitle(r'$|| True $\bar{Y}_k$ - Inferred $\bar{Y}_k ||$')
+    ax_list[k].set_xlabel('Time')
+    fig.suptitle(r'$||$ True $\bar{Y}_k$ - Inferred $\bar{Y}_k ||$')
     fig.savefig(fname=output_fname)
+
+    for k in range(K):
+        ax_list[k].set_yscale('log')
+    fig.savefig(fname=output_fname+'_log')
+
     plt.close(fig)
 
 
@@ -1366,7 +1371,7 @@ def run_GP(y_clean_train, y_noisy_train,
         if y_fast_test is not None:
             Ybar_inferred = ODE.implied_Ybar(X=gpr_test_predictions_raw, delta_t=model_params['delta_t'])
             Ybar_true = y_fast_test[kkt,:,:].reshape( (y_fast_test.shape[1], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
-            timeseries_Ybar_error(delta_t=model_params['delta_t'], Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_timeseries_TEST_{0}.png'.format(kkt))
+            timeseries_Ybar_error(delta_t=model_params['delta_t'], Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_timeseries_TEST_{0}'.format(kkt))
             scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_TEST_{0}.png'.format(kkt))
             n_short = int(0.2/model_params['delta_t'])
             scatter_Ybar(Ybar_true=Ybar_true[:n_short,:], Ybar_inferred=Ybar_inferred[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}.png'.format(kkt,n_short*model_params['delta_t']))
