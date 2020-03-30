@@ -17,7 +17,7 @@ N_TESTING_SETS = 10
 
 OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/l96_TRIALS_default_name'
 
-ODE_PARAMETERS = {'F': [10,25,50],
+ODE_PARAMETERS = {'F': [10,25,50,100],
                 'eps': [2**(-1), 2**(-3), 2**(-5), 2**(-7), 2**(-8)],
                 'K': [4],
                 'J': [4]
@@ -257,7 +257,7 @@ def main(output_dir=OUTPUT_DIR,
                 hidden_size = pred_settings['hidden_size']
 
                 # vanillaRNN
-                run_nm = 'vanillaRNN_residual{0}_hs{1}'.format(learn_residuals, hidden_size)
+                run_nm = 'vanillaRNN_residual{0}_hs{1}_epochs{2}'.format(learn_residuals, hidden_size, pred_settings['n_epochs'])
                 run_path = os.path.join(n_pred_dir, run_nm)
                 if not os.path.exists(run_path):
                     mkdir_p(run_path)
@@ -273,14 +273,14 @@ def main(output_dir=OUTPUT_DIR,
                         jobfile_dir=experiment_dir,
                         jobname='{0}_Init{1}'.format(run_nm, n),
                         jobid_dir=run_path, master_job_file=master_job_file,
-                        hours=14)
+                        hours=16)
                 # train_chaosRNN_wrapper(**pred_settings)
                     if jobstatus!=0:
                         print('Quitting because job failed!')
                         return submissions_complete
 
                 # mechRNN
-                run_nm = 'mechRNN_residual{0}_hs{1}'.format(learn_residuals, hidden_size)
+                run_nm = 'mechRNN_residual{0}_hs{1}_epochs{2}'.format(learn_residuals, hidden_size, pred_settings['n_epochs'])
                 run_path = os.path.join(n_pred_dir, run_nm)
                 if not os.path.exists(run_path):
                     mkdir_p(run_path)
@@ -296,7 +296,7 @@ def main(output_dir=OUTPUT_DIR,
                         jobfile_dir=experiment_dir,
                         jobname='{0}_Init{1}'.format(run_nm, n),
                         jobid_dir=run_path, master_job_file=master_job_file,
-                        hours=24)
+                        hours=16)
                     # train_chaosRNN_wrapper(**pred_settings)
                     if jobstatus!=0:
                         print('Quitting because job failed!')
