@@ -9,6 +9,8 @@ from time import sleep
 # --slow_only True --epoch 1000 --ode_int_method RK45
 # --run_RNN True
 
+NO_SUBMIT = False
+
 CMD_generate_data_wrapper = 'python3 $HOME/mechRNN/experiments/scripts/generate_data_wrapper.py'
 CMD_run_fits = 'python3 $HOME/mechRNN/experiments/scripts/train_chaosRNN_wrapper.py'
 
@@ -81,7 +83,8 @@ def main(output_dir=OUTPUT_DIR,
     n_testing_sets=N_TESTING_SETS,
     ode_parameters=ODE_PARAMETERS,
     rnn_experiments=RNN_EXPERIMENT_LIST,
-    gp_experiments=GP_EXPERIMENT_LIST):
+    gp_experiments=GP_EXPERIMENT_LIST,
+    no_submit=no_submit):
 
     # hasn't finished yet
     submissions_complete = False
@@ -148,7 +151,8 @@ def main(output_dir=OUTPUT_DIR,
                 command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir,
                 jobname='testdatagen_{0}'.format(n), master_job_file=master_job_file,
                 exclusive=True,
-                hours=1)
+                hours=1,
+                no_submit=no_submit)
             testjob_ids.append(jobnum)
             # write job_id to its target directory for easy checking later
             with open(os.path.join(testdir,'dataset_{0}_{1}.id'.format(n,jobnum)), 'w') as fp:
@@ -175,7 +179,8 @@ def main(output_dir=OUTPUT_DIR,
                     command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir,
                     jobname='traindatagen_{0}'.format(n), master_job_file=master_job_file,
                     exclusive=True,
-                    hours=1)
+                    hours=1,
+                    no_submit=no_submit)
                 # write job_id to its target directory for easy checking later
                 with open(os.path.join(traindir,'dataset_{0}_{1}.id'.format(n,jobnum)), 'w') as fp:
                     pass
@@ -212,7 +217,8 @@ def main(output_dir=OUTPUT_DIR,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
                         jobfile_dir=experiment_dir,
                         jobname='{0}_Init{1}'.format(run_nm, n),
-                        jobid_dir=run_path, master_job_file=master_job_file, hours=1)
+                        jobid_dir=run_path, master_job_file=master_job_file, hours=1,
+                        no_submit=no_submit)
 
                     if jobstatus!=0:
                         print('Quitting because job failed!')
@@ -242,7 +248,8 @@ def main(output_dir=OUTPUT_DIR,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
                         jobfile_dir=experiment_dir,
                         jobname='{0}_Init{1}'.format(run_nm, n),
-                        jobid_dir=run_path, master_job_file=master_job_file, hours=1)
+                        jobid_dir=run_path, master_job_file=master_job_file, hours=1,
+                        no_submit=no_submit)
                     if jobstatus!=0:
                         print('Quitting because job failed!')
                         return submissions_complete
@@ -273,7 +280,8 @@ def main(output_dir=OUTPUT_DIR,
                         jobfile_dir=experiment_dir,
                         jobname='{0}_Init{1}'.format(run_nm, n),
                         jobid_dir=run_path, master_job_file=master_job_file,
-                        hours=16)
+                        hours=16,
+                        no_submit=no_submit)
                 # train_chaosRNN_wrapper(**pred_settings)
                     if jobstatus!=0:
                         print('Quitting because job failed!')
@@ -296,7 +304,8 @@ def main(output_dir=OUTPUT_DIR,
                         jobfile_dir=experiment_dir,
                         jobname='{0}_Init{1}'.format(run_nm, n),
                         jobid_dir=run_path, master_job_file=master_job_file,
-                        hours=16)
+                        hours=16,
+                        no_submit=no_submit)
                     # train_chaosRNN_wrapper(**pred_settings)
                     if jobstatus!=0:
                         print('Quitting because job failed!')
@@ -311,5 +320,11 @@ if __name__ == '__main__':
     except:
         output_dir = OUTPUT_DIR
 
-    main(output_dir=output_dir)
+    try:
+        if sys.argv[2]=='--no_submit':
+            no_submit = True
+    except:
+        no_submit = NO_SUBMIT
+
+    main(output_dir=output_dir, no_submit=no_submit)
 

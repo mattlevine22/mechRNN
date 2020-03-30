@@ -79,7 +79,7 @@ def resubmit_glob_jobs(glob_str, old_str=None, new_str=''):
             print('Job submitted:', ' '.join(cmd))
     return
 
-def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=None, jobid_dir=None, master_job_file=None, report_status=True, exclusive=True, hours=24):
+def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=None, jobid_dir=None, master_job_file=None, report_status=True, exclusive=True, hours=24, no_submit=False):
 
     # build sbatch job script and write to file
     job_directory = os.path.join(jobfile_dir,'.job')
@@ -116,6 +116,10 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
         cmd.append('--dependency=after:{0}'.format(depstr))
 
     cmd.append(job_file)
+
+    if no_submit:
+        print('Job created (not submitted):', ' '.join(cmd))
+        return 0, 0
 
     proc = subprocess.run(cmd, capture_output=True, text=True)
     # check for successful run and print the error
