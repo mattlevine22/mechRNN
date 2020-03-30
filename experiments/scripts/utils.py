@@ -1441,7 +1441,7 @@ def run_GP(y_clean_train, y_noisy_train,
     # in cases where input size has doubled (e.g. GPR2), be sure to also double the axis limits
     boo_xmax = normz_info['Ymax']
     boo_xmin = normz_info['Ymin']
-    if ALLgpr_inputs.shape[0]==2*boo_xmax.shape[0]:
+    if ALLgpr_inputs.shape[1]==2*boo_xmax.shape[0]:
         boo_xmax = np.concatenate((boo_xmax,boo_xmax))
         boo_xmin = np.concatenate((boo_xmin,boo_xmin))
 
