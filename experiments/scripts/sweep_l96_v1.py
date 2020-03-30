@@ -192,24 +192,29 @@ def main(output_dir=OUTPUT_DIR,
             # GPR w/out residuals (learn_flow=False) gp_style 2 and 3
 
             # ODE only
-            run_nm = 'pureODE'
-            run_path = os.path.join(n_pred_dir, run_nm)
-            if not os.path.exists(run_path):
-                mkdir_p(run_path)
-                pred_settings['output_dir'] = run_path
-                pred_settings['ode_only'] = True
-                pred_settings_path = os.path.join(run_path, 'prediction_settings.json')
-                dict_to_file(mydict=pred_settings, fname=pred_settings_path)
-                command_flag_dict = {'settings_path': pred_settings_path}
-                jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
-                    command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
-                    jobfile_dir=experiment_dir,
-                    jobname='{0}_Init{1}'.format(run_nm, n),
-                    jobid_dir=run_path, master_job_file=master_job_file, hours=2)
+            for use_ode_test_data in [True,False]:
+                if use_ode_test_data:
+                    run_nm = 'multiscaleODE'
+                else:
+                    run_nm = 'slowODE'
+                run_path = os.path.join(n_pred_dir, run_nm)
+                if not os.path.exists(run_path):
+                    mkdir_p(run_path)
+                    pred_settings['use_ode_test_data'] = use_ode_test_data
+                    pred_settings['output_dir'] = run_path
+                    pred_settings['ode_only'] = True
+                    pred_settings_path = os.path.join(run_path, 'prediction_settings.json')
+                    dict_to_file(mydict=pred_settings, fname=pred_settings_path)
+                    command_flag_dict = {'settings_path': pred_settings_path}
+                    jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
+                        command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
+                        jobfile_dir=experiment_dir,
+                        jobname='{0}_Init{1}'.format(run_nm, n),
+                        jobid_dir=run_path, master_job_file=master_job_file, hours=2)
 
-                if jobstatus!=0:
-                    print('Quitting because job failed!')
-                    return submissions_complete
+                    if jobstatus!=0:
+                        print('Quitting because job failed!')
+                        return submissions_complete
 
             pred_settings['ode_only'] = False
             pred_settings['gp_only'] = True

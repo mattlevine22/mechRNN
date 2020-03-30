@@ -147,7 +147,7 @@ def getval(x):
 
 def dict_to_file(mydict, fname):
     with open(fname, 'w') as f:
-        json.dump(mydict, f)
+        json.dump(mydict, f, indent=2)
     return
 
 
@@ -968,7 +968,11 @@ def run_ode_test(y_clean_test, y_noisy_test,
                 n_plttrain,
                 n_plttest,
                 n_test_sets,
-                err_thresh):
+                err_thresh,
+                y_fast_test=None,
+                y_fast_train=None,
+                ODE=None,
+                use_ode_test_data=False):
 
     gp_nm = ''
 
@@ -995,26 +999,30 @@ def run_ode_test(y_clean_test, y_noisy_test,
             target = y_noisy_test[kkt,j,:]
             target_clean = y_clean_test[kkt,j,:]
 
-            # generate next-step ODE model prediction
-            # tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
-            # unnormalize model_input so that it can go through the ODE solver
-            y0 = f_unNormalize_minmax(normz_info, pred)
-
-            # compute prediction using PURE ODE MODEL
-            if not solver_failed:
-                sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-                y_out = sol.y.T
-                if not sol.success:
-                    # solver failed
-                    print('ODE solver has failed at y0=',y0)
-                    solver_failed = True
-            if solver_failed:
-                my_model_pred = np.copy(pred) # persist previous normalized solution
+            if use_ode_test_data:
+                # ONLY do this to test our ability to infer Ybark from true slow data
+                pred = target_clean
             else:
-                # solver is OKAY--use the solution like a good boy!
-                my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+                # generate next-step ODE model prediction
+                # tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+                # unnormalize model_input so that it can go through the ODE solver
+                y0 = f_unNormalize_minmax(normz_info, pred)
 
-            pred = my_model_pred
+                # compute prediction using PURE ODE MODEL
+                if not solver_failed:
+                    sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+                    y_out = sol.y.T
+                    if not sol.success:
+                        # solver failed
+                        print('ODE solver has failed at y0=',y0)
+                        solver_failed = True
+                if solver_failed:
+                    my_model_pred = np.copy(pred) # persist previous normalized solution
+                else:
+                    # solver is OKAY--use the solution like a good boy!
+                    my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+
+                pred = my_model_pred
 
             # compute losses
             j_loss = sum((pred - target)**2)
@@ -1073,6 +1081,15 @@ def run_ode_test(y_clean_test, y_noisy_test,
         # plot KDE of test data vs predictions
         invdens_plotname = output_dir+'/invariant_density_TEST_{0}'.format(kkt)
         invariant_density_plot(test_data=y_clean_test_raw, pred_data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
+
+        # plot inferred Ybar vs true Ybar
+        if y_fast_test is not None:
+            Ybar_inferred = ODE.implied_Ybar(X=gpr_test_predictions_raw, delta_t=model_params['delta_t'])
+            Ybar_true = y_fast_test[kkt,:,:].reshape( (y_fast_test.shape[1], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
+            timeseries_Ybar_plots(delta_t=model_params['delta_t'], Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_timeseries_TEST_{0}'.format(kkt))
+            scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_TEST_{0}.png'.format(kkt))
+            n_short = int(1.5/model_params['delta_t'])
+            scatter_Ybar(Ybar_true=Ybar_true[:n_short,:], Ybar_inferred=Ybar_inferred[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}.png'.format(kkt,n_short*model_params['delta_t']))
 
         ALLy_clean_test_raw.append(y_clean_test_raw)
         ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
@@ -1752,7 +1769,8 @@ def train_chaosRNN(forward,
             ode_only=False,
             y_fast_train=None,
             y_fast_test=None,
-            ODE=None):
+            ODE=None,
+            use_ode_test_data=False):
 
     model_params['smaller_delta_t'] = model_params['delta_t'] # later, need to remove smaller_delta_t as field
 
@@ -1863,7 +1881,12 @@ def train_chaosRNN(forward,
                     n_plttrain,
                     n_plttest,
                     n_test_sets,
-                    err_thresh)
+                    err_thresh,
+                    y_fast_test=y_fast_test,
+                    y_fast_train=y_fast_train,
+                    ODE=ODE,
+                    use_ode_test_data=use_ode_test_data)
+
         return
 
 
