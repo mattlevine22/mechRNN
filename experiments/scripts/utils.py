@@ -79,7 +79,7 @@ def resubmit_glob_jobs(glob_str, old_str=None, new_str=''):
             print('Job submitted:', ' '.join(cmd))
     return
 
-def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=None, jobid_dir=None, master_job_file=None, report_status=True, exclusive=True, hours=24, no_submit=False):
+def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=[], jobid_dir=None, master_job_file=None, report_status=True, exclusive=True, hours=24, no_submit=False):
 
     # build sbatch job script and write to file
     job_directory = os.path.join(jobfile_dir,'.job')
@@ -110,10 +110,9 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
         fh.writelines(sbatch_str)
 
     # run the sbatch job script
-    # depending_jobs = [z for z in depending_jobs if z is not None]
+    depending_jobs = [z for z in depending_jobs if z is not None]
     cmd = ['sbatch']
     if depending_jobs:
-        pdb.set_trace()
         depstr = ','.join(depending_jobs) #depending_jobs must be list of strings
         cmd.append('--dependency=after:{0}'.format(depstr))
 
