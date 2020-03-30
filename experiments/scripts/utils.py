@@ -855,7 +855,6 @@ def phase_plot(data, plot_inds, state_names, output_fname, delta_t=1, state_lims
 
 def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, output_fname, xmin=None, xmax=None):
 
-    pdb.set_trace()
     if xmax is not None and xmin is not None:
         my_inds = np.where((xdata>=xmin).all(axis=1) & (xdata<=xmax).all(axis=1))[0]
         xdata = xdata[my_inds,:]
