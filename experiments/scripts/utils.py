@@ -346,7 +346,9 @@ def generate_data(
         ode_int_max_step=1.5e-3,
         rng_seed=None,
         slow_name='slow_data.npz',
-        fast_name='fast_data.npz'):
+        fast_name='fast_data.npz',
+        slow_lims=None,
+        fast_lims=None):
     '''To generate training data, set t_synch=0. For testing data, set t_synch>0.'''
 
 
@@ -373,7 +375,7 @@ def generate_data(
         #only considering slow system anyway, so output every state
         np.savez(file=slow_name, **output_dict_all)
         # save phase plot
-        phase_plot(data=y_clean, plot_inds=ODE.plot_state_indices(), state_names=ODE.get_state_names(), output_fname=base_path+'phase_plot', delta_t=delta_t)
+        phase_plot(data=y_clean, plot_inds=ODE.plot_state_indices(), state_names=ODE.get_state_names(), output_fname=base_path+'phase_plot', delta_t=delta_t, state_lims=slow_lims)
     else:
         output_dict_slow_only = {'y_clean': y_clean[ntsynch:,:ODE.K],
                 'y_noisy': y_noisy[ntsynch:,:ODE.K],
@@ -395,12 +397,12 @@ def generate_data(
         # save fast phase plot
         (base_path, ext) = os.path.splitext(fast_name)
         plot_inds = np.arange(ODE.K, ODE.K+ODE.J).tolist()
-        phase_plot(data=y_clean, plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True), output_fname=base_path+'phase_plot', delta_t=delta_t)
+        phase_plot(data=y_clean, plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True), output_fname=base_path+'phase_plot', delta_t=delta_t, state_lims=slow_lims)
 
         # save slow phase plot
         (base_path, ext) = os.path.splitext(slow_name)
         plot_inds = np.arange(ODE.K).tolist()
-        phase_plot(data=y_clean, plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True), output_fname=base_path+'phase_plot', delta_t=delta_t)
+        phase_plot(data=y_clean, plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True), output_fname=base_path+'phase_plot', delta_t=delta_t, state_lims=fast_lims)
 
     return
 
@@ -820,7 +822,7 @@ def invariant_density_plot(test_data, pred_data, plot_inds, state_names, output_
     return
 
 
-def phase_plot(data, plot_inds, state_names, output_fname, delta_t=1):
+def phase_plot(data, plot_inds, state_names, output_fname, delta_t=1, state_lims=None):
     fig, ax_list = plt.subplots(len(plot_inds),len(plot_inds), figsize=[11,11])
     for i_y in range(len(plot_inds)):
         yy = plot_inds[i_y]
@@ -835,6 +837,8 @@ def phase_plot(data, plot_inds, state_names, output_fname, delta_t=1):
             ax = ax_list[i_y][i_x]
             if xx<yy:
                 ax.plot(data[:,xx],data[:,yy])
+                # if state_lims:
+                #     ax.set
             elif xx==yy:
                 ax.plot(delta_t*np.arange(data.shape[0]), data[:,xx])
             else:
@@ -851,6 +855,7 @@ def phase_plot(data, plot_inds, state_names, output_fname, delta_t=1):
 
 def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, output_fname, xmin=None, xmax=None):
 
+    pdb.set_trace()
     if xmax is not None and xmin is not None:
         my_inds = np.where((xdata>=xmin).all(axis=1) & (xdata<=xmax).all(axis=1))[0]
         xdata = xdata[my_inds,:]
