@@ -112,6 +112,7 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
     # run the sbatch job script
     cmd = ['sbatch']
     if depending_jobs:
+        pdb.set_trace()
         depstr = ','.join(depending_jobs) #depending_jobs must be list of strings
         cmd.append('--dependency=after:{0}'.format(depstr))
 
@@ -119,7 +120,7 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
 
     if no_submit:
         print('Job created (not submitted):', ' '.join(cmd))
-        return 0, 0
+        return 0, None
 
     proc = subprocess.run(cmd, capture_output=True, text=True)
     # check for successful run and print the error
