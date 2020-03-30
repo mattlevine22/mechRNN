@@ -7,6 +7,7 @@
 # based off of code from https://www.cpuheater.com/deep-learning/introduction-to-recurrent-neural-networks-in-pytorch/
 import os
 import subprocess
+import glob
 import itertools
 from time import time, sleep
 from datetime import timedelta
@@ -57,6 +58,19 @@ def make_cmd(cmd='echo $Home', command_flag_dict={}):
     for key in command_flag_dict:
         cmd += ' --{0} {1}'.format(key, command_flag_dict[key])
     return cmd
+
+def resubmit_glob_jobs(glob_str):
+    for job_file in glob.glob(glob_str):
+        cmd = ['sbatch', job_file]
+
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        # check for successful run and print the error
+        status = proc.returncode
+        if status!=0:
+            print('Job submission FAILED:', proc.stdout, cmd)
+        else:
+            print('Job submitted:', ' '.join(cmd))
+    return
 
 def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=None, jobid_dir=None, master_job_file=None, report_status=True, exclusive=True):
 
