@@ -18,7 +18,7 @@ N_TESTING_SETS = 10
 OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/l96_TRIALS_default_name'
 
 ODE_PARAMETERS = {'F': [10,25,50],
-                'eps': [2**(-1), 2**(-3), 2**(-5), 2**(-7)],
+                'eps': [2**(-1), 2**(-3), 2**(-5), 2**(-7), 2**(-8)],
                 'K': [4],
                 'J': [4]
             }
@@ -147,7 +147,8 @@ def main(output_dir=OUTPUT_DIR,
             jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
                 command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir,
                 jobname='testdatagen_{0}'.format(n), master_job_file=master_job_file,
-                exclusive=True)
+                exclusive=True,
+                hours=1)
             testjob_ids.append(jobnum)
             # write job_id to its target directory for easy checking later
             with open(os.path.join(testdir,'dataset_{0}_{1}.id'.format(n,jobnum)), 'w') as fp:
@@ -173,7 +174,8 @@ def main(output_dir=OUTPUT_DIR,
                 jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_generate_data_wrapper,
                     command_flag_dict=command_flag_dict, jobfile_dir=experiment_dir,
                     jobname='traindatagen_{0}'.format(n), master_job_file=master_job_file,
-                    exclusive=True)
+                    exclusive=True,
+                    hours=1)
                 # write job_id to its target directory for easy checking later
                 with open(os.path.join(traindir,'dataset_{0}_{1}.id'.format(n,jobnum)), 'w') as fp:
                     pass
@@ -210,7 +212,7 @@ def main(output_dir=OUTPUT_DIR,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
                         jobfile_dir=experiment_dir,
                         jobname='{0}_Init{1}'.format(run_nm, n),
-                        jobid_dir=run_path, master_job_file=master_job_file, hours=2)
+                        jobid_dir=run_path, master_job_file=master_job_file, hours=1)
 
                     if jobstatus!=0:
                         print('Quitting because job failed!')
@@ -240,7 +242,7 @@ def main(output_dir=OUTPUT_DIR,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
                         jobfile_dir=experiment_dir,
                         jobname='{0}_Init{1}'.format(run_nm, n),
-                        jobid_dir=run_path, master_job_file=master_job_file, hours=2)
+                        jobid_dir=run_path, master_job_file=master_job_file, hours=1)
                     if jobstatus!=0:
                         print('Quitting because job failed!')
                         return submissions_complete
@@ -270,7 +272,8 @@ def main(output_dir=OUTPUT_DIR,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
                         jobfile_dir=experiment_dir,
                         jobname='{0}_Init{1}'.format(run_nm, n),
-                        jobid_dir=run_path, master_job_file=master_job_file, hours=14)
+                        jobid_dir=run_path, master_job_file=master_job_file,
+                        hours=14)
                 # train_chaosRNN_wrapper(**pred_settings)
                     if jobstatus!=0:
                         print('Quitting because job failed!')
@@ -292,7 +295,8 @@ def main(output_dir=OUTPUT_DIR,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
                         jobfile_dir=experiment_dir,
                         jobname='{0}_Init{1}'.format(run_nm, n),
-                        jobid_dir=run_path, master_job_file=master_job_file, hours=24)
+                        jobid_dir=run_path, master_job_file=master_job_file,
+                        hours=24)
                     # train_chaosRNN_wrapper(**pred_settings)
                     if jobstatus!=0:
                         print('Quitting because job failed!')
