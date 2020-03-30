@@ -110,7 +110,7 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
         fh.writelines(sbatch_str)
 
     # run the sbatch job script
-    depending_jobs = [z for z in depending_jobs if z is not None]
+    # depending_jobs = [z for z in depending_jobs if z is not None]
     cmd = ['sbatch']
     if depending_jobs:
         pdb.set_trace()
