@@ -205,7 +205,7 @@ def main(output_dir=OUTPUT_DIR,
                     command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
                     jobfile_dir=experiment_dir,
                     jobname='{0}_Init{1}'.format(run_nm, n),
-                    jobid_dir=run_path, master_job_file=master_job_file)
+                    jobid_dir=run_path, master_job_file=master_job_file, hours=2)
 
                 if jobstatus!=0:
                     print('Quitting because job failed!')
@@ -235,7 +235,7 @@ def main(output_dir=OUTPUT_DIR,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
                         jobfile_dir=experiment_dir,
                         jobname='{0}_Init{1}'.format(run_nm, n),
-                        jobid_dir=run_path, master_job_file=master_job_file)
+                        jobid_dir=run_path, master_job_file=master_job_file, hours=2)
                     if jobstatus!=0:
                         print('Quitting because job failed!')
                         return submissions_complete
@@ -265,7 +265,7 @@ def main(output_dir=OUTPUT_DIR,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
                         jobfile_dir=experiment_dir,
                         jobname='{0}_Init{1}'.format(run_nm, n),
-                        jobid_dir=run_path, master_job_file=master_job_file)
+                        jobid_dir=run_path, master_job_file=master_job_file, hours=14)
                 # train_chaosRNN_wrapper(**pred_settings)
                     if jobstatus!=0:
                         print('Quitting because job failed!')
@@ -287,7 +287,7 @@ def main(output_dir=OUTPUT_DIR,
                         command_flag_dict=command_flag_dict, depending_jobs=depending_jobs,
                         jobfile_dir=experiment_dir,
                         jobname='{0}_Init{1}'.format(run_nm, n),
-                        jobid_dir=run_path, master_job_file=master_job_file)
+                        jobid_dir=run_path, master_job_file=master_job_file, hours=24)
                     # train_chaosRNN_wrapper(**pred_settings)
                     if jobstatus!=0:
                         print('Quitting because job failed!')

@@ -59,8 +59,15 @@ def make_cmd(cmd='echo $Home', command_flag_dict={}):
         cmd += ' --{0} {1}'.format(key, command_flag_dict[key])
     return cmd
 
-def resubmit_glob_jobs(glob_str):
+def resubmit_glob_jobs(glob_str, old_str=None, new_str=''):
     for job_file in glob.glob(glob_str):
+        if old_str is not None:
+            with open(job_file, 'rt') as f:
+                data = f.read()
+                data = data.replace(old_str, new_str)
+            with open(job_file, 'wt') as f:
+                f.write(data)
+
         cmd = ['sbatch', job_file]
 
         proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -72,7 +79,7 @@ def resubmit_glob_jobs(glob_str):
             print('Job submitted:', ' '.join(cmd))
     return
 
-def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=None, jobid_dir=None, master_job_file=None, report_status=True, exclusive=True):
+def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=None, jobid_dir=None, master_job_file=None, report_status=True, exclusive=True, hours=24):
 
     # build sbatch job script and write to file
     job_directory = os.path.join(jobfile_dir,'.job')
@@ -89,7 +96,7 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
     sbatch_str += "#SBATCH --job-name=%s.job\n" % jobname
     sbatch_str += "#SBATCH --output=%s.out\n" % os.path.join(out_directory,jobname)
     sbatch_str += "#SBATCH --error=%s.err\n" % os.path.join(out_directory,jobname)
-    sbatch_str += "#SBATCH --time=48:00:00\n" # 48hr
+    sbatch_str += "#SBATCH --time={0}:00:00\n".format(hours) # default 24hrs. Shorter time gets more priority.
     if exclusive:
         sbatch_str += "#SBATCH --exclusive\n" # exclusive use of a node for the submitted job
     sbatch_str += bash_run_command
