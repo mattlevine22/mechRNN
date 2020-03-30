@@ -191,7 +191,7 @@ def main(output_dir=OUTPUT_DIR,
                 # generate_data(**datagen_settings_TRAIN)
                 depending_jobs = testjob_ids + [jobnum]
             else:
-                depending_jobs = None
+                depending_jobs = []
                 # print(n_trainpath, 'already exists, so skipping.')
 
             # submit job to Train and evaluate model
