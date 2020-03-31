@@ -1006,9 +1006,9 @@ def run_ode_test(y_clean_test, y_noisy_test,
             target = y_noisy_test[kkt,j,:]
             target_clean = y_clean_test[kkt,j,:]
             if j>0:
-                test_val_prev = y_clean_test[kkt,j-1,:]
+                test_val_prev = y_clean_test[kkt,j-1,:].squeeze()
             else:
-                test_val_prev = y_noisy_testSynch[kkt,-1,:]
+                test_val_prev = y_clean_testSynch[kkt,-1,:].squeeze()
 
             if use_ode_test_data:
                 # ONLY do this to test our ability to infer Ybark from true slow data
@@ -1104,6 +1104,7 @@ def run_ode_test(y_clean_test, y_noisy_test,
 
         # plot inferred Ybar vs true Ybar
         if y_fast_test is not None:
+            pdb.set_trace()
             X_in = y_clean_test_raw
             X_out = gpr_test_predictions_onestep_raw
             Ybar_inferred = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
