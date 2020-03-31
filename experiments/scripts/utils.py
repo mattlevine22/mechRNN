@@ -1104,7 +1104,7 @@ def run_ode_test(y_clean_test, y_noisy_test,
 
         # plot inferred Ybar vs true Ybar
         if y_fast_test is not None:
-            X_in = np.vstack((y_clean_testSynch[kkt,-1,:], y_clean_test_raw[:-1,:]))
+            X_in = np.vstack((f_unNormalize_Y(normz_info,y_clean_testSynch[kkt,-1,:]), y_clean_test_raw[:-1,:]))
             X_out = gpr_test_predictions_onestep_raw
             Ybar_inferred = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
             Ybar_true = y_fast_test[kkt,:,:].reshape( (y_fast_test.shape[1], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
@@ -1339,12 +1339,19 @@ def run_GP(y_clean_train, y_noisy_train,
         pw_loss_test = np.zeros(test_seq_length)
         pw_loss_clean_test = np.zeros(test_seq_length)
         gpr_test_predictions = np.zeros([test_seq_length, output_size])
+        gpr_test_predictions_onestep = np.zeros([test_seq_length, output_size])
         gp_input = np.zeros([test_seq_length, output_size*(1+(gp_style==2))])
         gp_output = np.zeros([test_seq_length, output_size])
         solver_failed = False
         for j in range(test_seq_length):
             target = y_noisy_test[kkt,j,:]
             target_clean = y_clean_test[kkt,j,:]
+
+            if j>0:
+                test_val_prev = y_clean_test[kkt,j-1,:].squeeze()
+            else:
+                test_val_prev = y_clean_testSynch[kkt,-1,:].squeeze()
+
 
             # generate next-step ODE model prediction
             # tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
@@ -1370,31 +1377,52 @@ def run_GP(y_clean_train, y_noisy_train,
                 else:
                     # solver is OKAY--use the solution like a good boy!
                     my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+
+                # NOW i'm going to compute my one-step-ahead-based model prediction, which always uses the previous test data point (only for Ybark_inferrence)
+                y0 = f_unNormalize_minmax(normz_info, test_val_prev)
+                if learn_flow:
+                    sol = solve_ivp(fun=lambda t, y: corrected_model(y, t, model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+                else:
+                    sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+                y_out = sol.y.T
+                my_model_pred_onestep = f_normalize_minmax(normz_info, y_out[-1,:])
+
             else:
                 # don't need it anyway, so just make it 0
                 my_model_pred = 0
+                my_model_pred_onestep = 0
 
             if learn_flow:
                 pred = my_model_pred
             else:
                 if gp_style==1:
                     x = pred
+                    x_onestep = test_val_prev
                 elif gp_style==2:
                     x = np.concatenate((pred, my_model_pred))
+                    x_onestep = np.concatenate((test_val_prev, my_model_pred_onestep))
                 elif gp_style==3:
                     x = my_model_pred
+                    x_onestep = my_model_pred_onestep
                 elif gp_style==4:
                     x = pred
+                    x_onestep = test_val_prev
 
                 if gp_style==2:
+                    gp_input_onestep = np.concatenate((f_unNormalize_Y(normz_info, test_val_prev), f_unNormalize_Y(normz_info, my_model_pred_onestep)))
                     gp_input[j,:] = np.concatenate((f_unNormalize_Y(normz_info, pred), f_unNormalize_Y(normz_info, my_model_pred)))
                 else:
+                    gp_input_onestep = f_unNormalize_Y(normz_info, x_onestep)
                     gp_input[j,:] = f_unNormalize_Y(normz_info, x)
 
                 gpr_pred_val = gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
                 pred = do_resid*my_model_pred + gpr_pred_val
 
                 gp_output[j,:] = f_unNormalize_Y(normz_info, pred) - do_resid*f_unNormalize_Y(normz_info, my_model_pred)
+
+                gpr_pred_val_onestep = gpr.predict(x_onestep.reshape(1, -1) , return_std=False).squeeze()
+                pred_onestep = do_resid*my_model_pred_onestep + gpr_pred_val_onestep
+
 
             # compute losses
             j_loss = sum((pred - target)**2)
@@ -1404,6 +1432,7 @@ def run_GP(y_clean_train, y_noisy_train,
             pw_loss_test[j] = j_loss**0.5 / avg_output_test
             pw_loss_clean_test[j] = j_loss_clean**0.5 / avg_output_clean_test
             gpr_test_predictions[j,:] = pred
+            gpr_test_predictions_onestep[j,:] = pred_onestep
 
         total_loss_test = total_loss_test / test_seq_length
         total_loss_clean_test = total_loss_clean_test / test_seq_length
@@ -1425,6 +1454,7 @@ def run_GP(y_clean_train, y_noisy_train,
         # plot forecast over test set
         y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
         gpr_test_predictions_raw = f_unNormalize_Y(normz_info,gpr_test_predictions)
+        gpr_test_predictions_onestep_raw = f_unNormalize_Y(normz_info,gpr_test_predictions_onestep)
 
         fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
         if not isinstance(ax_list,np.ndarray):
@@ -1456,7 +1486,9 @@ def run_GP(y_clean_train, y_noisy_train,
 
         # plot inferred Ybar vs true Ybar
         if y_fast_test is not None:
-            Ybar_inferred = ODE.implied_Ybar(X=gpr_test_predictions_raw, delta_t=model_params['delta_t'])
+            X_in = np.vstack((f_unNormalize_Y(normz_info,y_clean_testSynch[kkt,-1,:]), y_clean_test_raw[:-1,:]))
+            X_out = gpr_test_predictions_onestep_raw
+            Ybar_inferred = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
             Ybar_true = y_fast_test[kkt,:,:].reshape( (y_fast_test.shape[1], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
             timeseries_Ybar_plots(delta_t=model_params['delta_t'], Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_timeseries_TEST_{0}'.format(kkt))
             scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_TEST_{0}.png'.format(kkt))
