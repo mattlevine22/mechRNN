@@ -1046,7 +1046,7 @@ def run_ode_test(y_clean_test, y_noisy_test,
             pw_loss_test[j] = j_loss**0.5 / avg_output_test
             pw_loss_clean_test[j] = j_loss_clean**0.5 / avg_output_clean_test
             gpr_test_predictions[j,:] = pred
-            gpr_test_predictions_onestep[j,:] = pred
+            gpr_test_predictions_onestep[j,:] = pred_one_step
 
         total_loss_test = total_loss_test / test_seq_length
         total_loss_clean_test = total_loss_clean_test / test_seq_length
