@@ -358,9 +358,10 @@ class L96M:
     # the idea is that X_in are true data coming from a test/training set
     # Xout(k) is the 1-step-ahed prediction associated to Xin(k).
     # In other words Xout(k) = Psi-ML(Xin(k))
-    Ybar = np.zeros( (X_in.shape[0], _s.K) )
-    for j in range(X.shape[0]-1):
-      Ybar[j,:] = _s.single_step_implied_Ybar(Xnow=X_in[j,:], Xnext=X_out[j,:], delta_t=delta_t)
+    T = X_in.shape[0]
+    Ybar = np.zeros( (T, _s.K) )
+    for t in range(T):
+      Ybar[t,:] = _s.single_step_implied_Ybar(Xnow=X_in[t,:], Xnext=X_out[t,:], delta_t=delta_t)
     return Ybar
 
   def compute_Yk(_s, z):
