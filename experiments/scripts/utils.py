@@ -1005,6 +1005,10 @@ def run_ode_test(y_clean_test, y_noisy_test,
         for j in range(test_seq_length):
             target = y_noisy_test[kkt,j,:]
             target_clean = y_clean_test[kkt,j,:]
+            if j>0:
+                test_val_prev = y_clean_test[kkt,j-1,:]
+            else:
+                test_val_prev = y_noisy_testSynch[kkt,-1,:]
 
             if use_ode_test_data:
                 # ONLY do this to test our ability to infer Ybark from true slow data
@@ -1033,7 +1037,7 @@ def run_ode_test(y_clean_test, y_noisy_test,
                 pred = my_model_pred
 
                 # now do one-step-ahead prediction using testing data (only for inferYbar plots)
-                y0 = f_unNormalize_minmax(normz_info, target_clean)
+                y0 = f_unNormalize_minmax(normz_info, test_val_prev)
                 sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
                 y_out = sol.y.T
                 pred_one_step = f_normalize_minmax(normz_info, y_out[-1,:])
@@ -1100,8 +1104,7 @@ def run_ode_test(y_clean_test, y_noisy_test,
 
         # plot inferred Ybar vs true Ybar
         if y_fast_test is not None:
-            X_in = np.vstack((y_noisy_testSynch[kkt,-1,:], y_clean_test[kkt,:-1,:]))
-            X_in = f_unNormalize_Y(normz_info,X_in)
+            X_in = y_clean_test_raw[kkt,:,:]
             X_out = gpr_test_predictions_onestep_raw
             Ybar_inferred = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
             Ybar_true = y_fast_test[kkt,:,:].reshape( (y_fast_test.shape[1], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
