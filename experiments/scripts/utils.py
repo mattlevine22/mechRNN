@@ -989,6 +989,7 @@ def run_ode_test(y_clean_test, y_noisy_test,
     # loop over test sets
     ALLy_clean_test_raw = []
     ALLgpr_test_predictions_raw = []
+    ALLgpr_test_predictions_onestep_raw = []
     tspan = get_tspan(model_params)
     for kkt in range(n_test_sets):
         # now compute test loss
@@ -999,6 +1000,7 @@ def run_ode_test(y_clean_test, y_noisy_test,
         pw_loss_test = np.zeros(test_seq_length)
         pw_loss_clean_test = np.zeros(test_seq_length)
         gpr_test_predictions = np.zeros([test_seq_length, output_size])
+        gpr_test_predictions_onestep = np.zeros([test_seq_length, output_size])
         solver_failed = False
         for j in range(test_seq_length):
             target = y_noisy_test[kkt,j,:]
@@ -1007,6 +1009,7 @@ def run_ode_test(y_clean_test, y_noisy_test,
             if use_ode_test_data:
                 # ONLY do this to test our ability to infer Ybark from true slow data
                 pred = target_clean
+                pred_one_step = target_clean
             else:
                 # generate next-step ODE model prediction
                 # tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
@@ -1029,6 +1032,12 @@ def run_ode_test(y_clean_test, y_noisy_test,
 
                 pred = my_model_pred
 
+                # now do one-step-ahead prediction using testing data (only for inferYbar plots)
+                y0 = f_unNormalize_minmax(normz_info, target_clean)
+                sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+                y_out = sol.y.T
+                pred_one_step = f_normalize_minmax(normz_info, y_out[-1,:])
+
             # compute losses
             j_loss = sum((pred - target)**2)
             j_loss_clean = sum((pred - target_clean)**2)
@@ -1037,6 +1046,7 @@ def run_ode_test(y_clean_test, y_noisy_test,
             pw_loss_test[j] = j_loss**0.5 / avg_output_test
             pw_loss_clean_test[j] = j_loss_clean**0.5 / avg_output_clean_test
             gpr_test_predictions[j,:] = pred
+            gpr_test_predictions_onestep[j,:] = pred
 
         total_loss_test = total_loss_test / test_seq_length
         total_loss_clean_test = total_loss_clean_test / test_seq_length
@@ -1057,6 +1067,7 @@ def run_ode_test(y_clean_test, y_noisy_test,
         # plot forecast over test set
         y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
         gpr_test_predictions_raw = f_unNormalize_Y(normz_info,gpr_test_predictions)
+        gpr_test_predictions_onestep_raw = f_unNormalize_Y(normz_info,gpr_test_predictions_onestep)
 
         fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
         if not isinstance(ax_list,np.ndarray):
@@ -1089,7 +1100,7 @@ def run_ode_test(y_clean_test, y_noisy_test,
 
         # plot inferred Ybar vs true Ybar
         if y_fast_test is not None:
-            Ybar_inferred = ODE.implied_Ybar(X=gpr_test_predictions_raw, delta_t=model_params['delta_t'])
+            Ybar_inferred = ODE.implied_Ybar(X_in=y_clean_test[kkt,:-1,:], X_out=gpr_test_predictions_onestep_raw[1:,:], delta_t=model_params['delta_t'])
             Ybar_true = y_fast_test[kkt,:,:].reshape( (y_fast_test.shape[1], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
             timeseries_Ybar_plots(delta_t=model_params['delta_t'], Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_timeseries_TEST_{0}'.format(kkt))
             scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_TEST_{0}.png'.format(kkt))
@@ -1098,11 +1109,14 @@ def run_ode_test(y_clean_test, y_noisy_test,
 
         ALLy_clean_test_raw.append(y_clean_test_raw)
         ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
+        ALLgpr_test_predictions_onestep_raw.append(gpr_test_predictions_onestep_raw)
 
     ALLy_clean_test_raw = np.array(ALLy_clean_test_raw)
     ALLgpr_test_predictions_raw = np.array(ALLgpr_test_predictions_raw)
+    ALLgpr_test_predictions_onestep_raw = np.array(ALLgpr_test_predictions_onestep_raw)
     ALLy_clean_test_raw = np.reshape(ALLy_clean_test_raw,(ALLy_clean_test_raw.shape[0]*ALLy_clean_test_raw.shape[1],ALLy_clean_test_raw.shape[2]))
     ALLgpr_test_predictions_raw = np.reshape(ALLgpr_test_predictions_raw,(ALLgpr_test_predictions_raw.shape[0]*ALLgpr_test_predictions_raw.shape[1],ALLgpr_test_predictions_raw.shape[2]))
+    ALLgpr_test_predictions_onestep_raw = np.reshape(ALLgpr_test_predictions_onestep_raw,(ALLgpr_test_predictions_onestep_raw.shape[0]*ALLgpr_test_predictions_onestep_raw.shape[1],ALLgpr_test_predictions_onestep_raw.shape[2]))
     # plot KDE of ALL test sets vs ALL prediction
     invdens_plotname = output_dir+'/invariant_density_TEST_ALL'
     invariant_density_plot(test_data=ALLy_clean_test_raw, pred_data=ALLgpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)

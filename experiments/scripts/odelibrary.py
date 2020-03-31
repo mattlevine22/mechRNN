@@ -354,11 +354,13 @@ class L96M:
 
     return Ybar
 
-  def implied_Ybar(_s, X, delta_t):
-    Ybar = np.zeros( (X.shape[0], _s.K) )
+  def implied_Ybar(_s, X_in, X_out, delta_t):
+    # the idea is that X_in are true data coming from a test/training set
+    # Xout(k) is the 1-step-ahed prediction associated to Xin(k).
+    # In other words Xout(k) = Psi-ML(Xin(k))
+    Ybar = np.zeros( (X_in.shape[0], _s.K) )
     for j in range(X.shape[0]-1):
-      Ybar[j,:] = _s.single_step_implied_Ybar(Xnow=X[j,:], Xnext=X[j+1,:], delta_t=delta_t)
-    # note that we don't have an estimate of Ybar[K*J,:] because Xnext is not available
+      Ybar[j,:] = _s.single_step_implied_Ybar(Xnow=X_in[j,:], Xnext=X_out[j,:], delta_t=delta_t)
     return Ybar
 
   def compute_Yk(_s, z):
