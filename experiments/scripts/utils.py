@@ -1104,8 +1104,8 @@ def run_ode_test(y_clean_test, y_noisy_test,
 
         # plot inferred Ybar vs true Ybar
         if y_fast_test is not None:
-            X_in = y_clean_test_raw[:-1,:]
-            X_out = gpr_test_predictions_onestep_raw[1:,:]
+            X_in = np.vstack((y_clean_testSynch[kkt,-1,:], y_clean_test_raw[:-1,:]))
+            X_out = gpr_test_predictions_onestep_raw
             Ybar_inferred = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
             Ybar_true = y_fast_test[kkt,:,:].reshape( (y_fast_test.shape[1], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
             timeseries_Ybar_plots(delta_t=model_params['delta_t'], Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_timeseries_TEST_{0}'.format(kkt))
