@@ -1100,6 +1100,7 @@ def run_ode_test(y_clean_test, y_noisy_test,
 
         # plot inferred Ybar vs true Ybar
         if y_fast_test is not None:
+            pdb.set_trace()
             X_in = np.vstack((y_noisy_testSynch[kkt,-1,:], y_clean_test[kkt,:-1,:]))
             X_in = f_unNormalize_Y(normz_info,X_in)
             X_out = gpr_test_predictions_onestep_raw
