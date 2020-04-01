@@ -1,5 +1,6 @@
 import os, sys
-from utils import dict_combiner, mkdir_p, dict_to_file, make_and_deploy
+import argparse
+from utils import dict_combiner, mkdir_p, dict_to_file, make_and_deploy, str2bool
 from time import sleep
 # Adapted from https://vsoch.github.io/lessons/sherlock-jobs/
 # python ../scripts/l96_sandbox.py
@@ -9,7 +10,14 @@ from time import sleep
 # --slow_only True --epoch 1000 --ode_int_method RK45
 # --run_RNN True
 
-NO_SUBMIT = False
+OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/l96_TRIALS_default_name'
+
+parser = argparse.ArgumentParser(description='L96 Job Submission script')
+parser.add_argument('--output_dir', type=str, default=OUTPUT_DIR, help='output directory')
+parser.add_argument('--no_submit', type=str2bool, default=False, help='whether or not to actually submit the jobs generated. Default is to submit.')
+parser.add_argument('--delta_t', type=float, default=0.01, help='Data sampling rate')
+FLAGS = parser.parse_args()
+
 
 CMD_generate_data_wrapper = 'python3 $HOME/mechRNN/experiments/scripts/generate_data_wrapper.py'
 CMD_run_fits = 'python3 $HOME/mechRNN/experiments/scripts/train_chaosRNN_wrapper.py'
@@ -17,7 +25,6 @@ CMD_run_fits = 'python3 $HOME/mechRNN/experiments/scripts/train_chaosRNN_wrapper
 N_TRAINING_SETS = 10
 N_TESTING_SETS = 10
 
-OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/l96_TRIALS_default_name'
 
 ODE_PARAMETERS = {'F': [10,25,50,100],
                 'eps': [2**(-1), 2**(-3), 2**(-5), 2**(-7), 2**(-8)],
@@ -29,7 +36,7 @@ ODE_PARAMETERS = {'F': [10,25,50,100],
 DATAGEN_SETTINGS_TRAIN = {'odeclass': 'odelibrary.L96M',
                         't_length': 20,
                         't_synch': 0,
-                        'delta_t': 0.01,
+                        'delta_t': FLAGS.delta_t,
                         'ode_int_method': 'Radau',
                         'ode_int_atol': 1.5e-6,
                         'ode_int_rtol': 1.5e-3,
@@ -41,7 +48,7 @@ DATAGEN_SETTINGS_TRAIN = {'odeclass': 'odelibrary.L96M',
 DATAGEN_SETTINGS_TEST = {'odeclass': 'odelibrary.L96M',
                         't_length': 20,
                         't_synch': 5,
-                        'delta_t': 0.01,
+                        'delta_t': FLAGS.delta_t,
                         'ode_int_method': 'Radau',
                         'ode_int_atol': 1.5e-6,
                         'ode_int_rtol': 1.5e-3,
@@ -54,7 +61,7 @@ PRED_SETTINGS = {'odeclass': 'odelibrary.L96M',
                         'model_params': {
                             'ode_params': (),
                             'time_avg_norm': 0.529,
-                            'delta_t': 0.01,
+                            'delta_t': FLAGS.delta_t,
                             'ode_int_method': 'RK45',
                             'ode_int_atol': 1.5e-6,
                             'ode_int_rtol': 1.5e-3,
@@ -315,16 +322,5 @@ def main(output_dir=OUTPUT_DIR,
     return submissions_complete
 
 if __name__ == '__main__':
-    try:
-        output_dir = sys.argv[1]
-    except:
-        output_dir = OUTPUT_DIR
-
-    try:
-        if sys.argv[2]=='--no_submit':
-            no_submit = True
-    except:
-        no_submit = NO_SUBMIT
-
-    main(output_dir=output_dir, no_submit=no_submit)
+    main(output_dir=FLAGS.output_dir, no_submit=FLAGS.no_submit)
 
