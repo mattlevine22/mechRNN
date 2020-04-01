@@ -424,7 +424,7 @@ def generate_data(
 
         # plot inferred Ybar vs true Ybar
         y_fast = output_dict_fast_only['y_clean'][:-1,:]
-        Ybar_true = y_fast.reshape( (y_fast.shape[1]-1, ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
+        Ybar_true = y_fast.reshape( (y_fast.shape[0], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
         timeseries_Ybar_plots(delta_t=delta_t, Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'_infer_Ybar_timeseries_TEST_{0}'.format(kkt))
         scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'_infer_Ybar_TEST_{0}.png'.format(kkt))
 
