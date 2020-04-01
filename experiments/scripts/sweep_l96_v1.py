@@ -91,7 +91,7 @@ def main(output_dir=OUTPUT_DIR,
     ode_parameters=ODE_PARAMETERS,
     rnn_experiments=RNN_EXPERIMENT_LIST,
     gp_experiments=GP_EXPERIMENT_LIST,
-    no_submit=NO_SUBMIT):
+    no_submit=FLAGS.no_submit):
 
     # hasn't finished yet
     submissions_complete = False
