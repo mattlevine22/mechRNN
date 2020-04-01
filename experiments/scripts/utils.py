@@ -919,6 +919,18 @@ def scatter_Ybar(Ybar_true, Ybar_inferred, output_fname):
     plt.close(fig)
     return
 
+def scatter_Ybar_X(X, Ybar_inferred, output_fname):
+    K = X.shape[1]
+    fig, ax_list = plt.subplots(1, K, figsize=[11,5], sharey=True, sharex=True)
+    for k in range(K):
+        ax_list[k].scatter(X[:,k], Ybar_inferred[:,k])
+        ax_list[k].set_xlabel(r'X_%d$' % k)
+        ax_list[k].set_ylabel(r'Inferred $\bar{Y}_%d$' % k)
+    fig.suptitle(r'Compare $X_k$ vs Inferred $\bar{Y}_k$')
+    fig.savefig(fname=output_fname)
+    plt.close(fig)
+    return
+
 def timeseries_Ybar_plots(Ybar_true, Ybar_inferred, output_fname, delta_t):
     timeseries_Ybar_k_error(Ybar_true, Ybar_inferred, output_fname+'kspecific', delta_t)
     timeseries_Ybar_normed_error(Ybar_true, Ybar_inferred, output_fname+'normed', delta_t)
@@ -1112,6 +1124,7 @@ def run_ode_test(y_clean_test, y_noisy_test,
             scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_TEST_{0}.png'.format(kkt))
             n_short = int(1.5/model_params['delta_t'])
             scatter_Ybar(Ybar_true=Ybar_true[:n_short,:], Ybar_inferred=Ybar_inferred[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}.png'.format(kkt,n_short*model_params['delta_t']))
+            scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/YbarInferred_vs_X_TEST_{0}.png'.format(kkt)
 
         ALLy_clean_test_raw.append(y_clean_test_raw)
         ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
@@ -1494,6 +1507,7 @@ def run_GP(y_clean_train, y_noisy_train,
             scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_TEST_{0}.png'.format(kkt))
             n_short = int(0.2/model_params['delta_t'])
             scatter_Ybar(Ybar_true=Ybar_true[:n_short,:], Ybar_inferred=Ybar_inferred[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}.png'.format(kkt,n_short*model_params['delta_t']))
+            scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/YbarInferred_vs_X_TEST_{0}.png'.format(kkt)
 
         ALLy_clean_test_raw.append(y_clean_test_raw)
         ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
