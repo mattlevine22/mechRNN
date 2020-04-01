@@ -420,13 +420,13 @@ def generate_data(
         X_in = output_dict_slow_only['y_clean'][:-1,:]
         X_out = output_dict_slow_only['y_clean'][1:,:]
         Ybar_data_inferred = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=delta_t)
-        scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_data_inferred, output_fname=base_path+'_YbarSlowDataInferred_vs_X_TEST')
+        scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_data_inferred, output_fname=base_path+'_YbarSlowDataInferred_vs_X')
 
         # plot inferred Ybar vs true Ybar
         y_fast = output_dict_fast_only['y_clean'][:-1,:]
         Ybar_true = y_fast.reshape( (y_fast.shape[0], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
-        timeseries_Ybar_plots(delta_t=delta_t, Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'_infer_Ybar_timeseries_TEST_{0}'.format(kkt))
-        scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'_infer_Ybar_TEST_{0}.png'.format(kkt))
+        timeseries_Ybar_plots(delta_t=delta_t, Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=base_path+'_infer_Ybar_timeseries')
+        scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=base_path+'_infer_Ybar')
 
     return
 
