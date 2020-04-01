@@ -1124,7 +1124,7 @@ def run_ode_test(y_clean_test, y_noisy_test,
             scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_TEST_{0}.png'.format(kkt))
             n_short = int(1.5/model_params['delta_t'])
             scatter_Ybar(Ybar_true=Ybar_true[:n_short,:], Ybar_inferred=Ybar_inferred[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}.png'.format(kkt,n_short*model_params['delta_t']))
-            scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/YbarInferred_vs_X_TEST_{0}.png'.format(kkt)
+            scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/YbarInferred_vs_X_TEST_{0}.png'.format(kkt))
 
         ALLy_clean_test_raw.append(y_clean_test_raw)
         ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
@@ -1507,7 +1507,7 @@ def run_GP(y_clean_train, y_noisy_train,
             scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/infer_Ybar_TEST_{0}.png'.format(kkt))
             n_short = int(0.2/model_params['delta_t'])
             scatter_Ybar(Ybar_true=Ybar_true[:n_short,:], Ybar_inferred=Ybar_inferred[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}.png'.format(kkt,n_short*model_params['delta_t']))
-            scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/YbarInferred_vs_X_TEST_{0}.png'.format(kkt)
+            scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_inferred, output_fname=output_dir+'/YbarInferred_vs_X_TEST_{0}.png'.format(kkt))
 
         ALLy_clean_test_raw.append(y_clean_test_raw)
         ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
