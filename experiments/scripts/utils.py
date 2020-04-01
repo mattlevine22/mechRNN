@@ -924,7 +924,7 @@ def scatter_Ybar_X(X, Ybar_inferred, output_fname):
     fig, ax_list = plt.subplots(1, K, figsize=[11,5], sharey=True, sharex=True)
     for k in range(K):
         ax_list[k].scatter(X[:,k], Ybar_inferred[:,k])
-        ax_list[k].set_xlabel(r'X_%d$' % k)
+        ax_list[k].set_xlabel(r'$X_%d$' % k)
         ax_list[k].set_ylabel(r'Inferred $\bar{Y}_%d$' % k)
     fig.suptitle(r'Compare $X_k$ vs Inferred $\bar{Y}_k$')
     fig.savefig(fname=output_fname)
