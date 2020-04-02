@@ -38,7 +38,7 @@ def main():
 			gpr = GaussianProcessRegressor(alpha=1e-10).fit(X=X_k,y=Ybar_k)
 			X_min = np.min(X_k)
 			X_max = np.max(X_k)
-			X_k_pred = np.arange(X_min,X_max,0.01).array.reshape(-1, 1)
+			X_k_pred = np.arange(X_min,X_max,0.01).reshape(-1, 1)
 			gp_mean, gp_std = gpr.predict(X_k_pred, return_std=True)
 
 			# my_dict = {'F': F, 'k': k, 'gp_mean': gp_mean, 'gp_std': gp_std}
