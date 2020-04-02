@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 import pdb
 
-n_subsample = 20000
+n_subsample = 10000
 
 def main():
 	basedir = '/groups/astuart/mlevine/writeup0/l96_dt_trials'
@@ -45,7 +45,6 @@ def main():
 		else:
 			my_inds = np.arange(N)
 		for k in range(K):
-			pdb.set_trace()
 			print('Fitting GP for F={F} and k={k}'.format(F=F,k=k))
 			X_k = X[my_inds,k].reshape(-1, 1)
 			Ybar_k = Ybar_data_inferred[my_inds,k].reshape(-1, 1)
