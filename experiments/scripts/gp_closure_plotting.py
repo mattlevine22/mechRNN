@@ -36,8 +36,8 @@ def main():
 			X_k = X[:,k].reshape(-1, 1)
 			Ybar_k = Ybar_data_inferred[:,k].reshape(-1, 1)
 			gpr = GaussianProcessRegressor(alpha=1e-10).fit(X=X_k,y=Ybar_k)
-			X_min = np.min(X_k)
-			X_max = np.max(X_k)
+			X_min = 0.8*np.min(X_k)
+			X_max = 0.8*np.max(X_k)
 			X_k_pred = np.arange(X_min,X_max,0.01).reshape(-1, 1)
 			gp_mean, gp_std = gpr.predict(X_k_pred, return_std=True)
 
