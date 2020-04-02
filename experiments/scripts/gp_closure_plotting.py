@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 
 import pdb
 
+n_subsample = 1000
+
 def main():
 	basedir = '/groups/astuart/mlevine/writeup0/l96_dt_trials'
 
@@ -36,9 +38,11 @@ def main():
 		X = foo['X']
 
 		K = X.shape[1]
+		N = X.shape[0]
+		my_inds = np.random.choice(np.arange(N), n_subsample, replace=False)
 		for k in range(K):
-			X_k = X[:,k].reshape(-1, 1)
-			Ybar_k = Ybar_data_inferred[:,k].reshape(-1, 1)
+			X_k = X[my_inds,k].reshape(-1, 1)
+			Ybar_k = Ybar_data_inferred[my_inds,k].reshape(-1, 1)
 			pdb.set_trace()
 			gpr = GaussianProcessRegressor(alpha=1e-10).fit(X=X_k,y=Ybar_k)
 			X_min = np.min(X_k)
