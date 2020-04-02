@@ -16,6 +16,8 @@ parser = argparse.ArgumentParser(description='L96 Job Submission script')
 parser.add_argument('--output_dir', type=str, default=OUTPUT_DIR, help='output directory')
 parser.add_argument('--no_submit', type=str2bool, default=False, help='whether or not to actually submit the jobs generated. Default is to submit.')
 parser.add_argument('--delta_t', type=float, default=0.01, help='Data sampling rate')
+parser.add_argument('--K', type=int, default=4, help='number of slow variables')
+parser.add_argument('--J', type=int, default=4, help='number of fast variables coupled to a single slow variable')
 FLAGS = parser.parse_args()
 
 
@@ -28,8 +30,8 @@ N_TESTING_SETS = 10
 
 ODE_PARAMETERS = {'F': [10,25,50,100],
                 'eps': [2**(-1), 2**(-3), 2**(-5), 2**(-7), 2**(-8)],
-                'K': [4],
-                'J': [4]
+                'K': [FLAGS.K],
+                'J': [FLAGS.J]
             }
 
 

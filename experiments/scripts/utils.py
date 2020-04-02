@@ -426,7 +426,7 @@ def generate_data(
         y_fast = output_dict_fast_only['y_clean'][:-1,:]
         Ybar_true = y_fast.reshape( (y_fast.shape[0], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
         timeseries_Ybar_plots(delta_t=delta_t, Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=base_path+'_infer_Ybar_timeseries')
-        scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=base_path+'_infer_Ybar')
+        scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=base_path+'_EulerInfer_Ybar')
 
     return
 
@@ -1139,10 +1139,10 @@ def run_ode_test(y_clean_test, y_noisy_test,
             scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_model_implied, output_fname=output_dir+'/YbarModelImplied_vs_X_TEST_{0}.png'.format(kkt))
 
             # generate slow-data-inferred Ybar [THIS IS THE IMPORTANT ONE]
-            X_out = y_clean_test_raw[1:,:]
-            Ybar_data_inferred = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
-            scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'/YbarSlowDataInferred_vs_X_TEST_{0}.png'.format(kkt))
-            scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'/YbarSlowDataInferred_vs_YbarTrue_{0}.png'.format(kkt))
+            # X_out = y_clean_test_raw[1:,:]
+            # Ybar_data_inferred = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
+            # scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'/YbarSlowDataInferred_vs_X_TEST_{0}.png'.format(kkt))
+            # scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'/YbarSlowDataInferred_vs_YbarTrue_{0}.png'.format(kkt))
 
 
         ALLy_clean_test_raw.append(y_clean_test_raw)
@@ -1529,10 +1529,10 @@ def run_GP(y_clean_train, y_noisy_train,
             scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_model_implied, output_fname=output_dir+'/YbarModelImplied_vs_X_TEST_{0}.png'.format(kkt))
 
             # generate slow-data-inferred Ybar [THIS IS THE IMPORTANT ONE]
-            X_out = y_clean_test_raw[1:,:]
-            Ybar_data_inferred = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
-            scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'/YbarSlowDataInferred_vs_X_TEST_{0}.png'.format(kkt))
-            scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'/YbarSlowDataInferred_vs_YbarTrue_{0}.png'.format(kkt))
+            # X_out = y_clean_test_raw[1:,:]
+            # Ybar_data_inferred = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
+            # scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'/YbarSlowDataInferred_vs_X_TEST_{0}.png'.format(kkt))
+            # scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'/YbarSlowDataInferred_vs_YbarTrue_{0}.png'.format(kkt))
 
         ALLy_clean_test_raw.append(y_clean_test_raw)
         ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
