@@ -67,8 +67,8 @@ def main():
 
 	ax_mean.set_title('GP mean')
 	ax_std.set_title('GP std')
-	ax_mean.set_xlim(my_lims)
-	ax_std.set_xlim(my_lims)
+	ax_mean.set_xlim((-20,20))
+	ax_std.set_xlim((-20,20))
 	ax_mean.set_ylim((-10,10))
 	# ax_std.set_ylim((-10,10))
 
