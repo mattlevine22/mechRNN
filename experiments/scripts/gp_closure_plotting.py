@@ -44,8 +44,8 @@ def main():
 			# my_dict = {'F': F, 'k': k, 'gp_mean': gp_mean, 'gp_std': gp_std}
 			# results.append(my_dict)
 
-			ax_mean.plot(X_k, gp_mean, color=F_color[F], linestyle=k_linestyle[k], label='X_{k} (F={F})'.format(k=k,F=F))
-			ax_std.plot(X_k, gp_std, color=F_color[F], linestyle=k_linestyle[k], label='X_{k} (F={F})'.format(k=k,F=F))
+			ax_mean.plot(X_k_pred, gp_mean, color=F_color[F], linestyle=k_linestyle[k], label='X_{k} (F={F})'.format(k=k,F=F))
+			ax_std.plot(X_k_pred, gp_std, color=F_color[F], linestyle=k_linestyle[k], label='X_{k} (F={F})'.format(k=k,F=F))
 
 
 	ax_mean.set_title('GP mean')
