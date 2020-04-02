@@ -58,6 +58,9 @@ def main():
 	ax_std.set_title('GP std')
 	ax_mean.set_xlim(my_lims)
 	ax_std.set_xlim(my_lims)
+	ax_mean.set_ylim((-10,10))
+	ax_std.set_ylim((-10,10))
+
 	ax_mean.legend()
 
 	fig.suptitle(r'GP-estimated closure function: $X_k \rightarrow \bar{Y}_k$')
