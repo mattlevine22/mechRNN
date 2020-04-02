@@ -23,6 +23,8 @@ def main():
 	ax_mean = ax_list[0]
 	ax_std = ax_list[1]
 
+	overall_X_min = -Inf
+	overall_X_max = Inf
 	for F in [10,50]:
 		fname = os.path.join(basedir,'dt{dt}'.format(dt=dt),'F{F}_eps{eps}'.format(F=F,eps=eps),'TRAIN_DATA','slow_data_0_YbarData.npz')
 
@@ -36,10 +38,13 @@ def main():
 			X_k = X[:,k].reshape(-1, 1)
 			Ybar_k = Ybar_data_inferred[:,k].reshape(-1, 1)
 			gpr = GaussianProcessRegressor(alpha=1e-10).fit(X=X_k,y=Ybar_k)
-			X_min = 0.8*np.min(X_k)
-			X_max = 0.8*np.max(X_k)
+			X_min = np.min(X_k)
+			X_max = np.max(X_k)
 			X_k_pred = np.arange(X_min,X_max,0.01).reshape(-1, 1)
 			gp_mean, gp_std = gpr.predict(X_k_pred, return_std=True)
+
+			overall_X_min = np.max(overall_X_min, X_min)
+			overall_X_max = np.min(overall_X_max, X_max)
 
 			# my_dict = {'F': F, 'k': k, 'gp_mean': gp_mean, 'gp_std': gp_std}
 			# results.append(my_dict)
@@ -47,10 +52,12 @@ def main():
 			ax_mean.plot(X_k_pred, gp_mean, color=F_color[F], linestyle=k_linestyle[k], label='X_{k} (F={F})'.format(k=k,F=F))
 			ax_std.plot(X_k_pred, gp_std, color=F_color[F], linestyle=k_linestyle[k], label='X_{k} (F={F})'.format(k=k,F=F))
 
+	my_lims = (overall_X_min, overall_X_max)
 
 	ax_mean.set_title('GP mean')
 	ax_std.set_title('GP std')
-
+	ax_mean.set_xlim(my_lims)
+	ax_std.set_xlim(my_lims)
 	ax_mean.legend()
 
 	fig.suptitle(r'GP-estimated closure function: $X_k \rightarrow \bar{Y}_k$')
