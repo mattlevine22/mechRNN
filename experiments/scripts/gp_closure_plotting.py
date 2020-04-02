@@ -36,7 +36,10 @@ def main():
 			X_k = X[:,k].reshape(-1, 1)
 			Ybar_k = Ybar_data_inferred[:,k].reshape(-1, 1)
 			gpr = GaussianProcessRegressor(alpha=1e-10).fit(X=X_k,y=Ybar_k)
-			gp_mean, gp_std = gpr.predict(X_k, return_std=True)
+			X_min = np.min(X_k)
+			X_max = np.max(X_k)
+			X_k_pred = np.arange(X_min,X_max,0.01)
+			gp_mean, gp_std = gpr.predict(X_k_pred, return_std=True)
 
 			# my_dict = {'F': F, 'k': k, 'gp_mean': gp_mean, 'gp_std': gp_std}
 			# results.append(my_dict)
