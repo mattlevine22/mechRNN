@@ -43,8 +43,8 @@ def main():
 			X_k_pred = np.arange(X_min,X_max,0.01).reshape(-1, 1)
 			gp_mean, gp_std = gpr.predict(X_k_pred, return_std=True)
 
-			overall_X_min = np.max(overall_X_min, X_min)
-			overall_X_max = np.min(overall_X_max, X_max)
+			overall_X_min = np.max((overall_X_min, X_min))
+			overall_X_max = np.min((overall_X_max, X_max))
 
 			# my_dict = {'F': F, 'k': k, 'gp_mean': gp_mean, 'gp_std': gp_std}
 			# results.append(my_dict)
