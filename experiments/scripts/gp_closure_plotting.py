@@ -67,12 +67,12 @@ def main():
 
 	ax_mean.set_title('GP mean')
 	ax_std.set_title('GP std')
-	ax_mean.set_xlim((-20,20))
-	ax_std.set_xlim((-20,20))
-	ax_mean.set_ylim((-10,10))
-	# ax_std.set_ylim((-10,10))
+	ax_mean.set_xlim((-8,10))
+	ax_std.set_xlim((-8,10))
+	ax_mean.set_ylim((-5,5))
+	ax_std.set_ylim((0,0.04))
 
-	ax_mean.legend()
+	ax_std.legend()
 
 	fig.suptitle(r'GP-estimated closure function: $X_k \rightarrow \bar{Y}_k$')
 	fig.savefig(fname=os.path.join(basedir,'dt{dt}'.format(dt=dt),'1d_GP_closure_comparison'))
