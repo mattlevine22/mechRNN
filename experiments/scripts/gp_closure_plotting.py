@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 import pdb
 
-n_subsample = 1000
+n_subsample = 20000
 
 def main():
 	basedir = '/groups/astuart/mlevine/writeup0/l96_dt_trials'
@@ -39,11 +39,15 @@ def main():
 
 		K = X.shape[1]
 		N = X.shape[0]
-		my_inds = np.random.choice(np.arange(N), n_subsample, replace=False)
+
+		if N > n_subsample:
+			my_inds = np.random.choice(np.arange(N), n_subsample, replace=False)
+		else:
+			my_inds = np.arange(N)
 		for k in range(K):
+			print('Fitting GP for F={F} and k={k}'.format(F=F,k=k))
 			X_k = X[my_inds,k].reshape(-1, 1)
 			Ybar_k = Ybar_data_inferred[my_inds,k].reshape(-1, 1)
-			pdb.set_trace()
 			gpr = GaussianProcessRegressor(alpha=1e-10).fit(X=X_k,y=Ybar_k)
 			X_min = np.min(X_k)
 			X_max = np.max(X_k)
@@ -55,6 +59,7 @@ def main():
 
 			# my_dict = {'F': F, 'k': k, 'gp_mean': gp_mean, 'gp_std': gp_std}
 			# results.append(my_dict)
+			print('Plotting GP for F={F} and k={k}'.format(F=F,k=k))
 
 			ax_mean.plot(X_k_pred, gp_mean, color=F_color[F], linestyle=k_linestyle[k], label='X_{k} (F={F})'.format(k=k,F=F))
 			ax_std.plot(X_k_pred, gp_std, color=F_color[F], linestyle=k_linestyle[k], label='X_{k} (F={F})'.format(k=k,F=F))
