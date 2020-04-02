@@ -23,8 +23,8 @@ def main():
 	ax_mean = ax_list[0]
 	ax_std = ax_list[1]
 
-	overall_X_min = -Inf
-	overall_X_max = Inf
+	overall_X_min = -np.Inf
+	overall_X_max = np.Inf
 	for F in [10,50]:
 		fname = os.path.join(basedir,'dt{dt}'.format(dt=dt),'F{F}_eps{eps}'.format(F=F,eps=eps),'TRAIN_DATA','slow_data_0_YbarData.npz')
 
