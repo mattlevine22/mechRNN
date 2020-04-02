@@ -428,6 +428,12 @@ def generate_data(
         timeseries_Ybar_plots(delta_t=delta_t, Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=base_path+'_infer_Ybar_timeseries')
         scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=base_path+'_EulerInfer_Ybar')
 
+        # save data needed for Ybar reconstruction
+        np.savez(file=base_path+'_YbarData.npz',
+                    Ybar_data_inferred=Ybar_data_inferred,
+                    Ybar_true=Ybar_true,
+                    X = X_in)
+
     return
 
 
