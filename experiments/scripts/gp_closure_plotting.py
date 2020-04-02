@@ -8,6 +8,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 # import seaborn as sns
 
+import pdb
+
 def main():
 	basedir = '/groups/astuart/mlevine/writeup0/l96_dt_trials'
 
@@ -37,6 +39,7 @@ def main():
 		for k in range(K):
 			X_k = X[:,k].reshape(-1, 1)
 			Ybar_k = Ybar_data_inferred[:,k].reshape(-1, 1)
+			pdb.set_trace()
 			gpr = GaussianProcessRegressor(alpha=1e-10).fit(X=X_k,y=Ybar_k)
 			X_min = np.min(X_k)
 			X_max = np.max(X_k)
