@@ -51,7 +51,7 @@ def main():
 	ax_mean.legend()
 
 	fig.suptitle(r'GP-estimated closure function: $X_k \rightarrow \bar{Y}_k$')
-	fig.savefig(fname=os.path.join(basedir,'dt{dt}'.format(dt=dt),'1d_GP_closure_comparison')
+	fig.savefig(fname=os.path.join(basedir,'dt{dt}'.format(dt=dt),'1d_GP_closure_comparison'))
 	plt.close(fig)
 
 if __name__ == '__main__':
