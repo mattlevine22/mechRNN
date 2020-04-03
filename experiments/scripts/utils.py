@@ -1283,7 +1283,7 @@ def run_GP(y_clean_train, y_noisy_train,
         return
 
     # save trained list of GPRs to a pickle object
-    with fpick as open( os.path.join(output_dir,'gpr_list.p'), "wb" ):
+    with open( os.path.join(output_dir,'gpr_list.p'), 'wb' ) as fpick:
         pickle.dump( gpr_list, fpick)
         print('GPRs dumped into a possibly very sour pickle jar.')
 
