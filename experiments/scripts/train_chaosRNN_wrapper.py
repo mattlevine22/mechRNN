@@ -1,7 +1,7 @@
 import argparse
 import json
 import numpy as np
-from utils import train_chaosRNN, f_normalize_minmax
+from utils import train_chaosRNN, f_normalize_minmax, run_GP
 from pydoc import locate
 from time import time
 
@@ -109,6 +109,7 @@ def main(settings_path=FLAGS.settings_path):
 	if FLAGS.profile:
 		lp = LineProfiler()
 		lp_wrapper = lp(train_chaosRNN)
+		lp.add_function(run_GP)   # add additional function to profile
 		lp_wrapper(**setts)
 		lp.print_stats()
 	else:
