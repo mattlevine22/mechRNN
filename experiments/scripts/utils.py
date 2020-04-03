@@ -1306,7 +1306,7 @@ def run_GP(y_clean_train, y_noisy_train,
         elif gp_style==3:
             x = f0
         # f_corrected = do_resid*f0 + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
-        f_corrected = do_resid*f0 + gp_pred(x).squeeze()
+        f_corrected = do_resid*f0 + gp_pred(x.reshape(1, -1)).squeeze()
         return f_corrected
 
     # gpr = GaussianProcessRegressor().fit(X=output_train[:-1],y=output_train[1:]-model_pred)
