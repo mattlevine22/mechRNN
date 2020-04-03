@@ -24,8 +24,8 @@ def main():
 
 
 	fig, (ax_list) = plt.subplots(1,1)
-	ax_mean = ax_list[0]
-	ax_std = ax_list[1]
+	ax_mean = ax_list
+	# ax_std = ax_list[1]
 
 	overall_X_min = -np.Inf
 	overall_X_max = np.Inf
