@@ -81,7 +81,7 @@ RNN_EXPERIMENT_LIST = dict_combiner({'hidden_size': [25, 50, 100],
 GP_EXPERIMENT_LIST = dict_combiner({'gp_style': [1,2,3],
                             'learn_residuals': [True,False],
                             'learn_flow': [False],
-                            'gp_space_map': ['full_to_full', 'each_R_to_R', 'share_R_to_R']
+                            'gp_space_map': ['fulltofull', 'RtoReach', 'RtoRshare']
                             }
                         )
 
