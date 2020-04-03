@@ -41,10 +41,10 @@ from odelibrary import *
 
 
 #Profile Code
-import line_profiler
-import atexit
-profile = line_profiler.LineProfiler()
-atexit.register(profile.print_stats)
+# import line_profiler
+# import atexit
+# profile = line_profiler.LineProfiler()
+# atexit.register(profile.print_stats)
 
 
 LORENZ_DEFAULT_PARAMS = (10, 28, 8/3)
@@ -1181,7 +1181,6 @@ def run_ode_test(y_clean_test, y_noisy_test,
     return
 
 
-@profile
 def run_GP(y_clean_train, y_noisy_train,
             y_clean_test, y_noisy_test,
             y_clean_testSynch, y_noisy_testSynch,
@@ -1484,18 +1483,20 @@ def run_GP(y_clean_train, y_noisy_train,
                     my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
 
                 # NOW i'm going to compute my one-step-ahead-based model prediction, which always uses the previous test data point (only for Ybark_inferrence)
-                y0 = f_unNormalize_minmax(normz_info, test_val_prev)
-                if (any(abs(y0)>1000)):
-                    print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
-                    solver_failed = True
+                if do_onestepahead:
+                    y0 = f_unNormalize_minmax(normz_info, test_val_prev)
+                    if (any(abs(y0)>1000)):
+                        print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
+                        solver_failed = True
 
-                if learn_flow:
-                    sol = solve_ivp(fun=lambda t, y: corrected_model(y, t, model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+                    if learn_flow:
+                        sol = solve_ivp(fun=lambda t, y: corrected_model(y, t, model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+                    else:
+                        sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+                    y_out = sol.y.T
+                    my_model_pred_onestep = f_normalize_minmax(normz_info, y_out[-1,:])
                 else:
-                    sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-                y_out = sol.y.T
-                my_model_pred_onestep = f_normalize_minmax(normz_info, y_out[-1,:])
-
+                    my_model_pred_onestep = 0
             else:
                 # don't need it anyway, so just make it 0
                 my_model_pred = 0
@@ -1531,9 +1532,10 @@ def run_GP(y_clean_train, y_noisy_train,
                 gp_output[j,:] = f_unNormalize_Y(normz_info, pred) - do_resid*f_unNormalize_Y(normz_info, my_model_pred)
 
                 # gpr_pred_val_onestep = gpr.predict(x_onestep.reshape(1, -1) , return_std=False).squeeze()
-                gpr_pred_val_onestep = gp_pred(x_onestep[None,:]).squeeze()
-                pred_onestep = do_resid*my_model_pred_onestep + gpr_pred_val_onestep
-                gpr_test_predictions_onestep[j,:] = pred_onestep
+                if do_onestepahead:
+                    gpr_pred_val_onestep = gp_pred(x_onestep[None,:]).squeeze()
+                    pred_onestep = do_resid*my_model_pred_onestep + gpr_pred_val_onestep
+                    gpr_test_predictions_onestep[j,:] = pred_onestep
 
 
             # compute losses

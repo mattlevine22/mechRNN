@@ -5,10 +5,15 @@ from utils import train_chaosRNN, f_normalize_minmax
 from pydoc import locate
 from time import time
 
+from utils import str2bool
+
 import pdb
+
+from line_profiler import LineProfiler
 
 parser = argparse.ArgumentParser(description='mechRNN')
 parser.add_argument('--settings_path', type=str, default='datagen_settings.npz', help='pathname of numpy settings dictionary')
+parser.add_argument('--profile', type=str2bool, default=False, help='option for profiling card')
 FLAGS = parser.parse_args()
 
 def main(settings_path=FLAGS.settings_path):
@@ -101,7 +106,13 @@ def main(settings_path=FLAGS.settings_path):
 
 	setts['ODE'] = odeInst
 
-	train_chaosRNN(**setts)
+	if FLAGS.profile:
+		lp = LineProfiler()
+		lp_wrapper = lp(train_chaosRNN)
+		lp_wrapper(**setts)
+		lp.print_stats()
+	else:
+		train_chaosRNN(**setts)
 	print('Ran training in:', time()-t0)
 
 if __name__ == '__main__':
