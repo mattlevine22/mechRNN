@@ -1202,7 +1202,8 @@ def run_GP(y_clean_train, y_noisy_train,
             ODE=None,
             gp_space_map='fulltofull',
             n_subsample=int(1e4),
-            do_onestepahead=False):
+            do_onestepahead=False,
+            save_gp_object=False):
 
     y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
     y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
@@ -1283,9 +1284,10 @@ def run_GP(y_clean_train, y_noisy_train,
         return
 
     # save trained list of GPRs to a pickle object
-    with open( os.path.join(output_dir,'gpr_list.p'), 'wb' ) as fpick:
-        pickle.dump( gpr_list, fpick)
-        print('GPRs dumped into a possibly very sour pickle jar.')
+    if save_gp_object:
+        with open( os.path.join(output_dir,'gpr_list.p'), 'wb' ) as fpick:
+            pickle.dump( gpr_list, fpick)
+            print('GPRs dumped into a possibly very sour pickle jar.')
 
     def gp_pred(X, gp_list=gpr_list):
 
