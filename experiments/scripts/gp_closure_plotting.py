@@ -74,7 +74,7 @@ def main():
 	ax_mean.set_xlabel(r'$X_k$')
 	# ax_std.set_xlabel(r'$X_k$')
 
-	# ax_std.legend()
+	ax_mean.legend()
 
 	fig.suptitle(r'GP-estimated closure function: $X_k \rightarrow \bar{Y}_k$')
 	fig.savefig(fname=os.path.join(basedir,'dt{dt}'.format(dt=dt),'1d_GP_closure_comparison'), dpi=300)
