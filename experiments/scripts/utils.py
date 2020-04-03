@@ -1934,7 +1934,8 @@ def train_chaosRNN(forward,
             y_fast_train=None,
             y_fast_test=None,
             ODE=None,
-            use_ode_test_data=False):
+            use_ode_test_data=False,
+            gp_space_map='fulltofull'):
 
     model_params['smaller_delta_t'] = model_params['delta_t'] # later, need to remove smaller_delta_t as field
 
