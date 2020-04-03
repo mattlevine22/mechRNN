@@ -1255,7 +1255,6 @@ def run_GP(y_clean_train, y_noisy_train,
         return my_inds
 
     # NEW. learn residuals with GP
-    pdb.set_trace()
     if gp_space_map=='fulltofull':
         my_inds = get_inds(X.shape[0])
         gp = GaussianProcessRegressor(alpha=alpha).fit(X=X[my_inds,:],y=y[my_inds,:])
@@ -1282,21 +1281,18 @@ def run_GP(y_clean_train, y_noisy_train,
     def gp_pred(X, gp_list=gpr_list):
 
         # initialize output prediction Y
-        try:
-            Y = np.zeros(X.shape)
+        Y = np.zeros(X.shape)
 
-            # if single input element (possibly multi-dim), reshape this way
-            if X.shape[0]==1:
-                X = X.reshape(1,-1)
+        # if single input element (possibly multi-dim), reshape this way
+        if X.shape[0]==1:
+            X = X.reshape(1,-1)
 
-            # if doing full2full, use this (we have 1 )
-            if len(gp_list)==1:
-                Y = gp_list[0].predict(X)
-            else:
-                for k in range(len(gp_list)):
-                    Y[:,k] = gp_list[k].predict(X[:,k].reshape(-1,1), return_std=False).squeeze()
-        except:
-            pdb.set_trace()
+        # if doing full2full, use this (we have 1 )
+        if len(gp_list)==1:
+            Y = gp_list[0].predict(X)
+        else:
+            for k in range(len(gp_list)):
+                Y[:,k] = gp_list[k].predict(X[:,k].reshape(-1,1), return_std=False).squeeze()
 
         return Y
 
