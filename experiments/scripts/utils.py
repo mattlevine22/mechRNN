@@ -1283,7 +1283,7 @@ def run_GP(y_clean_train, y_noisy_train,
 
         # initialize output prediction Y
         try:
-            Y = np.empty(X.shape)
+            Y = np.zeros(X.shape)
             K = X.shape[1]
 
             # if single input element (possibly multi-dim), reshape this way
@@ -1376,7 +1376,7 @@ def run_GP(y_clean_train, y_noisy_train,
             elif gp_style==4:
                 x = pred
             # pred = do_resid*my_model_pred + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
-            pred = do_resid*my_model_pred + gp_pred(x).squeeze()
+            pred = do_resid*my_model_pred + gp_pred(x[None,:]).squeeze()
 
         # compute losses
         # total_loss_test += (pred - target.squeeze()).pow(2).sum()/2
@@ -1512,13 +1512,13 @@ def run_GP(y_clean_train, y_noisy_train,
                     gp_input[j,:] = f_unNormalize_Y(normz_info, x)
 
                 # gpr_pred_val = gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
-                gpr_pred_val = gp_pred(x).squeeze()
+                gpr_pred_val = gp_pred(x[None,:]).squeeze()
                 pred = do_resid*my_model_pred + gpr_pred_val
 
                 gp_output[j,:] = f_unNormalize_Y(normz_info, pred) - do_resid*f_unNormalize_Y(normz_info, my_model_pred)
 
                 # gpr_pred_val_onestep = gpr.predict(x_onestep.reshape(1, -1) , return_std=False).squeeze()
-                gpr_pred_val_onestep = gp_pred(x_onestep).squeeze()
+                gpr_pred_val_onestep = gp_pred(x_onestep[None,:]).squeeze()
                 pred_onestep = do_resid*my_model_pred_onestep + gpr_pred_val_onestep
 
 
@@ -1738,7 +1738,7 @@ def run_GP(y_clean_train, y_noisy_train,
                 x_input = y0_normalized
 
             # gp_forecast = do_resid*bad_model_pred + gpr.predict(x_input.reshape(1, -1) , return_std=False).squeeze()
-            gp_forecast = do_resid*bad_model_pred + gp_pred(x_input).squeeze()
+            gp_forecast = do_resid*bad_model_pred + gp_pred(x_input[None,:]).squeeze()
 
             y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=0, full_output=True)
 
@@ -1821,7 +1821,7 @@ def run_GP(y_clean_train, y_noisy_train,
                         x_input = y0_normalized
 
                     # gp_forecast = do_resid*bad_model_pred + gpr.predict(x_input.reshape(1, -1) , return_std=False).squeeze()
-                    gp_forecast = do_resid*bad_model_pred + gp_pred(x_input).squeeze()
+                    gp_forecast = do_resid*bad_model_pred + gp_pred(x_input[None,:]).squeeze()
 
                     y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=0, full_output=True)
 
