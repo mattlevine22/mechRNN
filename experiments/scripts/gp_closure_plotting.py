@@ -71,11 +71,13 @@ def main():
 	ax_std.set_xlim((-8,10))
 	ax_mean.set_ylim((-5,5))
 	ax_std.set_ylim((0,0.04))
+	ax_mean.set_xlabel(r'$X_k$')
+	ax_std.set_xlabel(r'$X_k$')
 
 	ax_std.legend()
 
 	fig.suptitle(r'GP-estimated closure function: $X_k \rightarrow \bar{Y}_k$')
-	fig.savefig(fname=os.path.join(basedir,'dt{dt}'.format(dt=dt),'1d_GP_closure_comparison'))
+	fig.savefig(fname=os.path.join(basedir,'dt{dt}'.format(dt=dt),'1d_GP_closure_comparison'), dpi=300)
 	plt.close(fig)
 
 if __name__ == '__main__':
