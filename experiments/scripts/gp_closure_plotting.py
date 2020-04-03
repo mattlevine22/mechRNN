@@ -11,12 +11,12 @@ import matplotlib.pyplot as plt
 import pdb
 
 n_subsample = 10000
+eps = 0.0078125
+dt = 0.01
 
 def main():
 	basedir = '/groups/astuart/mlevine/writeup0/l96_dt_trials'
 
-	eps = 0.0078125
-	dt = 0.001
 
 	results = []
 	F_color = {10:'blue', 50:'green'}
