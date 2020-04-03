@@ -12,7 +12,7 @@ import pdb
 
 n_subsample = 10000
 eps = 0.0078125
-dt = 0.01
+dt = 0.001
 
 def main():
 	basedir = '/groups/astuart/mlevine/writeup0/l96_dt_trials'
