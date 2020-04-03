@@ -1268,14 +1268,16 @@ def run_GP(y_clean_train, y_noisy_train,
             gp = GaussianProcessRegressor(alpha=alpha).fit(X=X[my_inds,k].reshape(-1, 1),y=y[my_inds,k].reshape(-1, 1))
             gpr_list.append(gp)
             print('GP Training Score =',gp.score(X=X[my_inds,k].reshape(-1, 1),y=y[my_inds,k].reshape(-1, 1)))
-    else gp_space_map=='share_R_to_R':
+    elif gp_space_map=='share_R_to_R':
         Xtrain = X.reshape(-1, 1)
         ytrain = y.reshape(-1, 1)
         my_inds = get_inds(Xtrain.shape[0])
         gp = GaussianProcessRegressor(alpha=alpha).fit(X=Xtrain[my_inds],y=ytrain[my_inds]) #stack everything together
         gpr_list = [gp for _ in range(X.shape[1])] # replicate gp regressor for each dimension
         print('GP Training Score =',gp.score(X=Xtrain[my_inds],y=ytrain[my_inds]))
-
+    else:
+        print('ERROR: gp_space_map name `{0}` not recognized', gp_space_map)
+        return
 
     def gp_pred(X, gp_list=gpr_list):
 
@@ -1296,6 +1298,7 @@ def run_GP(y_clean_train, y_noisy_train,
                     Y[:,k] = gp_list[k].predict(X[:,k].reshape(-1,1), return_std=False).squeeze()
             else:
                 print('ERROR: Second dimension of input does not equal length of gp_list. And len(gp_list)>1.')
+                return
         except:
             pdb.set_trace()
 
