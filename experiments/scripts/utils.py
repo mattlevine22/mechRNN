@@ -1196,7 +1196,9 @@ def run_GP(y_clean_train, y_noisy_train,
             learn_flow=True,
             y_fast_test=None,
             y_fast_train=None,
-            ODE=None):
+            ODE=None,
+            gp_space_map='full_to_full',
+            n_subsample=1e4):
 
     y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
     y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
@@ -1245,9 +1247,59 @@ def run_GP(y_clean_train, y_noisy_train,
     nXDim = X.shape[1]
     nYDim = y.shape[1]
 
+    def get_inds(N_total, N_subsample=n_subsample):
+        if N_total > N_subsample:
+            my_inds = np.random.choice(np.arange(N_total), N_subsample, replace=False)
+        else:
+            my_inds = np.arange(N_total)
+        return my_inds
+
     # NEW. learn residuals with GP
-    gpr = GaussianProcessRegressor(alpha=alpha).fit(X=X,y=y)
-    print(gp_nm,'Training Score =',gpr.score(X=X,y=y))
+    pdb.set_trace()
+    if gp_space_map=='full_to_full':
+        my_inds = get_inds(X.shape[0])
+        gp = GaussianProcessRegressor(alpha=alpha).fit(X=X[my_inds,:],y=y[my_inds,:])
+        gpr_list = [gp]
+        print('GP Training Score =',gp.score(X=X[my_inds,:],y=y[my_inds,:]))
+    elif gp_space_map=='each_R_to_R':
+        my_inds = get_inds(X.shape[0])
+        gpr_list = []
+        for k in range(X.shape[1]):
+            gp = GaussianProcessRegressor(alpha=alpha).fit(X=X[my_inds,k].reshape(-1, 1),y=y[my_inds,k].reshape(-1, 1))
+            gpr_list.append(gp)
+            print('GP Training Score =',gp.score(X=X[my_inds,k].reshape(-1, 1),y=y[my_inds,k].reshape(-1, 1)))
+    else gp_space_map=='share_R_to_R':
+        Xtrain = X.reshape(-1, 1)
+        ytrain = y.reshape(-1, 1)
+        my_inds = get_inds(Xtrain.shape[0])
+        gp = GaussianProcessRegressor(alpha=alpha).fit(X=Xtrain[my_inds],y=ytrain[my_inds]) #stack everything together
+        gpr_list = [gp for _ in range(X.shape[1])] # replicate gp regressor for each dimension
+        print('GP Training Score =',gp.score(X=Xtrain[my_inds],y=ytrain[my_inds]))
+
+
+    def gp_pred(X, gp_list=gpr_list):
+
+        # initialize output prediction Y
+        try:
+            Y = np.empty(X.shape)
+            K = X.shape[1]
+
+            # if single input element (possibly multi-dim), reshape this way
+            if X.shape[0]==1:
+                X = X.reshape(1,-1)
+
+            # if doing full2full, use this (we have 1 )
+            if len(gp_list)==1:
+                Y = gp_list[0].predict(X)
+            elif len(gp_list)==K:
+                for k in range(K):
+                    Y[:,k] = gp_list[k].predict(X[:,k].reshape(-1,1), return_std=False).squeeze()
+            else:
+                print('ERROR: Second dimension of input does not equal length of gp_list. And len(gp_list)>1.')
+        except:
+            pdb.set_trace()
+
+        return Y
 
     def corrected_model(y, t, params=None, do_resid=do_resid, gp_style=gp_style):
         # pdb.set_trace()
@@ -1258,7 +1310,8 @@ def run_GP(y_clean_train, y_noisy_train,
             x = np.concatenate((y,f0))
         elif gp_style==3:
             x = f0
-        f_corrected = do_resid*f0 + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
+        # f_corrected = do_resid*f0 + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
+        f_corrected = do_resid*f0 + gp_pred(x).squeeze()
         return f_corrected
 
     # gpr = GaussianProcessRegressor().fit(X=output_train[:-1],y=output_train[1:]-model_pred)
@@ -1269,7 +1322,8 @@ def run_GP(y_clean_train, y_noisy_train,
     if learn_flow:
         gpr_train_predictions_orig = np.zeros([train_seq_length-1, output_size])
     else:
-        gpr_train_predictions_orig = do_resid*model_pred + gpr.predict(X).squeeze()
+        # gpr_train_predictions_orig = do_resid*model_pred + gpr.predict(X).squeeze()
+        gpr_train_predictions_orig = do_resid*model_pred + gp_pred(X).squeeze()
 
 
     pred = y_noisy_train[0,:,None].squeeze()
@@ -1318,7 +1372,8 @@ def run_GP(y_clean_train, y_noisy_train,
                 x = my_model_pred
             elif gp_style==4:
                 x = pred
-            pred = do_resid*my_model_pred + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
+            # pred = do_resid*my_model_pred + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
+            pred = do_resid*my_model_pred + gp_pred(x).squeeze()
 
         # compute losses
         # total_loss_test += (pred - target.squeeze()).pow(2).sum()/2
@@ -1453,12 +1508,14 @@ def run_GP(y_clean_train, y_noisy_train,
                     gp_input_onestep = f_unNormalize_Y(normz_info, x_onestep)
                     gp_input[j,:] = f_unNormalize_Y(normz_info, x)
 
-                gpr_pred_val = gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
+                # gpr_pred_val = gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
+                gpr_pred_val = gp_pred(x).squeeze()
                 pred = do_resid*my_model_pred + gpr_pred_val
 
                 gp_output[j,:] = f_unNormalize_Y(normz_info, pred) - do_resid*f_unNormalize_Y(normz_info, my_model_pred)
 
-                gpr_pred_val_onestep = gpr.predict(x_onestep.reshape(1, -1) , return_std=False).squeeze()
+                # gpr_pred_val_onestep = gpr.predict(x_onestep.reshape(1, -1) , return_std=False).squeeze()
+                gpr_pred_val_onestep = gp_pred(x_onestep).squeeze()
                 pred_onestep = do_resid*my_model_pred_onestep + gpr_pred_val_onestep
 
 
@@ -1677,7 +1734,8 @@ def run_GP(y_clean_train, y_noisy_train,
             elif gp_style==4:
                 x_input = y0_normalized
 
-            gp_forecast = do_resid*bad_model_pred + gpr.predict(x_input.reshape(1, -1) , return_std=False).squeeze()
+            # gp_forecast = do_resid*bad_model_pred + gpr.predict(x_input.reshape(1, -1) , return_std=False).squeeze()
+            gp_forecast = do_resid*bad_model_pred + gp_pred(x_input).squeeze()
 
             y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=0, full_output=True)
 
@@ -1700,7 +1758,7 @@ def run_GP(y_clean_train, y_noisy_train,
         print('ATTRACTOR sampling took',str(timedelta(seconds=time()-t0grid)))
         # plot 1-d marginal errors
         print('Total {0} ATTRACTOR error = {1}'.format(gp_nm,GP_total_error))
-        print('{0} ATTRACTOR score = {1}'.format(gp_nm,gpr.score(X=bigX,y=bigY)))
+        # print('{0} ATTRACTOR score = {1}'.format(gp_nm,gpr.score(X=bigX,y=bigY)))
 
         # np.savez(output_dir+'/{0}GP_error_grid'.format(gp_nm), GP_error_grid=GP_error_grid, xvals=xvals, yvals=yvals, zvals=zvals, GP_total_error=GP_total_error)
 
@@ -1759,7 +1817,8 @@ def run_GP(y_clean_train, y_noisy_train,
                     elif gp_style==4:
                         x_input = y0_normalized
 
-                    gp_forecast = do_resid*bad_model_pred + gpr.predict(x_input.reshape(1, -1) , return_std=False).squeeze()
+                    # gp_forecast = do_resid*bad_model_pred + gpr.predict(x_input.reshape(1, -1) , return_std=False).squeeze()
+                    gp_forecast = do_resid*bad_model_pred + gp_pred(x_input).squeeze()
 
                     y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=0, full_output=True)
 
@@ -1782,7 +1841,7 @@ def run_GP(y_clean_train, y_noisy_train,
         print('Grid took',str(timedelta(seconds=time()-t0grid)))
         # plot 1-d marginal errors
         print('Total {0} grid error = {1}'.format(gp_nm,GP_total_error))
-        print('{0} grid score = {1}'.format(gp_nm,gpr.score(X=bigX,y=bigY)))
+        # print('{0} grid score = {1}'.format(gp_nm,gpr.score(X=bigX,y=bigY)))
 
         np.savez(output_dir+'/{0}GP_error_grid'.format(gp_nm), GP_error_grid=GP_error_grid, xvals=xvals, yvals=yvals, zvals=zvals, GP_total_error=GP_total_error)
 

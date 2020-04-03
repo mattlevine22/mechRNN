@@ -80,7 +80,8 @@ RNN_EXPERIMENT_LIST = dict_combiner({'hidden_size': [25, 50, 100],
 
 GP_EXPERIMENT_LIST = dict_combiner({'gp_style': [1,2,3],
                             'learn_residuals': [True,False],
-                            'learn_flow': [False]
+                            'learn_flow': [False],
+                            'gp_space_map': ['full_to_full', 'each_R_to_R', 'share_R_to_R']
                             }
                         )
 
@@ -239,12 +240,13 @@ def main(output_dir=OUTPUT_DIR,
                 for key in gp_exp:
                     pred_settings[key] = gp_exp[key] # gp_style, learn_residuals, learn flow
                 gp_style = pred_settings['gp_style']
+                gp_space_map = pred_settings['gp_space_map']
                 learn_residuals = pred_settings['learn_residuals']
                 learn_flow = pred_settings['learn_flow']
                 if gp_style==1 and not learn_residuals:
-                    run_nm = 'ModelFreeGPR_learnflow{0}'.format(learn_flow)
+                    run_nm = 'ModelFreeGPR_learnflow{0}_Space{1}'.format(learn_flow, gp_space_map)
                 else:
-                    run_nm = 'hybridGPR{0}_residual{1}_learnflow{2}'.format(gp_style, learn_residuals, learn_flow)
+                    run_nm = 'hybridGPR{0}_residual{1}_learnflow{2}_Space{3}'.format(gp_style, learn_residuals, learn_flow, gp_space_map)
 
                 run_path = os.path.join(n_pred_dir, run_nm)
                 if not os.path.exists(run_path):
