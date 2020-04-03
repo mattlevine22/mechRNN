@@ -23,7 +23,7 @@ def main():
 	k_linestyle= ['-','--','-.',':']
 
 
-	fig, (ax_list) = plt.subplots(1,2)
+	fig, (ax_list) = plt.subplots(1,1)
 	ax_mean = ax_list[0]
 	ax_std = ax_list[1]
 
@@ -61,20 +61,20 @@ def main():
 			# results.append(my_dict)
 
 			ax_mean.plot(X_k_pred, gp_mean, color=F_color[F], linestyle=k_linestyle[k], label='X_{k} (F={F})'.format(k=k,F=F))
-			ax_std.plot(X_k_pred, gp_std, color=F_color[F], linestyle=k_linestyle[k], label='X_{k} (F={F})'.format(k=k,F=F))
+			# ax_std.plot(X_k_pred, gp_std, color=F_color[F], linestyle=k_linestyle[k], label='X_{k} (F={F})'.format(k=k,F=F))
 
 	my_lims = (overall_X_min, overall_X_max)
 
 	ax_mean.set_title('GP mean')
-	ax_std.set_title('GP std')
+	# ax_std.set_title('GP std')
 	ax_mean.set_xlim((-8,10))
-	ax_std.set_xlim((-8,10))
+	# ax_std.set_xlim((-8,10))
 	ax_mean.set_ylim((-5,5))
-	ax_std.set_ylim((0,0.04))
+	# ax_std.set_ylim((0,0.04))
 	ax_mean.set_xlabel(r'$X_k$')
-	ax_std.set_xlabel(r'$X_k$')
+	# ax_std.set_xlabel(r'$X_k$')
 
-	ax_std.legend()
+	# ax_std.legend()
 
 	fig.suptitle(r'GP-estimated closure function: $X_k \rightarrow \bar{Y}_k$')
 	fig.savefig(fname=os.path.join(basedir,'dt{dt}'.format(dt=dt),'1d_GP_closure_comparison'), dpi=300)
