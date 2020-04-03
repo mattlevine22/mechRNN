@@ -108,8 +108,8 @@ def main(settings_path=FLAGS.settings_path):
 
 	if FLAGS.profile:
 		lp = LineProfiler()
-		lp_wrapper = lp(train_chaosRNN)
 		lp.add_function(run_GP)   # add additional function to profile
+		lp_wrapper = lp(train_chaosRNN)
 		lp_wrapper(**setts)
 		lp.print_stats()
 	else:
