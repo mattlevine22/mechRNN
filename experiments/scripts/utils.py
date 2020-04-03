@@ -1284,7 +1284,6 @@ def run_GP(y_clean_train, y_noisy_train,
         # initialize output prediction Y
         try:
             Y = np.zeros(X.shape)
-            K = X.shape[1]
 
             # if single input element (possibly multi-dim), reshape this way
             if X.shape[0]==1:
@@ -1293,12 +1292,9 @@ def run_GP(y_clean_train, y_noisy_train,
             # if doing full2full, use this (we have 1 )
             if len(gp_list)==1:
                 Y = gp_list[0].predict(X)
-            elif len(gp_list)==K:
-                for k in range(K):
-                    Y[:,k] = gp_list[k].predict(X[:,k].reshape(-1,1), return_std=False).squeeze()
             else:
-                print('ERROR: Second dimension of input does not equal length of gp_list. And len(gp_list)>1.')
-                return
+                for k in range(len(gp_list)):
+                    Y[:,k] = gp_list[k].predict(X[:,k].reshape(-1,1), return_std=False).squeeze()
         except:
             pdb.set_trace()
 
@@ -2083,7 +2079,8 @@ def train_chaosRNN(forward,
                     learn_flow = learn_flow,
                     y_fast_test=y_fast_test,
                     y_fast_train=y_fast_train,
-                    ODE=ODE)
+                    ODE=ODE,
+                    gp_space_map=gp_space_map)
         # plot GP comparisons
         if GP_grid:
             style_list = [1,2,3]
