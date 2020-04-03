@@ -1197,7 +1197,7 @@ def run_GP(y_clean_train, y_noisy_train,
             y_fast_test=None,
             y_fast_train=None,
             ODE=None,
-            gp_space_map='full_to_full',
+            gp_space_map='fulltofull',
             n_subsample=1e4):
 
     y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
@@ -1256,19 +1256,19 @@ def run_GP(y_clean_train, y_noisy_train,
 
     # NEW. learn residuals with GP
     pdb.set_trace()
-    if gp_space_map=='full_to_full':
+    if gp_space_map=='fulltofull':
         my_inds = get_inds(X.shape[0])
         gp = GaussianProcessRegressor(alpha=alpha).fit(X=X[my_inds,:],y=y[my_inds,:])
         gpr_list = [gp]
         print('GP Training Score =',gp.score(X=X[my_inds,:],y=y[my_inds,:]))
-    elif gp_space_map=='each_R_to_R':
+    elif gp_space_map=='RtoReach':
         my_inds = get_inds(X.shape[0])
         gpr_list = []
         for k in range(X.shape[1]):
             gp = GaussianProcessRegressor(alpha=alpha).fit(X=X[my_inds,k].reshape(-1, 1),y=y[my_inds,k].reshape(-1, 1))
             gpr_list.append(gp)
             print('GP Training Score =',gp.score(X=X[my_inds,k].reshape(-1, 1),y=y[my_inds,k].reshape(-1, 1)))
-    elif gp_space_map=='share_R_to_R':
+    elif gp_space_map=='RtoRshare':
         Xtrain = X.reshape(-1, 1)
         ytrain = y.reshape(-1, 1)
         my_inds = get_inds(Xtrain.shape[0])
