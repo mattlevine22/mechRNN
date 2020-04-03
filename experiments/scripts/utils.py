@@ -1338,6 +1338,10 @@ def run_GP(y_clean_train, y_noisy_train,
         # unnormalize model_input so that it can go through the ODE solver
         if learn_flow or do_resid or (gp_style in [2,3]):
             y0 = f_unNormalize_minmax(normz_info, pred)
+            if (any(abs(y0)>1000)):
+                print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
+                solver_failed = True
+
             if not solver_failed:
                 # y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
 
@@ -1450,6 +1454,10 @@ def run_GP(y_clean_train, y_noisy_train,
             # unnormalize model_input so that it can go through the ODE solver
             if learn_flow or do_resid or (gp_style in [2,3]):
                 y0 = f_unNormalize_minmax(normz_info, pred)
+                if (any(abs(y0)>1000)):
+                    print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
+                    solver_failed = True
+
                 if not solver_failed:
                     # y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
                     if learn_flow:
@@ -1472,6 +1480,10 @@ def run_GP(y_clean_train, y_noisy_train,
 
                 # NOW i'm going to compute my one-step-ahead-based model prediction, which always uses the previous test data point (only for Ybark_inferrence)
                 y0 = f_unNormalize_minmax(normz_info, test_val_prev)
+                if (any(abs(y0)>1000)):
+                    print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
+                    solver_failed = True
+
                 if learn_flow:
                     sol = solve_ivp(fun=lambda t, y: corrected_model(y, t, model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
                 else:
