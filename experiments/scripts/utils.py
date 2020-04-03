@@ -39,6 +39,14 @@ import pdb
 
 from odelibrary import *
 
+
+#Profile Code
+import line_profiler
+import atexit
+profile = line_profiler.LineProfiler()
+atexit.register(profile.print_stats)
+
+
 LORENZ_DEFAULT_PARAMS = (10, 28, 8/3)
 
 def mkdir_p(dir):
@@ -1173,6 +1181,7 @@ def run_ode_test(y_clean_test, y_noisy_test,
     return
 
 
+@profile
 def run_GP(y_clean_train, y_noisy_train,
             y_clean_test, y_noisy_test,
             y_clean_testSynch, y_noisy_testSynch,
