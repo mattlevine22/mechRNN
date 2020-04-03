@@ -1203,7 +1203,7 @@ def run_GP(y_clean_train, y_noisy_train,
             gp_space_map='fulltofull',
             n_subsample=int(1e4),
             do_onestepahead=False,
-            save_gp_object=False):
+            save_gp_object=True):
 
     y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
     y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
