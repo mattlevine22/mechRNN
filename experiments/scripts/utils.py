@@ -34,17 +34,12 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 import json
+import pickle
 import pandas as pd
 import pdb
 
 from odelibrary import *
 
-
-#Profile Code
-# import line_profiler
-# import atexit
-# profile = line_profiler.LineProfiler()
-# atexit.register(profile.print_stats)
 
 
 LORENZ_DEFAULT_PARAMS = (10, 28, 8/3)
@@ -1286,6 +1281,11 @@ def run_GP(y_clean_train, y_noisy_train,
     else:
         print('ERROR: gp_space_map name `{0}` not recognized', gp_space_map)
         return
+
+    # save trained list of GPRs to a pickle object
+    with fpick as open( os.path.join(output_dir,'gpr_list.p'), "wb" ):
+        pickle.dump( gpr_list, fpick)
+        print('GPRs dumped into a possibly very sour pickle jar.')
 
     def gp_pred(X, gp_list=gpr_list):
 
