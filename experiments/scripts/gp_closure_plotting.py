@@ -98,9 +98,9 @@ def main(basedir=FLAGS.basedir,
 
 		ax_mean.set_title('GP mean')
 		# ax_std.set_title('GP std')
-		ax_mean.set_xlim((-8,10))
+		# ax_mean.set_xlim((-8,10))
 		# ax_std.set_xlim((-8,10))
-		ax_mean.set_ylim((-5,5))
+		# ax_mean.set_ylim((-5,5))
 		# ax_std.set_ylim((0,0.04))
 		ax_mean.set_xlabel(r'$X_k$')
 		# ax_std.set_xlabel(r'$X_k$')
