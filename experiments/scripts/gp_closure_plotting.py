@@ -91,7 +91,7 @@ def main(basedir=FLAGS.basedir,
 			gpr = GaussianProcessRegressor(alpha=alpha, n_restarts_optimizer=15).fit(X=Xtrain[my_inds],y=ytrain[my_inds])
 			X_k_pred = np.arange(X_min,X_max,0.01).reshape(-1, 1)
 			gp_mean, gp_std = gpr.predict(X_k_pred, return_std=True)
-			ax_mean.plot(X_k_pred, gp_mean, color='red', linestyle='-', label='X-all (F={F})'.format(k=k,F=F))
+			ax_mean.plot(X_k_pred, gp_mean, color=F_color[F], linestyle='-', label='X-all (F={F})'.format(k=k,F=F))
 
 
 		my_lims = (overall_X_min, overall_X_max)
