@@ -17,7 +17,7 @@ parser.add_argument('--basedir', type=str, default='/groups/astuart/mlevine/writ
 parser.add_argument('--infer_Ybar', type=str2bool, default=False)
 parser.add_argument('--delta_t', type=float, default=0.001)
 parser.add_argument('--eps', type=float, default=2**(-7))
-parser.add_argument('--n_subsample', type=int, 1000)
+parser.add_argument('--n_subsample', type=int, default=1000)
 FLAGS = parser.parse_args()
 
 
