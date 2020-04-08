@@ -73,8 +73,21 @@ def main(basedir=FLAGS.basedir,
 				# my_dict = {'F': F, 'k': k, 'gp_mean': gp_mean, 'gp_std': gp_std}
 				# results.append(my_dict)
 
-				ax_mean.plot(X_k_pred, gp_mean, color=F_color[F], linestyle=k_linestyle[k], label='X_{k} (F={F})'.format(k=k,F=F))
+				ax_mean.plot(X_k_pred, gp_mean, color=F_color[F], linestyle=':', label='X_{k} (F={F})'.format(k=k,F=F))
 				# ax_std.plot(X_k_pred, gp_std, color=F_color[F], linestyle=k_linestyle[k], label='X_{k} (F={F})'.format(k=k,F=F))
+
+			# fit GP to all states together
+			Xtrain = X.reshape(-1, 1)
+			if infer_Ybar:
+				ytrain = Ybar_data_inferred.reshape(-1, 1)
+			else:
+				ytrain = Ybar_true.reshape(-1, 1)
+			my_inds = get_inds(Xtrain.shape[0])
+			gpr = GaussianProcessRegressor(alpha=alpha, n_restarts_optimizer=15).fit(X=Xtrain[my_inds],y=ytrain[my_inds])
+			X_k_pred = np.arange(X_min,X_max,0.01).reshape(-1, 1)
+			gp_mean, gp_std = gpr.predict(X_k_pred, return_std=True)
+			ax_mean.plot(X_k_pred, gp_mean, color='red', linestyle='-', label='X-all (F={F})'.format(k=k,F=F))
+
 
 		my_lims = (overall_X_min, overall_X_max)
 
