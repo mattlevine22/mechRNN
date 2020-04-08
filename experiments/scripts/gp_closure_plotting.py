@@ -32,7 +32,7 @@ def main(basedir=FLAGS.basedir,
 	k_linestyle= ['-','--','-.',':']
 
 	# for alpha in [1, 1e-1, 1e-5, 1e-10]:
-	for alpha in [0.5, 1e-10]:
+	for alpha in [1, 1e-10]:
 		fig, (ax_list) = plt.subplots(1,1)
 		ax_mean = ax_list
 		# ax_std = ax_list[1]
