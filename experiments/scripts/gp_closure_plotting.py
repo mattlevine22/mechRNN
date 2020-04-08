@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 import pdb
 
-n_subsample = 10000
+n_subsample = 1000
 eps = 0.0078125
 dt = 0.001
 
@@ -22,7 +22,8 @@ def main():
 	F_color = {10:'blue', 50:'green'}
 	k_linestyle= ['-','--','-.',':']
 
-	for alpha in [1, 1e-1, 1e-5, 1e-10]:
+	# for alpha in [1, 1e-1, 1e-5, 1e-10]:
+	for alpha in [1]:
 		fig, (ax_list) = plt.subplots(1,1)
 		ax_mean = ax_list
 		# ax_std = ax_list[1]
@@ -48,7 +49,7 @@ def main():
 				print('Fitting GP for F={F} and k={k}'.format(F=F,k=k))
 				X_k = X[my_inds,k].reshape(-1, 1)
 				Ybar_k = Ybar_data_inferred[my_inds,k].reshape(-1, 1)
-				gpr = GaussianProcessRegressor(alpha=alpha).fit(X=X_k,y=Ybar_k)
+				gpr = GaussianProcessRegressor(alpha=alpha, n_restarts_optimizer=15).fit(X=X_k,y=Ybar_k)
 				X_min = np.min(X_k)
 				X_max = np.max(X_k)
 				X_k_pred = np.arange(X_min,X_max,0.01).reshape(-1, 1)
