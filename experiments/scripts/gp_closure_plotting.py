@@ -1,7 +1,9 @@
 import os
 import numpy as np
 import pandas as pd
+import argparse
 from sklearn.gaussian_process import GaussianProcessRegressor
+from utils import str2bool
 
 import matplotlib
 matplotlib.use('Agg')
@@ -10,20 +12,27 @@ import matplotlib.pyplot as plt
 
 import pdb
 
-n_subsample = 1000
-eps = 0.0078125
-dt = 0.001
+parser = argparse.ArgumentParser()
+parser.add_argument('--basedir', type=str, default='/groups/astuart/mlevine/writeup0/l96_dt_trials')
+parser.add_argument('--infer_Ybar', type=str2bool, default=False)
+parser.add_argument('--delta_t', type=float, default=0.001)
+parser.add_argument('--eps', type=float, default=2**(-7))
+parser.add_argument('--n_subsample', type=ing, 1000)
+FLAGS = parser.parse_args()
 
-def main():
-	basedir = '/groups/astuart/mlevine/writeup0/l96_dt_trials'
 
+def main(basedir=FLAGS.basedir,
+	infer_Ybar=FLAGS.infer_Ybar,
+	dt=FLAGS.delta_t,
+	eps=FLAGS.eps,
+	n_subsample=FLAGS.n_subsample):
 
 	results = []
 	F_color = {10:'blue', 50:'green'}
 	k_linestyle= ['-','--','-.',':']
 
 	# for alpha in [1, 1e-1, 1e-5, 1e-10]:
-	for alpha in [1]:
+	for alpha in [0.5, 1e-10]:
 		fig, (ax_list) = plt.subplots(1,1)
 		ax_mean = ax_list
 		# ax_std = ax_list[1]
@@ -48,7 +57,10 @@ def main():
 			for k in range(K):
 				print('Fitting GP for F={F} and k={k}'.format(F=F,k=k))
 				X_k = X[my_inds,k].reshape(-1, 1)
-				Ybar_k = Ybar_data_inferred[my_inds,k].reshape(-1, 1)
+				if infer_Ybar:
+					Ybar_k = Ybar_data_inferred[my_inds,k].reshape(-1, 1)
+				else:
+					Ybar_k = Ybar_true[my_inds,k].reshape(-1, 1)
 				gpr = GaussianProcessRegressor(alpha=alpha, n_restarts_optimizer=15).fit(X=X_k,y=Ybar_k)
 				X_min = np.min(X_k)
 				X_max = np.max(X_k)
@@ -78,7 +90,7 @@ def main():
 		ax_mean.legend()
 
 		fig.suptitle(r'GP-estimated closure function: $X_k \rightarrow \bar{Y}_k$')
-		fig.savefig(fname=os.path.join(basedir,'dt{dt}'.format(dt=dt),'1d_GP_closure_n{n_subsample}_comparison_alpha{alpha}.png'.format(n_subsample=n_subsample, alpha=alpha)), dpi=300)
+		fig.savefig(fname=os.path.join(basedir,'dt{dt}'.format(dt=dt),'1d_GP_closure_n{n_subsample}_inferYbar{infer_Ybar}_comparison_alpha{alpha}.png'.format(infer_Ybar=infer_Ybar, n_subsample=n_subsample, alpha=alpha)), dpi=300)
 		plt.close(fig)
 
 if __name__ == '__main__':
