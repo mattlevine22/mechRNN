@@ -79,7 +79,7 @@ def make_plots(sim_model_params=dict(), output_dir='.', K=4, J=4, F=10, eps_powe
 
 	l96m = L96M(K=K, J=J, F=F, eps=eps)
 	# establish initial conditions
-	state_init = np.squeeze(l96m.get_inits(n=1))
+	state_init = np.squeeze(l96m.get_inits())
 
 	if decoupled:
 		state_init = state_init[K:] # only fast variables
@@ -99,6 +99,58 @@ def make_plots(sim_model_params=dict(), output_dir='.', K=4, J=4, F=10, eps_powe
 	run_ode_model(sim_model, tspan, sim_model_params, output_dir=output_dir, plot_slow_indices=plot_slow_indices, plot_fast_indices=plot_fast_indices)
 	return
 
+def make_traj_plots(n_inits=2, sd_perturb=0.01, sim_model_params=dict(), output_dir='.', K=4, J=4, F=50, eps_power=-7, delta_t=0.01, T=5, decoupled=False):
+	# delta_t = 0.01 # output interval for ODE simulation
+	# T = 10 # Total length of ODE simulation
+	# K = 4
+	# J = 4
+
+	# set up state names
+	state_names = ['X_'+ str(k+1) for k in range(K)]
+	for k in range(K):
+		state_names += ['Y_' + str(j+1) + ',' + str(k+1) for j in range(J)]
+	sim_model_params['state_names'] = state_names
+
+	eps = 2**(eps_power)
+	if not os.path.exists(output_dir):
+		os.mkdir(output_dir)
+
+	# write parameters to file
+	settings_fname = output_dir + '/run_settings.txt'
+	with open(settings_fname, 'w') as f:
+		json.dump(locals(), f, default=lambda x: getval(x) , indent=2)
+
+	tspan = np.arange(0,T,delta_t)
+	plot_fast_indices = [K, K+1, K+J-2, K+J-1]
+	plot_slow_indices = np.arange(K)
+
+	l96m = L96M(K=K, J=J, F=F, eps=eps)
+	sim_model = l96m.full
+	# establish initial conditions
+	state_init = np.squeeze(l96m.get_inits())
+
+
+	Y = []
+	sim_model_params['state_init'] = state_init
+	y_clean = run_ode_model(sim_model, tspan, sim_model_params, output_dir=output_dir, plot_slow_indices=plot_slow_indices, plot_fast_indices=plot_fast_indices)
+	Y.append(y_clean)
+
+	sim_model_params['state_init'] = state_init + sd_perturb*np.random.randn()
+	y_clean_perturbed = run_ode_model(sim_model, tspan, sim_model_params, output_dir=output_dir, plot_slow_indices=plot_slow_indices, plot_fast_indices=plot_fast_indices)
+	Y.append(y_clean_perturbed)
+
+	fig, ax_list = plt.subplots(len(plot_slow_indices), 1, figsize=[11,11])
+	for k in range(K):
+		ax = ax_list[k]
+		for y in Y:
+			ax.plot(delta_t*np.arange(y.shape[0]), y[:,k])
+		ax.set_ylabel(sim_model_params['state_names'][k])
+		ax.set_xlabel('time')
+	fig.savefig(fname=os.path.join(output_dir,'ODEsensitivity'))
+	plt.close(fig)
+
+	return
+
 if __name__ == '__main__':
 
 	sim_model_params = {'ode_params': (),
@@ -107,25 +159,33 @@ if __name__ == '__main__':
 						'ode_int_atol':1e-6,
 						'ode_int_max_step':1e-3}
 
-	main_dir = '/Users/matthewlevine/Downloads/l96_check_chaos_4'
+	main_dir = '/Users/matthewlevine/Downloads/l96_check_chaos_NEW'
 	if not os.path.exists(main_dir):
 		os.mkdir(main_dir)
-	T_list = [20,50]
-	F_list = [18,22,10,15,25,50,1,5,100]
-	eps_power_list = [-1, -3, -5, -7, -9]
 
-	for T in T_list:
-		print('T=',T)
-		for F in F_list: #[10,25,50]:
-			print('F=',F)
-			if T==T_list[0]:
-				output_dir = main_dir+'/l96chaos_decoupled_F{0}'.format(F)
-				if not os.path.exists(output_dir):
-					make_plots(sim_model_params=sim_model_params, output_dir=output_dir, F=F, delta_t=0.0001, T=0.2, decoupled=True)
-			for eps_power in eps_power_list:
-				print('eps_power=',eps_power)
-				output_dir = main_dir+'/l96chaos_full_F{0}_epsPower{1}_T{2}'.format(F,eps_power,T)
-				if not os.path.exists(output_dir):
-					make_plots(sim_model_params=sim_model_params, output_dir=output_dir, F=F, eps_power=eps_power, T=T, decoupled=False)
+	T = 10
+	eps_power = -7
+	F = 50
+	output_dir = main_dir+'/l96chaos_full_F{0}_epsPower{1}_T{2}'.format(F,eps_power,T)
+	make_traj_plots(n_inits=2, sd_perturb=0.5, sim_model_params=sim_model_params, output_dir=output_dir, F=F, eps_power=eps_power, T=T, decoupled=False)
+
+
+	# T_list = [20,50]
+	# F_list = [18,22,10,15,25,50,1,5,100]
+	# eps_power_list = [-1, -3, -5, -7, -9]
+
+	# for T in T_list:
+	# 	print('T=',T)
+	# 	for F in F_list: #[10,25,50]:
+	# 		print('F=',F)
+	# 		if T==T_list[0]:
+	# 			output_dir = main_dir+'/l96chaos_decoupled_F{0}'.format(F)
+	# 			if not os.path.exists(output_dir):
+	# 				make_plots(sim_model_params=sim_model_params, output_dir=output_dir, F=F, delta_t=0.0001, T=0.2, decoupled=True)
+	# 		for eps_power in eps_power_list:
+	# 			print('eps_power=',eps_power)
+	# 			output_dir = main_dir+'/l96chaos_full_F{0}_epsPower{1}_T{2}'.format(F,eps_power,T)
+	# 			if not os.path.exists(output_dir):
+	# 				make_plots(sim_model_params=sim_model_params, output_dir=output_dir, F=F, eps_power=eps_power, T=T, decoupled=False)
 
 
