@@ -82,7 +82,13 @@ def main(basedir=FLAGS.basedir,
 				ytrain = Ybar_data_inferred.reshape(-1, 1)
 			else:
 				ytrain = Ybar_true.reshape(-1, 1)
-			my_inds = get_inds(Xtrain.shape[0])
+			N = Xtrain.shape[0]
+			if N > n_subsample:
+				my_inds = np.random.choice(np.arange(N), n_subsample, replace=False)
+			else:
+				my_inds = np.arange(N)
+
+			my_inds = get_inds()
 			gpr = GaussianProcessRegressor(alpha=alpha, n_restarts_optimizer=15).fit(X=Xtrain[my_inds],y=ytrain[my_inds])
 			X_k_pred = np.arange(X_min,X_max,0.01).reshape(-1, 1)
 			gp_mean, gp_std = gpr.predict(X_k_pred, return_std=True)
