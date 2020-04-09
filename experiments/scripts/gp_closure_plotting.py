@@ -32,7 +32,7 @@ def main(basedir=FLAGS.basedir,
 	k_linestyle= ['-','--','-.',':']
 
 	# for alpha in [1, 1e-1, 1e-5, 1e-10]:
-	for alpha in [1e3, 1e2, 1e1, 1]:
+	for alpha in [100, 50, 25, 10, 1]:
 		fig, (ax_list) = plt.subplots(1,1)
 		ax_mean = ax_list
 		# ax_std = ax_list[1]
@@ -93,8 +93,8 @@ def main(basedir=FLAGS.basedir,
 			gpr = GaussianProcessRegressor(alpha=alpha, n_restarts_optimizer=15).fit(X=Xtrain[my_inds],y=ytrain[my_inds])
 			X_k_pred = np.arange(X_min,X_max,0.01).reshape(-1, 1)
 			gp_mean, gp_std = gpr.predict(X_k_pred, return_std=True)
-			ax_mean.scatter(Xtrain[my_inds],ytrain[my_inds], color='gray', alpha=0.1, label='Data')
-			ax_mean.scatter(Xtrain[my_inds],ytrain[my_inds], color='red', label='Training')
+			ax_mean.scatter(Xtrain,ytrain, s=5, color='gray', alpha=0.8, label='Data')
+			ax_mean.scatter(Xtrain[my_inds],ytrain[my_inds], s=5, color='red', label='Training')
 			ax_mean.plot(X_k_pred, gp_mean, color=F_color[F], linestyle='-', label='X-all (F={F})'.format(F=F))
 
 		# my_lims = (overall_X_min, overall_X_max)
