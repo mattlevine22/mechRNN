@@ -42,7 +42,8 @@ class L96M:
     hx = hx * np.ones(K)
     if hx.size != K:
       raise ValueError("'hx' must be a 1D-array of size 'K'")
-    # _s.predictor = 0
+    _s.predictor = None
+    _s.dima_style = False
     _s.slow_only = slow_only
     _s.K = K
     _s.J = J
@@ -260,7 +261,7 @@ class L96M:
 
     return rhs
 
-  def regressed(_s, t, x):
+  def regressed(_s, x, t):
     ''' Only slow variables with RHS learned from data '''
     K = _s.K
     rhs = np.empty(K)
@@ -279,7 +280,10 @@ class L96M:
 
     # add data-learned coupling term
     # XXX verify this (twice: sign and vector-vector multiplication)
-    rhs += _s.hx * _s.simulate(x)
+    if _s.dima_style:
+      rhs += _s.hx * _s.simulate(x)
+    else:
+      rhs += _s.simulate(x)
 
     return rhs
 
