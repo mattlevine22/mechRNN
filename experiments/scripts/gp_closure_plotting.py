@@ -33,8 +33,6 @@ def main(basedir=FLAGS.basedir,
 
 	# for alpha in [1, 1e-1, 1e-5, 1e-10]:
 	for F in [50]:
-		fig, (ax_list) = plt.subplots(1,1)
-		ax_mean = ax_list
 		# ax_std = ax_list[1]
 
 		fname = os.path.join(basedir,'dt{dt}'.format(dt=dt),'F{F}_eps{eps}'.format(F=F,eps=eps),'TRAIN_DATA','slow_data_0_YbarData.npz')
@@ -58,6 +56,9 @@ def main(basedir=FLAGS.basedir,
 		else:
 			my_inds = np.arange(N)
 		for alpha in [100, 50, 25, 10, 1]:
+			fig, (ax_list) = plt.subplots(1,1)
+			ax_mean = ax_list
+
 			# N = X.shape[0]
 
 			# if N > n_subsample:
