@@ -95,7 +95,7 @@ def main(basedir=FLAGS.basedir,
 			gp_mean, gp_std = gpr.predict(X_k_pred, return_std=True)
 			ax_mean.scatter(Xtrain[my_inds],ytrain[my_inds], color='gray', alpha=0.1, label='Data')
 			ax_mean.scatter(Xtrain[my_inds],ytrain[my_inds], color='red', label='Training')
-			ax_mean.plot(X_k_pred, gp_mean, color=F_color[F], linestyle='-', label='X-all (F={F})'.format(k=k,F=F))
+			ax_mean.plot(X_k_pred, gp_mean, color=F_color[F], linestyle='-', label='X-all (F={F})'.format(F=F))
 
 		# my_lims = (overall_X_min, overall_X_max)
 
