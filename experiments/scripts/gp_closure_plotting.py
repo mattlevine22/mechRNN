@@ -32,14 +32,14 @@ def main(basedir=FLAGS.basedir,
 	k_linestyle= ['-','--','-.',':']
 
 	# for alpha in [1, 1e-1, 1e-5, 1e-10]:
-	for alpha in [100, 10, 1, 1e-10]:
+	for alpha in [1e3, 1e2, 1e1, 1]:
 		fig, (ax_list) = plt.subplots(1,1)
 		ax_mean = ax_list
 		# ax_std = ax_list[1]
 
 		overall_X_min = -np.Inf
 		overall_X_max = np.Inf
-		for F in [10,50]:
+		for F in [50]:
 			fname = os.path.join(basedir,'dt{dt}'.format(dt=dt),'F{F}_eps{eps}'.format(F=F,eps=eps),'TRAIN_DATA','slow_data_0_YbarData.npz')
 
 			foo = np.load(fname)
@@ -48,32 +48,32 @@ def main(basedir=FLAGS.basedir,
 			X = foo['X']
 
 			K = X.shape[1]
-			N = X.shape[0]
+			# N = X.shape[0]
 
-			if N > n_subsample:
-				my_inds = np.random.choice(np.arange(N), n_subsample, replace=False)
-			else:
-				my_inds = np.arange(N)
-			for k in range(K):
-				print('Fitting GP for F={F} and k={k}'.format(F=F,k=k))
-				X_k = X[my_inds,k].reshape(-1, 1)
-				if infer_Ybar:
-					Ybar_k = Ybar_data_inferred[my_inds,k].reshape(-1, 1)
-				else:
-					Ybar_k = Ybar_true[my_inds,k].reshape(-1, 1)
-				gpr = GaussianProcessRegressor(alpha=alpha, n_restarts_optimizer=15).fit(X=X_k,y=Ybar_k)
-				X_min = np.min(X_k)
-				X_max = np.max(X_k)
-				X_k_pred = np.arange(X_min,X_max,0.01).reshape(-1, 1)
-				gp_mean, gp_std = gpr.predict(X_k_pred, return_std=True)
+			# if N > n_subsample:
+			# 	my_inds = np.random.choice(np.arange(N), n_subsample, replace=False)
+			# else:
+			# 	my_inds = np.arange(N)
+			# for k in range(K):
+			# 	print('Fitting GP for F={F} and k={k}'.format(F=F,k=k))
+			# 	X_k = X[my_inds,k].reshape(-1, 1)
+			# 	if infer_Ybar:
+			# 		Ybar_k = Ybar_data_inferred[my_inds,k].reshape(-1, 1)
+			# 	else:
+			# 		Ybar_k = Ybar_true[my_inds,k].reshape(-1, 1)
+			# 	gpr = GaussianProcessRegressor(alpha=alpha, n_restarts_optimizer=15).fit(X=X_k,y=Ybar_k)
+			# 	X_min = np.min(X_k)
+			# 	X_max = np.max(X_k)
+			# 	X_k_pred = np.arange(X_min,X_max,0.01).reshape(-1, 1)
+			# 	gp_mean, gp_std = gpr.predict(X_k_pred, return_std=True)
 
-				overall_X_min = np.max((overall_X_min, X_min))
-				overall_X_max = np.min((overall_X_max, X_max))
+			# 	overall_X_min = np.max((overall_X_min, X_min))
+			# 	overall_X_max = np.min((overall_X_max, X_max))
 
-				# my_dict = {'F': F, 'k': k, 'gp_mean': gp_mean, 'gp_std': gp_std}
-				# results.append(my_dict)
+			# 	# my_dict = {'F': F, 'k': k, 'gp_mean': gp_mean, 'gp_std': gp_std}
+			# 	# results.append(my_dict)
 
-				ax_mean.plot(X_k_pred, gp_mean, color=F_color[F], linestyle=':', label='X_{k} (F={F})'.format(k=k,F=F))
+			# 	ax_mean.plot(X_k_pred, gp_mean, color=F_color[F], linestyle=':', label='X_{k} (F={F})'.format(k=k,F=F))
 				# ax_std.plot(X_k_pred, gp_std, color=F_color[F], linestyle=k_linestyle[k], label='X_{k} (F={F})'.format(k=k,F=F))
 
 			# fit GP to all states together
@@ -91,10 +91,11 @@ def main(basedir=FLAGS.basedir,
 			gpr = GaussianProcessRegressor(alpha=alpha, n_restarts_optimizer=15).fit(X=Xtrain[my_inds],y=ytrain[my_inds])
 			X_k_pred = np.arange(X_min,X_max,0.01).reshape(-1, 1)
 			gp_mean, gp_std = gpr.predict(X_k_pred, return_std=True)
+			ax_mean.scatter(Xtrain[my_inds],ytrain[my_inds], color='gray', alpha=0.1, label='Data')
+			ax_mean.scatter(Xtrain[my_inds],ytrain[my_inds], color='red', label='Training')
 			ax_mean.plot(X_k_pred, gp_mean, color=F_color[F], linestyle='-', label='X-all (F={F})'.format(k=k,F=F))
 
-
-		my_lims = (overall_X_min, overall_X_max)
+		# my_lims = (overall_X_min, overall_X_max)
 
 		ax_mean.set_title('GP mean')
 		# ax_std.set_title('GP std')
@@ -108,7 +109,7 @@ def main(basedir=FLAGS.basedir,
 		ax_mean.legend()
 
 		fig.suptitle(r'GP-estimated closure function: $X_k \rightarrow \bar{Y}_k$')
-		fig.savefig(fname=os.path.join(basedir,'dt{dt}'.format(dt=dt),'1d_GP_closure_n{n_subsample}_inferYbar{infer_Ybar}_comparison_alpha{alpha}.png'.format(infer_Ybar=infer_Ybar, n_subsample=n_subsample, alpha=alpha)), dpi=300)
+		fig.savefig(fname=os.path.join(basedir,'dt{dt}'.format(dt=dt),'1d_F50_GP_closure_n{n_subsample}_inferYbar{infer_Ybar}_comparison_alpha{alpha}.png'.format(infer_Ybar=infer_Ybar, n_subsample=n_subsample, alpha=alpha)), dpi=300)
 		plt.close(fig)
 
 if __name__ == '__main__':
