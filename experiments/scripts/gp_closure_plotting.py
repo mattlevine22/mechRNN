@@ -78,8 +78,8 @@ def main(basedir=FLAGS.basedir,
 
 			# fit GP to all states together
 			Xtrain = X.reshape(-1, 1)
-			Xmin = np.min(Xtrain)
-			Xmax = np.max(Xtrain)
+			X_min = np.min(Xtrain)
+			X_max = np.max(Xtrain)
 			if infer_Ybar:
 				ytrain = Ybar_data_inferred.reshape(-1, 1)
 			else:
