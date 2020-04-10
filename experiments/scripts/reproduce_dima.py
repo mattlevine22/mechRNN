@@ -19,7 +19,7 @@ import pdb
 parser = argparse.ArgumentParser()
 parser.add_argument('--testing_fname', type=str, default='/groups/astuart/mlevine/writeup0/l96_dt_trials_v2/dt0.001/F50_eps0.0078125/reproduce_dima/testing.npz')
 parser.add_argument('--training_fname', type=str, default='/groups/astuart/mlevine/writeup0/l96_dt_trials_v2/dt0.001/F50_eps0.0078125/reproduce_dima/training.npz')
-parser.add_argument('--dima_data_path', type=str, default='~/mechRNN/experiments/scripts/dima_gp_training_data.npy')
+parser.add_argument('--dima_data_path', type=str, default='/home/mlevine/mechRNN/experiments/scripts/dima_gp_training_data.npy')
 parser.add_argument('--output_dir', type=str, default='/groups/astuart/mlevine/writeup0/l96_dt_trials_v2/dt0.001/F50_eps0.0078125/reproduce_dima/')
 FLAGS = parser.parse_args()
 
