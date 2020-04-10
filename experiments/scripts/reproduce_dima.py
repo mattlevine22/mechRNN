@@ -54,9 +54,9 @@ def eliminate_dima(
 		ode_int_rtol=1e-3,
 		ode_int_max_step=1e-3,
 		delta_t = 1e-3,
-		t_synch = 50,
+		t_synch = 5,
 		t_train = 10,
-		t_invariant_measure = 100):
+		t_invariant_measure = 10):
 
 	mkdir_p(output_dir)
 
@@ -104,8 +104,8 @@ def plot_data(testing_fname=FLAGS.testing_fname,
 	training_fname=FLAGS.training_fname,
 	dima_data_path=FLAGS.dima_data_path,
 	output_dir = FLAGS.output_dir,
-	n_subsample_gp=5000,
-	n_subsample_kde=int(1e7),
+	n_subsample_gp=1000,
+	n_subsample_kde=int(1e8),
 	n_restarts_optimizer=15,
 	K=9,
 	J=8,
@@ -244,6 +244,10 @@ def plot_data(testing_fname=FLAGS.testing_fname,
 		ax_kde.legend().set_visible(False)
 		# save figure after each loop
 		fig.savefig(fname=output_fname, dpi=300)
+		np.savez(os.path.join(output_dir,'test_output_{alpha}.npz'.format(alpha=alpha)),
+				X_test_gpr_true=X_test_gpr_true,
+				X_test_gpr_approx=X_test_gpr_approx,
+				X_test=X_test)
 	# close the fig when you're done!
 	plt.close(fig)
 	return
