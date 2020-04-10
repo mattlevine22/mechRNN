@@ -121,7 +121,7 @@ def plot_data(testing_fname=FLAGS.testing_fname,
 	output_fname = os.path.join(output_dir,'eliminate_dima.png')
 
 	# initialize ode object
-	ODE = L96M(K=K, J=J, F=F, eps=eps)
+	ODE = L96M(K=K, J=J, F=F, eps=eps, dima_style=True)
 	ODE.set_stencil() # this is a default, empty usage that is required
 
 

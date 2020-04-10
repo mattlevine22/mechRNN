@@ -35,7 +35,7 @@ class L96M:
   """
 
   def __init__(_s,
-      K = 9, J = 8, hx = -0.8, hy = 1, F = 10, eps = 2**(-7), k0 = 0, slow_only=False):
+      K = 9, J = 8, hx = -0.8, hy = 1, F = 10, eps = 2**(-7), k0 = 0, slow_only=False, dima_style=False):
     '''
     Initialize an instance: setting parameters and xkstar
     '''
@@ -43,7 +43,7 @@ class L96M:
     if hx.size != K:
       raise ValueError("'hx' must be a 1D-array of size 'K'")
     _s.predictor = None
-    _s.dima_style = False
+    _s.dima_style = dima_style
     _s.slow_only = slow_only
     _s.K = K
     _s.J = J
