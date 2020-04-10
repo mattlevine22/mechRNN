@@ -56,7 +56,7 @@ def eliminate_dima(
 		delta_t = 1e-3,
 		t_synch = 50,
 		t_train = 10,
-		t_invariant_measure = 100)
+		t_invariant_measure = 100):
 
 	mkdir_p(output_dir)
 
