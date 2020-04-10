@@ -54,9 +54,9 @@ def eliminate_dima(
 		ode_int_rtol=1e-3,
 		ode_int_max_step=1e-3,
 		delta_t = 1e-3,
-		t_synch = 5,
+		t_synch = 50,
 		t_train = 10,
-		t_invariant_measure = 10):
+		t_invariant_measure = 100):
 
 	mkdir_p(output_dir)
 
@@ -104,7 +104,7 @@ def plot_data(testing_fname=FLAGS.testing_fname,
 	training_fname=FLAGS.training_fname,
 	dima_data_path=FLAGS.dima_data_path,
 	output_dir = FLAGS.output_dir,
-	n_subsample_gp=1000,
+	n_subsample_gp=800,
 	n_subsample_kde=int(1e8),
 	n_restarts_optimizer=15,
 	K=9,
