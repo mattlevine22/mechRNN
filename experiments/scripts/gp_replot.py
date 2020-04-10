@@ -46,10 +46,8 @@ def plot_gp_x_vs_y(gp_path, data_path, infer_Ybar=False):
 	X_k_pred = np.arange(X_min,X_max,0.01).reshape(-1, 1)
 	gpr_list = pickle.load(open(gp_path,'rb'))
 	for gpr in gpr_list:
-		pdb.set_trace()
 		gp_mean, gp_std = gpr.predict(X_k_pred, return_std=True)
 		ax_mean.plot(X_k_pred, gp_mean, color='black', linestyle='-')
-
 	ax_mean.set_title('GP mean')
 	ax_mean.set_xlabel(r'$X_k$')
 	ax_mean.set_ylabel(r'$\bar{Y}_k$')
@@ -70,6 +68,7 @@ def main():
 			glob_str = os.path.join(run_dir,'Init0/*/gpr_list.p')
 			for gp_path in glob.glob(glob_str):
 				# this compares the GP prediction over Xk VS the true Ybark
+				print('Plotting:',gp_path)
 				plot_gp_x_vs_y(gp_path=gp_path, data_path=data_path)
 
 
