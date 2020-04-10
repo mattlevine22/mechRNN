@@ -29,6 +29,7 @@ def plot_gp_x_vs_y(gp_path, data_path, infer_Ybar=False):
 	Ybar_data_inferred = foo['Ybar_data_inferred']
 	Ybar_true = foo['Ybar_true']
 	Xtrain= foo['X'].reshape(-1, 1)
+	K = foo['X'].shape[1]
 	if infer_Ybar:
 		ytrain = Ybar_data_inferred.reshape(-1, 1)
 	else:
@@ -45,11 +46,15 @@ def plot_gp_x_vs_y(gp_path, data_path, infer_Ybar=False):
 	X_max = np.max(Xtrain)
 	X_k_pred = np.arange(X_min,X_max,0.01).reshape(-1, 1)
 	gpr_list = pickle.load(open(gp_path,'rb'))
-	pdb.set_trace()
 	for gpr in gpr_list:
-		gp_mean, gp_std = gpr.predict(X_k_pred, return_std=True)
-		ax_mean.plot(X_k_pred, gp_mean, color='black', linestyle='-')
-	pdb.set_trace()
+		try:
+			gp_mean = gpr.predict(X_k_pred)
+			ax_mean.plot(X_k_pred, gp_mean, color='black', linestyle='-')
+		except:
+			gp_mean = gpr.predict(np.outer(X_k_pred,np.ones(K)))
+			for k in range(K):
+				ax_mean.scatter(X_k_pred, gp_mean[:,k], color='black')
+
 	ax_mean.set_title('GP mean')
 	ax_mean.set_xlabel(r'$X_k$')
 	ax_mean.set_ylabel(r'$\bar{Y}_k$')
