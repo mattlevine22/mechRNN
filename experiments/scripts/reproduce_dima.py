@@ -84,7 +84,7 @@ def eliminate_dima(
 	# Use slow-training to compute Ybar-infer (note we can't get Ybar_k for the last time index)
 	Ybar_data_inferred = ODE.implied_Ybar(X_in=X_train[:-1,:], X_out=X_train[1:,:], delta_t=delta_t)
 
-	np.savez('training.npz', X_train=X_train, Ybar_true=Ybar_true, Ybar_data_inferred=Ybar_data_inferred)
+	np.savez(training_fname, X_train=X_train, Ybar_true=Ybar_true, Ybar_data_inferred=Ybar_data_inferred)
 
 	# Get data for estimating the true invariant measure:
 	# Run for 5k and output solutions at dT
@@ -98,7 +98,7 @@ def eliminate_dima(
 	# Remove first 500 and plot KDE
 	X_test = y_clean[ntsynch:,:K].reshape(-1, 1)
 	x_grid = np.linspace(min(X_test), max(X_test), 1000)
-	np.savez('testing.npz', X_test=X_test, ntsynch=ntsynch, t_eval=t_eval, x_grid=x_grid, y0=y0, K=K)
+	np.savez(testing_fname, X_test=X_test, ntsynch=ntsynch, t_eval=t_eval, x_grid=x_grid, y0=y0, K=K)
 
 	return
 
