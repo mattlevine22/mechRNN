@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import pickle
 import argparse
+import glob
 from sklearn.gaussian_process import GaussianProcessRegressor
 from utils import str2bool
 
@@ -14,7 +15,6 @@ import matplotlib.pyplot as plt
 import pdb
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--basedir', type=str, default='/groups/astuart/mlevine/writeup0/l96_dt_trials')
 parser.add_argument('--infer_Ybar', type=str2bool, default=False)
 parser.add_argument('--delta_t', type=float, default=0.001)
 parser.add_argument('--eps', type=float, default=2**(-7))
@@ -62,9 +62,6 @@ def plot_gp_x_vs_y(gp_path, data_path, infer_Ybar=False):
 def main():
 	base_path = '/groups/astuart/mlevine/writeup0/l96_dt_trials_v2'
 	eps = 0.0078125
-
-    for job_file in glob.glob(glob_str):
-
 	for dt in [1e-3, 1e-4, 1e-2]:
 		for F in [10, 50]:
 			run_dir = os.path.join(base_path, 'dt{dt}/F{F}_eps{eps}'.format(dt=dt,F=F,eps=eps))
