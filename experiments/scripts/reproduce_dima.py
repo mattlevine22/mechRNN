@@ -115,7 +115,8 @@ def plot_data(testing_fname=FLAGS.testing_fname,
 	ode_int_atol=1e-6,
 	ode_int_rtol=1e-3,
 	ode_int_max_step=1e-3,
-	alpha_list = [0.5,1]):
+	alpha_list = [0.5,1],
+	fit_dima=False):
 
 	# output dir
 	output_fname = os.path.join(output_dir,'eliminate_dima.png')
@@ -149,13 +150,13 @@ def plot_data(testing_fname=FLAGS.testing_fname,
 	test_inds = get_inds(N_total=X_test.shape[0], N_subsample=n_subsample_kde)
 	fig, (ax_gp, ax_kde) = plt.subplots(1,2,figsize=[8,4])
 	t0 = time()
-	sns.kdeplot(X_test[test_inds].squeeze(), ax=ax_kde, label='Matt-True', color='black', linestyle='--')
+	sns.kdeplot(X_test[test_inds].squeeze(), ax=ax_kde, label='Matt-True', color='black', linestyle='-')
 	print('Plotted matt-KDE of invariant measure in:', (time()-t0)/60,'minutes')
 
 	# plot Dimas data invariant measure
 	X_dima = np.load(dima_data_path)
-	sns.kdeplot(X_dima[:,0].squeeze(), ax=ax_kde, label='Dima-True', color='black', linestyle=':')
-	print('Plotted dima-KDE of invariant measure in:', (time()-t0)/60,'minutes')
+	# sns.kdeplot(X_dima[:,0].squeeze(), ax=ax_kde, label='Dima-True', color='black', linestyle=':')
+	# print('Plotted dima-KDE of invariant measure in:', (time()-t0)/60,'minutes')
 	dima_inds = get_inds(N_total=X_dima.shape[0], N_subsample=n_subsample_gp)
 
 	ax_kde.legend()
@@ -192,15 +193,18 @@ def plot_data(testing_fname=FLAGS.testing_fname,
 		)
 
 		# fit Dima-data
-		gpr_dima = my_gpr.fit(X=X_dima[dima_inds,0].reshape(-1,1),y=X_dima[dima_inds,1].reshape(-1,1))
-		gpr_dima_mean = gpr_dima.predict(X_pred, return_std=False)
-		# now run gp-corrected ODE
-		ODE.set_predictor(gpr_dima.predict)
-		t0 = time()
-		sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
-		y_clean = sol.y.T
-		X_test_gpr_dima = y_clean[ntsynch:,:K].reshape(-1, 1)
-		print('Generated invariant measure for GP-dima:', (time()-t0)/60,'minutes')
+		if fit_dima:
+			gpr_dima = my_gpr.fit(X=X_dima[dima_inds,0].reshape(-1,1),y=X_dima[dima_inds,1].reshape(-1,1))
+			gpr_dima_mean = gpr_dima.predict(X_pred, return_std=False)
+			# now run gp-corrected ODE
+			ODE.set_predictor(gpr_dima.predict)
+			t0 = time()
+			sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
+			y_clean = sol.y.T
+			X_test_gpr_dima = y_clean[ntsynch:,:K].reshape(-1, 1)
+			print('Generated invariant measure for GP-dima:', (time()-t0)/60,'minutes')
+			ax_gp.plot(X_pred, gpr_dima_mean, color=color, linestyle=':', label='X_k vs true Y-avg (alpha={alpha})'.format(alpha=alpha))
+			sns.kdeplot(X_test_gpr_dima[test_inds].squeeze(), ax=ax_kde, color=color, linestyle=':', label='Dima (alpha={alpha})'.format(alpha=alpha))
 
 		# fit GPR-Ybartrue to Xk vs Ybar-true
 		gpr_true = my_gpr.fit(X=X[train_inds], y=Y_true[train_inds])
@@ -225,7 +229,6 @@ def plot_data(testing_fname=FLAGS.testing_fname,
 		print('Generated invariant measure for GP-approx:', (time()-t0)/60,'minutes')
 
 		# Plot each GPR along X vs Ybar (give alpha a color; give True/Infer a line-style)
-		ax_gp.plot(X_pred, gpr_dima_mean, color=color, linestyle=':', label='X_k vs true Y-avg (alpha={alpha})'.format(alpha=alpha))
 		ax_gp.plot(X_pred, gpr_true_mean, color=color, linestyle='--', label='X_k vs true Y-avg (alpha={alpha})'.format(alpha=alpha))
 		ax_gp.plot(X_pred, gpr_approx_mean, color=color, linestyle='-', label='X_k vs inferred Y-avg (alpha={alpha})'.format(alpha=alpha))
 		ax_gp.set_xlabel(r'$X_k$')
@@ -233,7 +236,6 @@ def plot_data(testing_fname=FLAGS.testing_fname,
 		# ax_gp.legend()
 
 		# Test each of these GPRs for their ability to reproduce invariant measure:
-		sns.kdeplot(X_test_gpr_dima[test_inds].squeeze(), ax=ax_kde, color=color, linestyle=':', label='Dima (alpha={alpha})'.format(alpha=alpha))
 		sns.kdeplot(X_test_gpr_true[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='--', label='Ybar-True (alpha={alpha})'.format(alpha=alpha))
 		sns.kdeplot(X_test_gpr_approx[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='-', label='Ybar-Inferred (alpha={alpha})'.format(alpha=alpha))
 		ax_kde.set_xlabel(r'$X_k$')
@@ -241,7 +243,7 @@ def plot_data(testing_fname=FLAGS.testing_fname,
 		# ax_kde.legend()
 		ax_kde.legend().set_visible(False)
 		# save figure after each loop
-		fig.savefig(fname=output_fname)
+		fig.savefig(fname=output_fname, dpi=300)
 	# close the fig when you're done!
 	plt.close(fig)
 	return
