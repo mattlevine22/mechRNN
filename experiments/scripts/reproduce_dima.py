@@ -17,8 +17,23 @@ import seaborn as sns
 import pdb
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--testing_fname', type=str, default='/groups/astuart/mlevine/writeup0/l96_dt_trials_v2/dt0.001/F50_eps0.0078125/reproduce_dima/testing.npz')
-parser.add_argument('--training_fname', type=str, default='/groups/astuart/mlevine/writeup0/l96_dt_trials_v2/dt0.001/F50_eps0.0078125/reproduce_dima/training.npz')
+parser.add_argument('--delta_t', type=float, default=1e-3, help='Data sampling rate')
+parser.add_argument('--K', type=int, default=9, help='number of slow variables')
+parser.add_argument('--J', type=int, default=8, help='number of fast variables coupled to a single slow variable')
+parser.add_argument('--F', type=float, default=10)
+parser.add_argument('--eps', type=float, default=2**(-7))
+parser.add_argument('--ode_int_method', type=str, default='RK45', help='See scipy solve_ivp documentation for options.')
+parser.add_argument('--ode_int_atol', type=float, default=1e-6, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--ode_int_rtol', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--ode_int_max_step', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--t_synch', type=float, default=5)
+parser.add_argument('--t_train', type=float, default=10)
+parser.add_argument('--t_invariant_measure', type=float, default=1)
+parser.add_argument('--n_subsample_gp', type=int, default=800)
+parser.add_argument('--n_subsample_kde', type=int, default=int(1e9))
+parser.add_argument('--n_restarts_optimizer', type=int, default=15)
+parser.add_argument('--testing_fname', type=str, default='testing.npz')
+parser.add_argument('--training_fname', type=str, default='training.npz')
 parser.add_argument('--dima_data_path', type=str, default='/home/mlevine/mechRNN/experiments/scripts/dima_gp_training_data.npy')
 parser.add_argument('--output_dir', type=str, default='/groups/astuart/mlevine/writeup0/l96_dt_trials_v2/dt0.001/F50_eps0.0078125/reproduce_dima/')
 FLAGS = parser.parse_args()
@@ -42,21 +57,21 @@ def kde_scipy(x, x_grid):
 
 
 def eliminate_dima(
-		testing_fname=FLAGS.testing_fname,
-		training_fname=FLAGS.training_fname,
-		output_dir=FLAGS.output_dir,
-		K=9,
-		J=8,
-		F=10,
-		eps=2**(-7),
-		ode_int_method='RK45',
-		ode_int_atol=1e-6,
-		ode_int_rtol=1e-3,
-		ode_int_max_step=1e-3,
-		delta_t = 1e-3,
-		t_synch = 50,
-		t_train = 10,
-		t_invariant_measure = 100):
+	testing_fname=os.path.join(FLAGS.output_dir,FLAGS.testing_fname),
+	training_fname=os.path.join(FLAGS.output_dir,FLAGS.training_fname),
+	output_dir=FLAGS.output_dir,
+	K=FLAGS.K,
+	J=FLAGS.J,
+	F=FLAGS.F,
+	eps=FLAGS.eps,
+	ode_int_method=FLAGS.ode_int_method,
+	ode_int_atol=FLAGS.ode_int_atol,
+	ode_int_rtol=FLAGS.ode_int_rtol,
+	ode_int_max_step=FLAGS.ode_int_max_step,
+	delta_t = FLAGS.delta_t,
+	t_synch = FLAGS.t_synch,
+	t_train = FLAGS.t_train,
+	t_invariant_measure = FLAGS.t_invariant_measure):
 
 	mkdir_p(output_dir)
 
@@ -100,21 +115,21 @@ def eliminate_dima(
 
 	return
 
-def plot_data(testing_fname=FLAGS.testing_fname,
-	training_fname=FLAGS.training_fname,
+def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
+	training_fname=os.path.join(FLAGS.output_dir,FLAGS.training_fname),
 	dima_data_path=FLAGS.dima_data_path,
 	output_dir = FLAGS.output_dir,
-	n_subsample_gp=800,
-	n_subsample_kde=int(1e8),
-	n_restarts_optimizer=15,
-	K=9,
-	J=8,
-	F=10,
-	eps=2**(-7),
-	ode_int_method='RK45',
-	ode_int_atol=1e-6,
-	ode_int_rtol=1e-3,
-	ode_int_max_step=1e-3,
+	n_subsample_gp=FLAGS.n_subsample_gp,
+	n_subsample_kde=FLAGS.n_subsample_kde,
+	n_restarts_optimizer=FLAGS.n_restarts_optimizer,
+	K=FLAGS.K,
+	J=FLAGS.J,
+	F=FLAGS.F,
+	eps=FLAGS.eps,
+	ode_int_method=FLAGS.ode_int_method,
+	ode_int_atol=FLAGS.ode_int_atol,
+	ode_int_rtol=FLAGS.ode_int_rtol,
+	ode_int_max_step=FLAGS.ode_int_max_step,
 	alpha_list = [0.5,1],
 	fit_dima=False):
 
@@ -160,7 +175,7 @@ def plot_data(testing_fname=FLAGS.testing_fname,
 	dima_inds = get_inds(N_total=X_dima.shape[0], N_subsample=n_subsample_gp)
 
 	ax_kde.legend()
-	fig.savefig(fname=output_fname)
+	fig.savefig(fname=output_fname, dip=300)
 
 	# plot training data
 	ax_gp.scatter(X, Y_true, s=5, color='gray', alpha=0.8, label='Data')
