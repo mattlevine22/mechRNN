@@ -45,9 +45,11 @@ def plot_gp_x_vs_y(gp_path, data_path, infer_Ybar=False):
 	X_max = np.max(Xtrain)
 	X_k_pred = np.arange(X_min,X_max,0.01).reshape(-1, 1)
 	gpr_list = pickle.load(open(gp_path,'rb'))
+	pdb.set_trace()
 	for gpr in gpr_list:
 		gp_mean, gp_std = gpr.predict(X_k_pred, return_std=True)
 		ax_mean.plot(X_k_pred, gp_mean, color='black', linestyle='-')
+	pdb.set_trace()
 	ax_mean.set_title('GP mean')
 	ax_mean.set_xlabel(r'$X_k$')
 	ax_mean.set_ylabel(r'$\bar{Y}_k$')
