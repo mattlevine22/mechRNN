@@ -106,6 +106,9 @@ class L96M:
   def set_G0_predictor(_s):
     _s.predictor = lambda x: _s.hy * x
 
+  def set_null_predictor(_s):
+    _s.predictor = lambda x: 0
+
   def set_stencil(_s, left = 0, right = 0):
     _s.stencil = np.arange(left, 1 + right)
 

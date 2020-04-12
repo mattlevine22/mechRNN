@@ -28,7 +28,7 @@ parser.add_argument('--ode_int_rtol', type=float, default=1e-3, help='This is a 
 parser.add_argument('--ode_int_max_step', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
 parser.add_argument('--t_synch', type=float, default=5)
 parser.add_argument('--t_train', type=float, default=10)
-parser.add_argument('--t_invariant_measure', type=float, default=1)
+parser.add_argument('--t_invariant_measure', type=float, default=10)
 parser.add_argument('--n_subsample_gp', type=int, default=800)
 parser.add_argument('--n_subsample_kde', type=int, default=int(1e9))
 parser.add_argument('--n_restarts_optimizer', type=int, default=15)
@@ -46,15 +46,6 @@ def get_inds(N_total, N_subsample):
 	else:
 		my_inds = np.arange(N_total)
 	return my_inds
-
-def kde_scipy(x, x_grid):
-	"""Kernel Density Estimation with Scipy"""
-	# Note that scipy weights its bandwidth by the covariance of the
-	# input data.  To make the results comparable to the other methods,
-	# we divide the bandwidth by the sample standard deviation here.
-	kde = gaussian_kde(x)
-	return kde.evaluate(x_grid)
-
 
 def eliminate_dima(
 	testing_fname=os.path.join(FLAGS.output_dir,FLAGS.testing_fname),
@@ -109,9 +100,8 @@ def eliminate_dima(
 	print('Generated invariant measure Testing data in:', (time()-t0)/60,'minutes')
 
 	# Remove first 500 and plot KDE
-	X_test = y_clean[ntsynch:,:K].reshape(-1, 1)
-	x_grid = np.linspace(min(X_test), max(X_test), 1000)
-	np.savez(testing_fname, X_test=X_test, ntsynch=ntsynch, t_eval=t_eval, x_grid=x_grid, y0=y0, K=K)
+	X_test = y_clean[ntsynch:,:K]
+	np.savez(testing_fname, X_test=X_test, ntsynch=ntsynch, t_eval=t_eval, y0=y0, K=K)
 
 	return
 
@@ -130,8 +120,14 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	ode_int_atol=FLAGS.ode_int_atol,
 	ode_int_rtol=FLAGS.ode_int_rtol,
 	ode_int_max_step=FLAGS.ode_int_max_step,
-	alpha_list = [0.5,1],
-	fit_dima=False):
+	alpha_list = [1,10],
+	fit_dima=False,
+	delta_t=FLAGS.delta_t,
+	T_plot=10):
+
+	# plot inds for trajectories
+	t_plot = np.arange(0, T_plot, delta_t)
+	n_plot = len(t_plot)
 
 	# output dir
 	output_fname = os.path.join(output_dir,'eliminate_dima.png')
@@ -155,23 +151,24 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	train_inds = get_inds(N_total=X.shape[0], N_subsample=n_subsample_gp)
 	X_pred = np.arange(np.min(X),np.max(X),0.01).reshape(-1, 1) # mesh to evaluate GPR
 
-	X_test = goo['X_test']
-	x_grid = goo['x_grid']
+	X_test = goo['X_test'].reshape(-1,1)
 	t_eval = goo['t_eval']
 	ntsynch = goo['ntsynch']
 	K = goo['K']
-	y0 = goo['y0'][:K]
+	# y0 = goo['y0'][:K]
+	y0 = goo['X_test'][0,:]
 	test_inds = get_inds(N_total=X_test.shape[0], N_subsample=n_subsample_kde)
 	fig, (ax_gp, ax_kde) = plt.subplots(1,2,figsize=[8,4])
 	t0 = time()
 	sns.kdeplot(X_test[test_inds].squeeze(), ax=ax_kde, label='Matt-True', color='black', linestyle='-')
 	print('Plotted matt-KDE of invariant measure in:', (time()-t0)/60,'minutes')
 
-	# plot Dimas data invariant measure
-	X_dima = np.load(dima_data_path)
-	# sns.kdeplot(X_dima[:,0].squeeze(), ax=ax_kde, label='Dima-True', color='black', linestyle=':')
-	# print('Plotted dima-KDE of invariant measure in:', (time()-t0)/60,'minutes')
-	dima_inds = get_inds(N_total=X_dima.shape[0], N_subsample=n_subsample_gp)
+	if fit_dima:
+		# plot Dimas data invariant measure
+		X_dima = np.load(dima_data_path)
+		# sns.kdeplot(X_dima[:,0].squeeze(), ax=ax_kde, label='Dima-True', color='black', linestyle=':')
+		# print('Plotted dima-KDE of invariant measure in:', (time()-t0)/60,'minutes')
+		dima_inds = get_inds(N_total=X_dima.shape[0], N_subsample=n_subsample_gp)
 
 	ax_kde.legend()
 	fig.savefig(fname=output_fname, dip=300)
@@ -180,19 +177,45 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	ax_gp.scatter(X, Y_true, s=5, color='gray', alpha=0.8, label='Data')
 	ax_gp.scatter(X[train_inds], Y_true[train_inds], s=5, color='red', alpha=0.8, label='Training Data')
 
-	# check null predictor (hy*x)
-	# ODE.set_G0_predictor()
+	def plot_traj(X_learned, plot_fname, t_plot=t_plot, X_true=goo['X_test'][:n_plot,:K]):
+		K = X_true.shape[1]
+		fig_traj, (ax_test) = plt.subplots(K,1,figsize=[8,10])
+		for k in range(K):
+			ax_test[k].plot(t_plot, X_true[:,k], color='black', label='True')
+			ax_test[k].plot(t_plot, X_learned[:,k], color='blue', label='Slow + ML')
+			ax_test[k].set_ylabel(r'$X_k$'.format(k))
+		ax_test[-1].set_xlabel('time')
+		ax_test[0].legend(loc='center right')
+		fig_traj.suptitle('Testing Trajectories')
+		fig_traj.savefig(fname=plot_fname, dip=300)
+		return
+
+	# check B0 predictor (hy*x)
+	ODE.set_G0_predictor()
 	# g0_mean = ODE.hy*X_pred
 	# ax_gp.plot(X_pred, g0_mean, color='black', linestyle='--', label='G0')
-
-	# t0 = time()
-	# sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
-	# y_clean = sol.y.T
-	# X_test_G0 = y_clean[ntsynch:,:K].reshape(-1, 1)
-	# print('Generated invariant measure for G0:', (time()-t0)/60,'minutes')
+	t0 = time()
+	sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
+	y_clean = sol.y.T
+	X_test_G0 = y_clean[ntsynch:,:K].reshape(-1, 1)
+	print('Generated invariant measure for G0:', (time()-t0)/60,'minutes')
 	# sns.kdeplot(X_test_G0[test_inds].squeeze(), ax=ax_kde, color='gray', linestyle='-', label='G0')
+	# plot trajectory fits
+	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_slow_plus_cX.png'))
 
-	# ax_kde.plot(x_grid, kde_scipy(x=X_test, x_grid=x_grid), label='True')
+	# check null predictor (0)
+	ODE.set_null_predictor()
+	# g0_mean = ODE.hy*X_pred
+	# ax_gp.plot(X_pred, g0_mean, color='black', linestyle='--', label='G0')
+	t0 = time()
+	sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
+	y_clean = sol.y.T
+	X_test_null = y_clean[ntsynch:,:K].reshape(-1, 1)
+	print('Generated invariant measure for G0:', (time()-t0)/60,'minutes')
+	sns.kdeplot(X_test_null[test_inds].squeeze(), ax=ax_kde, color='gray', linestyle='-', label='null')
+	# plot trajectory fits
+	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_slow_plus_zero.png'))
+
 	for c in range(len(alpha_list)):
 		alpha = alpha_list[c]
 		color = color_list[c]
@@ -230,6 +253,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		y_clean = sol.y.T
 		X_test_gpr_true = y_clean[ntsynch:,:K].reshape(-1, 1)
 		print('Generated invariant measure for GP-true:', (time()-t0)/60,'minutes')
+		plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_YbarTrue_alpha{alpha}.png'.format(alpha=alpha)))
 
 		# fit GPR-Ybarpprox to Xk vs Ybar-infer
 		gpr_approx = my_gpr.fit(X=X[train_inds], y=Y_inferred[train_inds])
@@ -241,17 +265,18 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		y_clean = sol.y.T
 		X_test_gpr_approx = y_clean[ntsynch:,:K].reshape(-1, 1)
 		print('Generated invariant measure for GP-approx:', (time()-t0)/60,'minutes')
+		plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_YbarInfer_alpha{alpha}.png'.format(alpha=alpha)))
 
 		# Plot each GPR along X vs Ybar (give alpha a color; give True/Infer a line-style)
-		ax_gp.plot(X_pred, gpr_true_mean, color=color, linestyle='--', label='X_k vs true Y-avg (alpha={alpha})'.format(alpha=alpha))
-		ax_gp.plot(X_pred, gpr_approx_mean, color=color, linestyle='-', label='X_k vs inferred Y-avg (alpha={alpha})'.format(alpha=alpha))
+		ax_gp.plot(X_pred, gpr_true_mean, color=color, linestyle='-', label='X_k vs true Y-avg (alpha={alpha})'.format(alpha=alpha))
+		ax_gp.plot(X_pred, gpr_approx_mean, color=color, linestyle='--', label='X_k vs inferred Y-avg (alpha={alpha})'.format(alpha=alpha))
 		ax_gp.set_xlabel(r'$X_k$')
 		ax_gp.set_ylabel(r'$\bar{Y}_k$')
 		# ax_gp.legend()
 
 		# Test each of these GPRs for their ability to reproduce invariant measure:
-		sns.kdeplot(X_test_gpr_true[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='--', label='Ybar-True (alpha={alpha})'.format(alpha=alpha))
-		sns.kdeplot(X_test_gpr_approx[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='-', label='Ybar-Inferred (alpha={alpha})'.format(alpha=alpha))
+		sns.kdeplot(X_test_gpr_true[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='-', label='Ybar-True (alpha={alpha})'.format(alpha=alpha))
+		sns.kdeplot(X_test_gpr_approx[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='--', label='Ybar-Inferred (alpha={alpha})'.format(alpha=alpha))
 		ax_kde.set_xlabel(r'$X_k$')
 		# ax_kde.set_ylabel(r'$\bar{Y}_k')
 		# ax_kde.legend()
