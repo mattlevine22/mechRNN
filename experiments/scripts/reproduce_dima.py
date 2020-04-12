@@ -153,8 +153,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	Y_true = foo['Ybar_true'].reshape(-1,1)
 	Y_inferred = foo['Ybar_data_inferred'].reshape(-1,1)
 	train_inds = get_inds(N_total=X.shape[0], N_subsample=n_subsample_gp)
-	my_lims = (-6, 13)
-	X_pred = np.arange(my_lims[0],my_lims[1],0.01).reshape(-1, 1)
+	X_pred = np.arange(np.min(X),np.max(X),0.01).reshape(-1, 1) # mesh to evaluate GPR
 
 	X_test = goo['X_test']
 	x_grid = goo['x_grid']
