@@ -25,7 +25,8 @@ parser.add_argument('--eps', type=float, default=2**(-7))
 parser.add_argument('--ode_int_method', type=str, default='RK45', help='See scipy solve_ivp documentation for options.')
 parser.add_argument('--ode_int_atol', type=float, default=1e-6, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
 parser.add_argument('--ode_int_rtol', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
-parser.add_argument('--ode_int_max_step', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--ode_int_max_step', type=float, default=0.5e-4, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--rng_seed', type=float, default=96)
 parser.add_argument('--t_synch', type=float, default=5)
 parser.add_argument('--t_train', type=float, default=10)
 parser.add_argument('--t_invariant_measure', type=float, default=10)
@@ -62,7 +63,8 @@ def eliminate_dima(
 	delta_t = FLAGS.delta_t,
 	t_synch = FLAGS.t_synch,
 	t_train = FLAGS.t_train,
-	t_invariant_measure = FLAGS.t_invariant_measure):
+	t_invariant_measure = FLAGS.t_invariant_measure,
+	rng_seed = FLAGS.rng_seed):
 
 	mkdir_p(output_dir)
 
@@ -92,6 +94,9 @@ def eliminate_dima(
 
 	# Get data for estimating the true invariant measure:
 	# Run for 5k and output solutions at dT
+	if rng_seed:
+		np.random.seed(rng_seed)
+
 	t_eval = np.arange(0, (t_synch+t_invariant_measure), delta_t)
 	y0 = ODE.get_inits().squeeze()
 	t0 = time()
@@ -135,7 +140,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	# initialize ode object
 	ODE = L96M(K=K, J=J, F=F, eps=eps, dima_style=True)
 	ODE.set_stencil() # this is a default, empty usage that is required
-
+	state_limits = ODE.get_state_limits()
 
 	# get initial colors
 	prop_cycle = plt.rcParams['axes.prop_cycle']
@@ -177,13 +182,14 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	ax_gp.scatter(X, Y_true, s=5, color='gray', alpha=0.8, label='Data')
 	ax_gp.scatter(X[train_inds], Y_true[train_inds], s=5, color='red', alpha=0.8, label='Training Data')
 
-	def plot_traj(X_learned, plot_fname, t_plot=t_plot, X_true=goo['X_test'][:n_plot,:K]):
+	def plot_traj(X_learned, plot_fname, t_plot=t_plot, X_true=goo['X_test'][:n_plot,:K], state_limits=state_limits):
 		K = X_true.shape[1]
 		fig_traj, (ax_test) = plt.subplots(K,1,figsize=[8,10])
 		for k in range(K):
 			ax_test[k].plot(t_plot, X_true[:,k], color='black', label='True')
 			ax_test[k].plot(t_plot, X_learned[:,k], color='blue', label='Slow + ML')
 			ax_test[k].set_ylabel(r'$X_k$'.format(k))
+			ax_test[k].set_ylim(state_limits)
 		ax_test[-1].set_xlabel('time')
 		ax_test[0].legend(loc='center right')
 		fig_traj.suptitle('Testing Trajectories')

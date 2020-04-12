@@ -75,6 +75,15 @@ class L96M:
         z0[_s.K + k_*_s.J : _s.K + (k_+1)*_s.J] = z0[k_]
       return z0
 
+  def get_state_limits(_s):
+    if _s.K==4 and _s.J==4:
+      lims = (-27.5, 36.5)
+    elif _s.K==9 and _s.J==8:
+      lims = (-9.5, 14.5)
+    else:
+      lims = (-np.Inf, np.Inf)
+    return lims
+
   def get_fast_state_names(_s):
     state_names = []
     for k in range(_s.K):
