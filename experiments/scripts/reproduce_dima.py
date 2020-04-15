@@ -26,7 +26,7 @@ parser.add_argument('--ode_int_method', type=str, default='RK45', help='See scip
 parser.add_argument('--ode_int_atol', type=float, default=1e-6, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
 parser.add_argument('--ode_int_rtol', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
 parser.add_argument('--ode_int_max_step', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
-parser.add_argument('--rng_seed', type=float, default=96)
+parser.add_argument('--rng_seed', type=float, default=63)
 parser.add_argument('--t_synch', type=float, default=5)
 parser.add_argument('--t_train', type=float, default=10)
 parser.add_argument('--t_invariant_measure', type=float, default=10)
