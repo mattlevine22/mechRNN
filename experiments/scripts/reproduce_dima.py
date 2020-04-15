@@ -125,7 +125,8 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	ode_int_atol=FLAGS.ode_int_atol,
 	ode_int_rtol=FLAGS.ode_int_rtol,
 	ode_int_max_step=FLAGS.ode_int_max_step,
-	alpha_list = [1,10],
+	alpha_list_cont = [1,10],
+	alpha_list_discrete = [1e-6, 5e-6],
 	fit_dima=False,
 	delta_t=FLAGS.delta_t,
 	T_plot=10):
@@ -149,7 +150,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	foo = np.load(training_fname)
 	goo = np.load(testing_fname)
 
-	# Fit GPRs to the data
+	# Read in data
 	X = foo['X_train'][:-1,:].reshape(-1,1)
 	Y_true = foo['Ybar_true'].reshape(-1,1)
 	Y_inferred = foo['Ybar_data_inferred'].reshape(-1,1)
@@ -166,6 +167,9 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	fig, (ax_gp, ax_kde) = plt.subplots(1,2,figsize=[8,4])
 	t0 = time()
 	sns.kdeplot(X_test[test_inds].squeeze(), ax=ax_kde, label='RHS = Full Multiscale', color='black', linestyle='-')
+	ax_gp.legend(loc='upper left', prop={'size': 5})
+	ax_kde.legend(loc='lower center', prop={'size': 4})
+	fig.savefig(fname=output_fname, dpi=300)
 	print('Plotted matt-KDE of invariant measure in:', (time()-t0)/60,'minutes')
 
 	if fit_dima:
@@ -179,8 +183,10 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 
 	# plot training data
 	ax_gp.plot(X, Y_true, 'o', markersize=2, color='gray', alpha=0.8, label='True Training Data (all)')
-	ax_gp.plot(X[train_inds], Y_true[train_inds], 'o', markersize=2, color='red', alpha=0.8, label='True Training Data (subset)')
-	ax_gp.plot(X[train_inds], Y_inferred[train_inds], '+', linewidth=1, markersize=3, markeredgewidth=1, color='green', alpha=0.8, label='Approximate Training Data (subset))')
+	ax_gp.plot(X[train_inds], Y_true[train_inds], 'o', markersize=2, color='red', alpha=0.8, label='True Training Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
+	ax_gp.plot(X[train_inds], Y_inferred[train_inds], '+', linewidth=1, markersize=3, markeredgewidth=1, color='green', alpha=0.8, label='Approximate Training Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
+	ax_gp.legend(loc='upper left', prop={'size': 5})
+	ax_kde.legend(loc='lower center', prop={'size': 4})
 	fig.savefig(fname=output_fname, dpi=300)
 
 	def plot_traj(X_learned, plot_fname, t_plot=t_plot, X_true=goo['X_test'][:n_plot,:K], state_limits=state_limits):
@@ -195,6 +201,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		ax_test[0].legend(loc='center right')
 		fig_traj.suptitle('Testing Trajectories')
 		fig_traj.savefig(fname=plot_fname, dip=300)
+		plt.close(fig_traj)
 		return
 
 	# check B0 predictor (hy*x)
@@ -220,11 +227,34 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	X_test_null = y_clean[ntsynch:,:K].reshape(-1, 1)
 	print('Generated invariant measure for G0:', (time()-t0)/60,'minutes')
 	sns.kdeplot(X_test_null[test_inds].squeeze(), ax=ax_kde, color='gray', linestyle='-', label='RHS = Slow')
+	ax_gp.legend(loc='upper left', prop={'size': 5})
+	ax_kde.legend(loc='lower center', prop={'size': 4})
+	fig.savefig(fname=output_fname, dpi=300)
 	# plot trajectory fits
 	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_slow_plus_zero.png'))
 
-	for c in range(len(alpha_list)):
-		alpha = alpha_list[c]
+	# first, make training data for discrete GP training
+	# GP(X_j) ~= Xtrue_{j+1} - Psi_slow(Xtrue_j), where Xtrue are true solutions of the slow variable
+	X_train_gp = foo['X_train']
+	slow_preds = np.zeros((X_train_gp.shape[0]-1, X_train_gp.shape[1]))
+	for j in range(X_train_gp.shape[0]-1):
+		ic = X_train_gp[j,:] # initial condition
+		sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=np.array([delta_t]))
+		slow_preds[j,:] = sol.y.T # prediction Psi_slow(Xtrue_j)
+	y_train_gp = (X_train_gp[1:,:] - slow_preds).reshape(-1, 1) # get the residuals
+	X_train_gp = X_train_gp[:-1,:].reshape(-1,1) # get the inputs
+	gp_train_inds_share = get_inds(N_total=X_train_gp.shape[0], N_subsample=n_subsample_gp)
+
+	fig_discrete, (ax_gp_discrete) = plt.subplots(1,1, figsize=[8,6])
+	ax_gp_discrete.plot(X_train_gp, y_train_gp, 'o', markersize=2, color='gray', alpha=0.8, label='Training Data (all)')
+	ax_gp_discrete.plot(X_train_gp[train_inds], y_train_gp[train_inds], 'o', markersize=2, color='red', alpha=0.8, label='Training Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
+	ax_gp_discrete.set_title('GPR fits to errors of discrete slow-only forward-map')
+	ax_gp_discrete.set_xlabel(r'$X^{(t)}_k$')
+	ax_gp_discrete.set_ylabel(r'$X^{(t+1)}_k - \Psi_0(X^{(t)})_k$')
+	ax_gp_discrete.legend(loc='best', prop={'size': 8})
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
+	for c in range(len(alpha_list_discrete)):
+		alpha = alpha_list_discrete[c]
 		color = color_list[c]
 		print('alpha=',alpha, color)
 
@@ -236,19 +266,54 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 			alpha = alpha
 		)
 
-		# fit Dima-data
-		if fit_dima:
-			gpr_dima = my_gpr.fit(X=X_dima[dima_inds,0].reshape(-1,1),y=X_dima[dima_inds,1].reshape(-1,1))
-			gpr_dima_mean = gpr_dima.predict(X_pred, return_std=False)
-			# now run gp-corrected ODE
-			ODE.set_predictor(gpr_dima.predict)
-			t0 = time()
-			sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
-			y_clean = sol.y.T
-			X_test_gpr_dima = y_clean[ntsynch:,:K].reshape(-1, 1)
-			print('Generated invariant measure for GP-dima:', (time()-t0)/60,'minutes')
-			ax_gp.plot(X_pred, gpr_dima_mean, color=color, linestyle=':', label='GP (True Y-avg) (alpha={alpha})'.format(alpha=alpha))
-			sns.kdeplot(X_test_gpr_dima[test_inds].squeeze(), ax=ax_kde, color=color, linestyle=':', label='Dima (alpha={alpha})'.format(alpha=alpha))
+		# fit GP to residuals of discrete operator
+		gpr_discrete_share = my_gpr.fit(X=X_train_gp[gp_train_inds_share], y=y_train_gp[gp_train_inds_share])
+		gpr_discrete_share_mean = gpr_discrete_share.predict(X_pred, return_std=False)
+		# plot training data
+		ax_gp_discrete.plot(X_pred, gpr_discrete_share_mean, color=color, linestyle='-', label=r'$g_{{GP}}(X^{{(t)}}_k)$ (alpha={alpha})'.format(alpha=alpha))
+		ax_gp_discrete.legend(loc='best', prop={'size': 8})
+		fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
+
+
+		t0 = time()
+		# now generate a test trajectory using the learned GPR
+		y_clean = np.zeros((len(t_eval), K))
+		y_clean[0,:] = y0
+		for j in range(len(t_eval)-1):
+			ic_discrete = y_clean[j,:]
+			sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=[delta_t])
+			y_pred = sol.y.squeeze()
+			# compute shared GPR correction
+			for k in range(K):
+				y_pred[k] += gpr_discrete_share.predict(ic_discrete[k].reshape(1,-1), return_std=False)
+			y_clean[j+1,:] = y_pred
+		X_test_gpr_discrete_share = y_clean[ntsynch:,:K].reshape(-1, 1)
+		print('Generated invariant measure for GP-discrete-share:', (time()-t0)/60,'minutes')
+		plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_discrete_shareGP_alpha{alpha}.png'.format(alpha=alpha)))
+		sns.kdeplot(X_test_gpr_discrete_share[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='', marker='+', markeredgewidth=1, markersize=5, label=r'$X_{{k+1}} = \Psi_0(X_k) + g_{{GP}}(X_k)$ (alpha={alpha})'.format(alpha=alpha))
+		ax_gp.legend(loc='upper left', prop={'size': 5})
+		ax_kde.legend(loc='lower center', prop={'size': 4})
+		fig.savefig(fname=output_fname, dpi=300)
+
+	# now run continuous RHS learning
+	ax_kde.set_xlabel(r'$X_k$')
+	ax_kde.legend(loc='lower center', prop={'size': 4})
+	ax_gp.set_xlabel(r'$X_k$')
+	ax_gp.set_ylabel(r'$\bar{Y}_k$')
+	ax_gp.legend(loc='upper left', prop={'size': 5})
+	fig.savefig(fname=output_fname, dpi=300)
+	for c in range(len(alpha_list_cont)):
+		alpha = alpha_list_cont[c]
+		color = color_list[c]
+		print('alpha=',alpha, color)
+
+		# intialize gpr
+		GP_ker = 1.0 * RBF(3, (1e-10, 1e+6))
+		my_gpr = GaussianProcessRegressor(
+			kernel = GP_ker,
+			n_restarts_optimizer = n_restarts_optimizer,
+			alpha = alpha
+		)
 
 		# fit GPR-Ybartrue to Xk vs Ybar-true
 		gpr_true = my_gpr.fit(X=X[train_inds], y=Y_true[train_inds])
@@ -261,6 +326,11 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		X_test_gpr_true = y_clean[ntsynch:,:K].reshape(-1, 1)
 		print('Generated invariant measure for GP-true:', (time()-t0)/60,'minutes')
 		plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_YbarTrue_alpha{alpha}.png'.format(alpha=alpha)))
+		sns.kdeplot(X_test_gpr_true[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='-', label='RHS = Slow + GP (True Y-avg) (alpha={alpha})'.format(alpha=alpha))
+		ax_gp.plot(X_pred, gpr_true_mean, color=color, linestyle='-', label='GP (True Y-avg) (alpha={alpha})'.format(alpha=alpha))
+		ax_gp.legend(loc='upper left', prop={'size': 5})
+		ax_kde.legend(loc='lower center', prop={'size': 4})
+		fig.savefig(fname=output_fname, dpi=300)
 
 		# fit GPR-Ybarpprox to Xk vs Ybar-infer
 		gpr_approx = my_gpr.fit(X=X[train_inds], y=Y_inferred[train_inds])
@@ -273,36 +343,26 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		X_test_gpr_approx = y_clean[ntsynch:,:K].reshape(-1, 1)
 		print('Generated invariant measure for GP-approx:', (time()-t0)/60,'minutes')
 		plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_YbarInfer_alpha{alpha}.png'.format(alpha=alpha)))
-
-		# Plot each GPR along X vs Ybar (give alpha a color; give True/Infer a line-style)
-		ax_gp.plot(X_pred, gpr_true_mean, color=color, linestyle='-', label='GP (True Y-avg) (alpha={alpha})'.format(alpha=alpha))
-		ax_gp.plot(X_pred, gpr_approx_mean, color=color, linestyle='--', label='GP (Inferred Y-avg) (alpha={alpha})'.format(alpha=alpha))
-		ax_gp.set_xlabel(r'$X_k$')
-		ax_gp.set_ylabel(r'$\bar{Y}_k$')
-		# ax_gp.legend()
-
-		# Test each of these GPRs for their ability to reproduce invariant measure:
-		sns.kdeplot(X_test_gpr_true[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='-', label='RHS = Slow + GP (True Y-avg) (alpha={alpha})'.format(alpha=alpha))
 		sns.kdeplot(X_test_gpr_approx[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='--', label='RHS = Slow + GP (Approx Y-avg) (alpha={alpha})'.format(alpha=alpha))
-		ax_kde.set_xlabel(r'$X_k$')
-		# ax_kde.set_ylabel(r'$\bar{Y}_k')
-		# ax_kde.legend()
-		ax_kde.legend(loc='lower center', prop={'size': 4})
+		ax_gp.plot(X_pred, gpr_approx_mean, color=color, linestyle='--', label='GP (Inferred Y-avg) (alpha={alpha})'.format(alpha=alpha))
 		ax_gp.legend(loc='upper left', prop={'size': 5})
-		# save figure after each loop
+		ax_kde.legend(loc='lower center', prop={'size': 4})
 		fig.savefig(fname=output_fname, dpi=300)
+
+		# save figure after each loop
 		np.savez(os.path.join(output_dir,'test_output_{alpha}.npz'.format(alpha=alpha)),
 				X_test_gpr_true=X_test_gpr_true,
 				X_test_gpr_approx=X_test_gpr_approx,
 				X_test=X_test)
-	# close the fig when you're done!
 
+	# dont be a slob...close the fig when you're done!
 	plt.close(fig)
+	plt.close(fig_discrete)
 	return
 
 
 if __name__ == '__main__':
-	eliminate_dima()
+	# eliminate_dima()
 	plot_data()
 
 
