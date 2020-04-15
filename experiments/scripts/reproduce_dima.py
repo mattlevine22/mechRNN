@@ -323,7 +323,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		X_test_gpr_discrete_share = y_clean[ntsynch:,:K].reshape(-1, 1)
 		print('Generated invariant measure for GP-discrete-share:', (time()-t0)/60,'minutes')
 		plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_discrete_shareGP_alpha{alpha}.png'.format(alpha=alpha)))
-		sns.kdeplot(X_test_gpr_discrete_share[test_inds].squeeze(), ax=ax_kde_discrete, color=color, linestyle='', marker='+', markeredgewidth=1, markersize=5, label=r'$X_{{k+1}} = \Psi_0(X_k) + \bar{{g}}_{{\theta}}(X_k)$ (alpha={alpha})'.format(alpha=alpha))
+		sns.kdeplot(X_test_gpr_discrete_share[test_inds].squeeze(), ax=ax_kde_discrete, color=color, linestyle='-', label=r'$X_{{k+1}} = \Psi_0(X_k) + \bar{{g}}_{{\theta}}(X_k)$ (alpha={alpha})'.format(alpha=alpha))
 		ax_kde_discrete.legend(loc='lower center', prop={'size': 4})
 		fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
 
