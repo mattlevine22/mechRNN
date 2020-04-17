@@ -289,7 +289,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 			sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=[delta_t])
 			y_pred = sol.y.squeeze()
 			# compute fulltofull GPR correction
-			y_pred += gpr_discrete_full.predict(ic_discrete.reshape(1,-1), return_std=False).squeeze()
+			y_pred += delta_t*gpr_discrete_full.predict(ic_discrete.reshape(1,-1), return_std=False).squeeze()
 			y_clean[j+1,:] = y_pred
 		X_test_gpr_discrete_full = y_clean[ntsynch:,:K].reshape(-1, 1)
 		print('Generated invariant measure for GP-discrete-full:', (time()-t0)/60,'minutes')
@@ -318,7 +318,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 			y_pred = sol.y.squeeze()
 			# compute shared GPR correction
 			for k in range(K):
-				y_pred[k] += gpr_discrete_share.predict(ic_discrete[k].reshape(1,-1), return_std=False)
+				y_pred[k] += delta_t*gpr_discrete_share.predict(ic_discrete[k].reshape(1,-1), return_std=False)
 			y_clean[j+1,:] = y_pred
 		X_test_gpr_discrete_share = y_clean[ntsynch:,:K].reshape(-1, 1)
 		print('Generated invariant measure for GP-discrete-share:', (time()-t0)/60,'minutes')
