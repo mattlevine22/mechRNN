@@ -327,6 +327,13 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		ax_kde_discrete.legend(loc='lower center', prop={'size': 4})
 		fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
 
+		np.savez(os.path.join(output_dir,'test_output_discrete_{alpha}.npz'.format(alpha=alpha)),
+		X_test_gpr_discrete_share=X_test_gpr_discrete_share,
+		X_test_gpr_discrete_full=X_test_gpr_discrete_full,
+		X_test=X_test,
+		X_test_null=X_test_null)
+	plt.close(fig_discrete)
+
 
 	# now run continuous RHS learning
 	ax_kde.set_xlabel(r'$X_k$')
@@ -383,14 +390,14 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		fig.savefig(fname=output_fname, dpi=300)
 
 		# save figure after each loop
-		np.savez(os.path.join(output_dir,'test_output_{alpha}.npz'.format(alpha=alpha)),
+		np.savez(os.path.join(output_dir,'test_output_continuous_{alpha}.npz'.format(alpha=alpha)),
 				X_test_gpr_true=X_test_gpr_true,
 				X_test_gpr_approx=X_test_gpr_approx,
-				X_test=X_test)
+				X_test=X_test,
+				X_test_null=X_test_null)
 
 	# dont be a slob...close the fig when you're done!
 	plt.close(fig)
-	plt.close(fig_discrete)
 	return
 
 
