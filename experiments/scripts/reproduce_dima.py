@@ -144,7 +144,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	output_fname = os.path.join(output_dir,'eliminate_dima.png')
 
 	# initialize ode object
-	ODE = L96M(K=K, J=J, F=F, eps=eps, dima_style=True)
+	ODE = L96M(K=K, J=J, F=F, eps=eps, dima_style=False)
 	ODE.set_stencil() # this is a default, empty usage that is required
 	state_limits = ODE.get_state_limits()
 
@@ -225,6 +225,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 
 	# check B0 predictor (hy*x)
 	ODE.set_G0_predictor()
+	ODE.dima_style = True
 	# g0_mean = ODE.hy*X_pred
 	# ax_gp.plot(X_pred, np.mean(ODE.hx)*g0_mean, color='black', linestyle='--', label='G0')
 	t0 = time()
@@ -238,6 +239,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 
 	# check null predictor (0)
 	ODE.set_null_predictor()
+	ODE.dima_style = False
 	# g0_mean = ODE.hy*X_pred
 	# ax_gp.plot(X_pred, np.mean(ODE.hx)*g0_mean, color='black', linestyle='--', label='G0')
 	t0 = time()
@@ -256,7 +258,6 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	fig.savefig(fname=output_fname, dpi=300)
 	# plot trajectory fits
 	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_slow_plus_zero.png'))
-
 	# first, make training data for discrete GP training
 	# GP(X_j) ~= Xtrue_{j+1} - Psi_slow(Xtrue_j), where Xtrue are true solutions of the slow variable
 	X_train_gp = foo['X_train']
