@@ -13,6 +13,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
+import pandas as pd
 
 from statsmodels.tsa.stattools import acf
 import pdb
@@ -31,6 +32,8 @@ parser.add_argument('--rng_seed', type=float, default=63)
 parser.add_argument('--t_synch', type=float, default=5)
 parser.add_argument('--t_train', type=float, default=10)
 parser.add_argument('--t_invariant_measure', type=float, default=10)
+parser.add_argument('--t_test_traj', type=float, default=8)
+parser.add_argument('--n_test_traj', type=int, default=20)
 parser.add_argument('--n_subsample_gp', type=int, default=800)
 parser.add_argument('--n_subsample_kde', type=int, default=int(1e9))
 parser.add_argument('--n_restarts_optimizer', type=int, default=15)
@@ -65,7 +68,9 @@ def eliminate_dima(
 	t_synch = FLAGS.t_synch,
 	t_train = FLAGS.t_train,
 	t_invariant_measure = FLAGS.t_invariant_measure,
-	rng_seed = FLAGS.rng_seed):
+	rng_seed = FLAGS.rng_seed,
+	n_test_traj = FLAGS.n_test_traj,
+	t_test_traj = FLAGS.t_test_traj):
 
 	mkdir_p(output_dir)
 
@@ -107,9 +112,29 @@ def eliminate_dima(
 
 	# Remove first 500 and plot KDE
 	X_test = y_clean[ntsynch:,:K]
-	np.savez(testing_fname, X_test=X_test, ntsynch=ntsynch, t_eval=t_eval, y0=y0, K=K)
+
+	# create short testing trajectories with initial conditions sampled from invariant density
+	t_eval_traj = np.arange(0, t_test_traj, delta_t)
+	ic_inds = get_inds(N_total=X_test.shape[0], N_subsample=n_test_traj)
+	X_test_traj = np.zeros((n_test_traj,len(t_eval_traj),K))
+	for c in range(n_test_traj):
+		ic = y_clean[ntsynch+ic_inds[c],:]
+		t0 = time()
+		sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=ic, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval_traj)
+		X_test_traj[c,:,:] = sol.y.T[:,:K]
+
+	np.savez(testing_fname, X_test_traj=X_test_traj, t_eval_traj=t_eval_traj, X_test=X_test, ntsynch=ntsynch, t_eval=t_eval, y0=y0, K=K)
 
 	return
+
+
+def traj_div_time(Xtrue, Xpred, delta_t, avg_output, thresh):
+	# avg_output = np.mean(Xtrue**2)**0.5
+	pw_loss = np.zeros((Xtrue.shape[0]))
+	for j in range(Xtrue.shape[0]):
+		pw_loss[j] = sum((Xtrue[j,:] - Xpred[j,:])**2)**0.5 / avg_output
+	t_valid = delta_t*np.argmax(pw_loss > thresh)
+	return t_valid
 
 def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	training_fname=os.path.join(FLAGS.output_dir,FLAGS.training_fname),
@@ -130,7 +155,16 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	fit_dima=False,
 	delta_t=FLAGS.delta_t,
 	T_plot=10,
-	T_acf=10):
+	T_acf=10,
+	t_valid_thresh=0.4):
+
+
+	# set up test-traj dict
+	name_list = ['slow',
+				'discrete_GP_full',
+				'discrete_GP_share',
+				'continuous_GP_Ytrue',
+				'continuous_GP_Yinferred']
 
 	# set up acf lags
 	nlags = int(T_acf/delta_t) - 1
@@ -169,8 +203,8 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	# y0 = goo['y0'][:K]
 	y0 = goo['X_test'][0,:]
 	test_inds = get_inds(N_total=X_test.shape[0], N_subsample=n_subsample_kde)
-	fig, (ax_gp, ax_kde, ax_acf) = plt.subplots(1,3,figsize=[16,5])
-	fig_discrete, (ax_gp_discrete, ax_kde_discrete, ax_acf_discrete) = plt.subplots(1,3, figsize=[16,5])
+	fig, (ax_gp, ax_kde, ax_acf, ax_tvalid) = plt.subplots(1,4,figsize=[24,7])
+	fig_discrete, (ax_gp_discrete, ax_kde_discrete, ax_acf_discrete, ax_tvalid_discrete) = plt.subplots(1,4, figsize=[24,7])
 	t0 = time()
 	sns.kdeplot(X_test[test_inds].squeeze(), ax=ax_kde, label='RHS = Full Multiscale', color='black', linestyle='-')
 	sns.kdeplot(X_test[test_inds].squeeze(), ax=ax_kde_discrete, label='RHS = Full Multiscale', color='black', linestyle='-')
@@ -180,13 +214,10 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	fig.savefig(fname=output_fname, dpi=300)
 	print('Plotted matt-KDE of invariant measure in:', (time()-t0)/60,'minutes')
 
-	if fit_dima:
-		# plot Dimas data invariant measure
-		X_dima = np.load(dima_data_path)
-		# sns.kdeplot(X_dima[:,0].squeeze(), ax=ax_kde, label='Dima-True', color='black', linestyle=':')
-		# print('Plotted dima-KDE of invariant measure in:', (time()-t0)/60,'minutes')
-		dima_inds = get_inds(N_total=X_dima.shape[0], N_subsample=n_subsample_gp)
-
+	# read in short test trajectories
+	X_test_traj = goo['X_test_traj']
+	n_test_traj = X_test_traj.shape[0]
+	t_valid = {nm: np.nan*np.ones(n_test_traj) for nm in name_list}
 
 	# plot training data
 	ax_gp.plot(X, np.mean(ODE.hx)*Y_true, 'o', markersize=2, color='gray', alpha=0.8, label='True Training Data (all)')
@@ -207,6 +238,10 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	ax_acf_discrete.set_xscale('log')
 	fig.savefig(fname=output_fname, dpi=300)
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
+
+	# compute time-avg-norm
+	avg_output = np.mean(goo['X_test']**2)**0.5
+
 
 	def plot_traj(X_learned, plot_fname, t_plot=t_plot, X_true=goo['X_test'][:n_plot,:K], state_limits=state_limits):
 		K = X_true.shape[1]
@@ -258,6 +293,24 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	fig.savefig(fname=output_fname, dpi=300)
 	# plot trajectory fits
 	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_slow_plus_zero.png'))
+	# run model against test trajectories
+	test_traj_preds = np.zeros(X_test_traj.shape)
+	for t in range(n_test_traj):
+		ic = X_test_traj[t,0,:]
+		for j in range(X_test_traj.shape[1]):
+			test_traj_preds[t,j,:] = ic # prediction Psi_slow(Xtrue_j)
+			sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=np.array([delta_t]))
+			ic = sol.y.T.squeeze()
+		# compute traj error
+		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
+		t_valid['slow'][t] = tval_foo
+	for ax in [ax_tvalid_discrete, ax_tvalid]:
+		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
+		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontweight='light', fontsize='small')
+		ax.set_ylabel('Validity Time')
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
+	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
+
 	# first, make training data for discrete GP training
 	# GP(X_j) ~= Xtrue_{j+1} - Psi_slow(Xtrue_j), where Xtrue are true solutions of the slow variable
 	X_train_gp = foo['X_train']
@@ -280,7 +333,9 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	ax_gp_discrete.set_xlabel(r'$X^{(t)}_k$')
 	ax_gp_discrete.set_ylabel(r'$[X^{(t+1)}_k - \Psi_0(X^{(t)})_k] / \Delta t$')
 	ax_gp_discrete.legend(loc='best', prop={'size': 4})
+
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
+	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
 
 	# color = color_list[c]
 	# print('alpha=',alpha, color)
@@ -332,6 +387,27 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	ax_acf_discrete.legend(loc='best', prop={'size': 8})
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
 
+	# run model against test trajectories
+	test_traj_preds = np.zeros(X_test_traj.shape)
+	for t in range(n_test_traj):
+		ic_discrete = X_test_traj[t,0,:]
+		for j in range(X_test_traj.shape[1]):
+			test_traj_preds[t,j,:] = ic_discrete # prediction Psi_slow(Xtrue_j)
+			sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=np.array([delta_t]))
+			y_pred = sol.y.squeeze()
+			# compute fulltofull GPR correction
+			y_pred += delta_t*gpr_discrete_full.predict(ic_discrete.reshape(1,-1), return_std=False).squeeze()
+			ic_discrete = y_pred
+		# compute traj error
+		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
+		t_valid['discrete_GP_full'][t] = tval_foo
+	for ax in [ax_tvalid_discrete, ax_tvalid]:
+		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
+		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontweight='light', fontsize='small')
+		ax.set_ylabel('Validity Time')
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
+	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
+
 
 	######### GP-share #######
 	c += 1
@@ -367,6 +443,29 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	ax_kde_discrete.legend(loc='lower center', prop={'size': 8})
 	ax_acf_discrete.legend(loc='best', prop={'size': 8})
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
+
+	# run model against test trajectories
+	test_traj_preds = np.zeros(X_test_traj.shape)
+	for t in range(n_test_traj):
+		ic_discrete = X_test_traj[t,0,:]
+		for j in range(X_test_traj.shape[1]):
+			test_traj_preds[t,j,:] = ic_discrete # prediction Psi_slow(Xtrue_j)
+			sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=np.array([delta_t]))
+			y_pred = sol.y.squeeze()
+			# compute shared GPR correction
+			for k in range(K):
+				y_pred[k] += delta_t*gpr_discrete_share.predict(ic_discrete[k].reshape(1,-1), return_std=False)
+			ic_discrete = y_pred
+		# compute traj error
+		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
+		t_valid['discrete_GP_share'][t] = tval_foo
+	for ax in [ax_tvalid_discrete, ax_tvalid]:
+		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
+		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontweight='light', fontsize='small')
+		ax.set_ylabel('Validity Time')
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
+	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
+
 
 	np.savez(os.path.join(output_dir,'test_output_discrete_{alpha}.npz'.format(alpha=alpha)),
 	X_test_gpr_discrete_share=X_test_gpr_discrete_share,
@@ -420,6 +519,25 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	ax_kde.legend(loc='lower center', prop={'size': 8})
 	fig.savefig(fname=output_fname, dpi=300)
 
+	# run model against test trajectories
+	test_traj_preds = np.zeros(X_test_traj.shape)
+	for t in range(n_test_traj):
+		ic = X_test_traj[t,0,:]
+		for j in range(X_test_traj.shape[1]):
+			test_traj_preds[t,j,:] = ic # prediction Psi_slow(Xtrue_j)
+			sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=np.array([delta_t]))
+			ic = sol.y.T.squeeze()
+		# compute traj error
+		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
+		t_valid['continuous_GP_Ytrue'][t] = tval_foo
+	for ax in [ax_tvalid_discrete, ax_tvalid]:
+		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
+		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontweight='light', fontsize='small')
+		ax.set_ylabel('Validity Time')
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
+	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
+
+
 	# fit GPR-Ybarpprox to Xk vs Ybar-infer
 	c += 1
 	color = color_list[c]
@@ -441,6 +559,24 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	ax_acf.legend(loc='best', prop={'size': 8})
 	ax_kde.legend(loc='lower center', prop={'size': 8})
 	fig.savefig(fname=output_fname, dpi=300)
+
+	# run model against test trajectories
+	test_traj_preds = np.zeros(X_test_traj.shape)
+	for t in range(n_test_traj):
+		ic = X_test_traj[t,0,:]
+		for j in range(X_test_traj.shape[1]):
+			test_traj_preds[t,j,:] = ic # prediction Psi_slow(Xtrue_j)
+			sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=np.array([delta_t]))
+			ic = sol.y.T.squeeze()
+		# compute traj error
+		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
+		t_valid['continuous_GP_Yinferred'][t] = tval_foo
+	for ax in [ax_tvalid_discrete, ax_tvalid]:
+		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
+		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontweight='light', fontsize='small')
+		ax.set_ylabel('Validity Time')
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
+	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
 
 	# save figure after each loop
 	np.savez(os.path.join(output_dir,'test_output_continuous_{alpha}.npz'.format(alpha=alpha)),
