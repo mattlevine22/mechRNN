@@ -306,7 +306,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		t_valid['slow'][t] = tval_foo
 	for ax in [ax_tvalid_discrete, ax_tvalid]:
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
-		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontweight='light', fontsize='small')
+		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
 		ax.set_ylabel('Validity Time')
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
 	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
@@ -327,8 +327,8 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	ax_kde_discrete.set_xlabel(r'$X_k$')
 	ax_kde_discrete.set_ylabel('Probability density')
 	ax_gp_discrete.plot(X_train_gp.reshape(-1,1), y_train_gp.reshape(-1,1)/delta_t, 'o', markersize=2, color='gray', alpha=0.8, label='Training Data (all)')
-	ax_gp_discrete.plot(X_train_gp.reshape(-1,1)[gp_train_inds_share], y_train_gp.reshape(-1,1)[gp_train_inds_share]/delta_t, 'o', markersize=2, color='red', alpha=0.8, label='GP-share Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
 	ax_gp_discrete.plot(X_train_gp[gp_train_inds_full,:].reshape(-1,1), y_train_gp[gp_train_inds_full,:].reshape(-1,1)/delta_t, '+', markersize=3, color='cyan', alpha=0.8, label='GP-full Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
+	ax_gp_discrete.plot(X_train_gp.reshape(-1,1)[gp_train_inds_share], y_train_gp.reshape(-1,1)[gp_train_inds_share]/delta_t, 'o', markersize=2, color='red', alpha=0.8, label='GP-share Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
 	# fig_discrete.suptitle('GPR fits to errors of discrete slow-only forward-map')
 	ax_gp_discrete.set_xlabel(r'$X^{(t)}_k$')
 	ax_gp_discrete.set_ylabel(r'$[X^{(t+1)}_k - \Psi_0(X^{(t)})_k] / \Delta t$')
@@ -403,7 +403,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		t_valid['discrete_GP_full'][t] = tval_foo
 	for ax in [ax_tvalid_discrete, ax_tvalid]:
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
-		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontweight='light', fontsize='small')
+		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
 		ax.set_ylabel('Validity Time')
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
 	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
@@ -461,7 +461,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		t_valid['discrete_GP_share'][t] = tval_foo
 	for ax in [ax_tvalid_discrete, ax_tvalid]:
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
-		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontweight='light', fontsize='small')
+		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
 		ax.set_ylabel('Validity Time')
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
 	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
@@ -532,7 +532,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		t_valid['continuous_GP_Ytrue'][t] = tval_foo
 	for ax in [ax_tvalid_discrete, ax_tvalid]:
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
-		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontweight='light', fontsize='small')
+		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
 		ax.set_ylabel('Validity Time')
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
 	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
@@ -573,7 +573,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		t_valid['continuous_GP_Yinferred'][t] = tval_foo
 	for ax in [ax_tvalid_discrete, ax_tvalid]:
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
-		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontweight='light', fontsize='small')
+		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
 		ax.set_ylabel('Validity Time')
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
 	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
