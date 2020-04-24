@@ -74,7 +74,7 @@ def eliminate_dima(
 	n_test_traj = FLAGS.n_test_traj,
 	t_test_traj = FLAGS.t_test_traj):
 
-	mkdir_p(output_dir)
+	os.makedirs(output_dir, exist_ok=True)
 
 	# initialize ode object
 	ODE = L96M(K=K, J=J, F=F, eps=eps, hx=hx)
