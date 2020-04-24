@@ -24,6 +24,7 @@ parser.add_argument('--K', type=int, default=9, help='number of slow variables')
 parser.add_argument('--J', type=int, default=8, help='number of fast variables coupled to a single slow variable')
 parser.add_argument('--F', type=float, default=10)
 parser.add_argument('--eps', type=float, default=2**(-7))
+parser.add_argument('--hx', type=float, default=-0.8)
 parser.add_argument('--ode_int_method', type=str, default='RK45', help='See scipy solve_ivp documentation for options.')
 parser.add_argument('--ode_int_atol', type=float, default=1e-6, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
 parser.add_argument('--ode_int_rtol', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
@@ -60,6 +61,7 @@ def eliminate_dima(
 	J=FLAGS.J,
 	F=FLAGS.F,
 	eps=FLAGS.eps,
+	hx=FLAGS.hx,
 	ode_int_method=FLAGS.ode_int_method,
 	ode_int_atol=FLAGS.ode_int_atol,
 	ode_int_rtol=FLAGS.ode_int_rtol,
@@ -75,7 +77,7 @@ def eliminate_dima(
 	mkdir_p(output_dir)
 
 	# initialize ode object
-	ODE = L96M(K=K, J=J, F=F, eps=eps)
+	ODE = L96M(K=K, J=J, F=F, eps=eps, hx=hx)
 	ODE.set_stencil() # this is a default, empty usage that is required
 
 	# Get training data:
@@ -147,6 +149,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	J=FLAGS.J,
 	F=FLAGS.F,
 	eps=FLAGS.eps,
+	hx=FLAGS.hx,
 	ode_int_method=FLAGS.ode_int_method,
 	ode_int_atol=FLAGS.ode_int_atol,
 	ode_int_rtol=FLAGS.ode_int_rtol,
@@ -178,7 +181,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	output_fname = os.path.join(output_dir,'eliminate_dima.png')
 
 	# initialize ode object
-	ODE = L96M(K=K, J=J, F=F, eps=eps, dima_style=False)
+	ODE = L96M(K=K, J=J, F=F, eps=eps, hx=hx, dima_style=False)
 	ODE.set_stencil() # this is a default, empty usage that is required
 	state_limits = ODE.get_state_limits()
 
