@@ -161,6 +161,8 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	T_acf=10,
 	t_valid_thresh=0.4):
 
+	# make output_dir
+	os.makedirs(output_dir, exist_ok=True)
 
 	# set up test-traj dict
 	name_list = ['slow',
