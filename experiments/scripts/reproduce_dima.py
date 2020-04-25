@@ -9,6 +9,7 @@ from scipy.stats import gaussian_kde
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, Matern, WhiteKernel, ConstantKernel
 from odelibrary import L96M
+from integratorlibrary import get_custom_solver
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -18,17 +19,29 @@ import pandas as pd
 from statsmodels.tsa.stattools import acf
 import pdb
 
+#Note: to use custom euler integrator, simply set delta_t
+# and let --ode_int_method='Euler'
+
 parser = argparse.ArgumentParser()
+parser.add_argument('--h_euler', type=float, default=None, help='Timestep for an euler-integrator')
 parser.add_argument('--delta_t', type=float, default=1e-3, help='Data sampling rate')
 parser.add_argument('--K', type=int, default=9, help='number of slow variables')
 parser.add_argument('--J', type=int, default=8, help='number of fast variables coupled to a single slow variable')
 parser.add_argument('--F', type=float, default=10)
 parser.add_argument('--eps', type=float, default=2**(-7))
 parser.add_argument('--hx', type=float, default=-0.8)
-parser.add_argument('--ode_int_method', type=str, default='RK45', help='See scipy solve_ivp documentation for options.')
-parser.add_argument('--ode_int_atol', type=float, default=1e-6, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
-parser.add_argument('--ode_int_rtol', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
-parser.add_argument('--ode_int_max_step', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--testcontinuous_ode_int_method', type=str, default='Euler', help='See scipy solve_ivp documentation for options.')
+parser.add_argument('--testcontinuous_ode_int_atol', type=float, default=1e-6, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--testcontinuous_ode_int_rtol', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--testcontinuous_ode_int_max_step', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--psi0_ode_int_method', type=str, default='Euler', help='See scipy solve_ivp documentation for options.')
+parser.add_argument('--psi0_ode_int_atol', type=float, default=1e-6, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--psi0_ode_int_rtol', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--psi0_ode_int_max_step', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--datagen_ode_int_method', type=str, default='Euler', help='See scipy solve_ivp documentation for options.')
+parser.add_argument('--datagen_ode_int_atol', type=float, default=1e-6, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--datagen_ode_int_rtol', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
+parser.add_argument('--datagen_ode_int_max_step', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
 parser.add_argument('--rng_seed', type=float, default=63)
 parser.add_argument('--t_synch', type=float, default=5)
 parser.add_argument('--t_train', type=float, default=10)
@@ -44,7 +57,12 @@ parser.add_argument('--dima_data_path', type=str, default='/home/mlevine/mechRNN
 parser.add_argument('--output_dir', type=str, default='/groups/astuart/mlevine/writeup0/l96_dt_trials_v2/dt0.001/F50_eps0.0078125/reproduce_dima/')
 FLAGS = parser.parse_args()
 
-# python3 reproduce_dima.py --testing_fname testing1.npz --training_fname training1.npz --dima_data_path /Users/matthewlevine/code_projects/mechRNN/experiments/scripts/dima_gp_training_data.npy --output_dir .
+if FLAGS.h_euler is None:
+	FLAGS.h_euler = FLAGS.delta_t
+
+FLAGS.datagen_ode_int_method = get_custom_solver(FLAGS.datagen_ode_int_method)
+FLAGS.psi0_ode_int_method = get_custom_solver(FLAGS.psi0_ode_int_method)
+FLAGS.testcontinuous_ode_int_method = get_custom_solver(FLAGS.testcontinuous_ode_int_method)
 
 def get_inds(N_total, N_subsample):
 	if N_total > N_subsample:
@@ -62,10 +80,11 @@ def eliminate_dima(
 	F=FLAGS.F,
 	eps=FLAGS.eps,
 	hx=FLAGS.hx,
-	ode_int_method=FLAGS.ode_int_method,
-	ode_int_atol=FLAGS.ode_int_atol,
-	ode_int_rtol=FLAGS.ode_int_rtol,
-	ode_int_max_step=FLAGS.ode_int_max_step,
+	h_euler=FLAGS.h_euler,
+	ode_int_method=FLAGS.datagen_ode_int_method,
+	ode_int_atol=FLAGS.datagen_ode_int_atol,
+	ode_int_rtol=FLAGS.datagen_ode_int_rtol,
+	ode_int_max_step=FLAGS.datagen_ode_int_max_step,
 	delta_t = FLAGS.delta_t,
 	t_synch = FLAGS.t_synch,
 	t_train = FLAGS.t_train,
@@ -85,7 +104,7 @@ def eliminate_dima(
 	# Run for 500+T and output solutions at dT
 	t0 = time()
 	y0 = ODE.get_inits().squeeze()
-	sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
+	sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, h=h_euler, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
 	y_clean = sol.y.T
 	print('Generated Training data in:', (time()-t0)/60,'minutes')
 
@@ -108,7 +127,7 @@ def eliminate_dima(
 	t_eval = np.arange(0, (t_synch+t_invariant_measure), delta_t)
 	y0 = ODE.get_inits().squeeze()
 	t0 = time()
-	sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
+	sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, h=h_euler, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
 	y_clean = sol.y.T
 	print('Generated invariant measure Testing data in:', (time()-t0)/60,'minutes')
 
@@ -122,10 +141,10 @@ def eliminate_dima(
 	for c in range(n_test_traj):
 		ic = y_clean[ntsynch+ic_inds[c],:]
 		t0 = time()
-		sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=ic, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval_traj)
+		sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=ic, h=h_euler, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval_traj)
 		X_test_traj[c,:,:] = sol.y.T[:,:K]
 
-	np.savez(testing_fname, X_test_traj=X_test_traj, t_eval_traj=t_eval_traj, X_test=X_test, ntsynch=ntsynch, t_eval=t_eval, y0=y0, K=K)
+	np.savez(testing_fname, X_test_traj=X_test_traj, t_eval_traj=t_eval_traj, X_test=X_test, ntsynch=ntsynch, t_eval=t_eval, y0=y0, h=h_euler, K=K)
 
 	return
 
@@ -150,10 +169,15 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	F=FLAGS.F,
 	eps=FLAGS.eps,
 	hx=FLAGS.hx,
-	ode_int_method=FLAGS.ode_int_method,
-	ode_int_atol=FLAGS.ode_int_atol,
-	ode_int_rtol=FLAGS.ode_int_rtol,
-	ode_int_max_step=FLAGS.ode_int_max_step,
+	h_euler=FLAGS.h_euler,
+	psi0_ode_int_method=FLAGS.psi0_ode_int_method,
+	psi0_ode_int_atol=FLAGS.psi0_ode_int_atol,
+	psi0_ode_int_rtol=FLAGS.psi0_ode_int_rtol,
+	psi0_ode_int_max_step=FLAGS.psi0_ode_int_max_step,
+	testcontinuous_ode_int_method=FLAGS.testcontinuous_ode_int_method,
+	testcontinuous_ode_int_atol=FLAGS.testcontinuous_ode_int_atol,
+	testcontinuous_ode_int_rtol=FLAGS.testcontinuous_ode_int_rtol,
+	testcontinuous_ode_int_max_step=FLAGS.testcontinuous_ode_int_max_step,
 	alpha = 1e-10,
 	fit_dima=False,
 	delta_t=FLAGS.delta_t,
@@ -269,7 +293,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	# g0_mean = ODE.hy*X_pred
 	# ax_gp.plot(X_pred, np.mean(ODE.hx)*g0_mean, color='black', linestyle='--', label='G0')
 	t0 = time()
-	sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
+	sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, h=h_euler, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=t_eval)
 	y_clean = sol.y.T
 	X_test_G0 = y_clean[ntsynch:,:K].reshape(-1, 1)
 	print('Generated invariant measure for G0:', (time()-t0)/60,'minutes')
@@ -283,7 +307,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	# g0_mean = ODE.hy*X_pred
 	# ax_gp.plot(X_pred, np.mean(ODE.hx)*g0_mean, color='black', linestyle='--', label='G0')
 	t0 = time()
-	sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
+	sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, h=h_euler, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=t_eval)
 	y_clean = sol.y.T
 	X_test_null = y_clean[ntsynch:,:K].reshape(-1, 1)
 	foo_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
@@ -304,7 +328,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		ic = X_test_traj[t,0,:]
 		for j in range(X_test_traj.shape[1]):
 			test_traj_preds[t,j,:] = ic # prediction Psi_slow(Xtrue_j)
-			sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=np.array([delta_t]))
+			sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, h=h_euler, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=np.array([delta_t]))
 			ic = sol.y.T.squeeze()
 		# compute traj error
 		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
@@ -322,7 +346,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	slow_preds = np.zeros((X_train_gp.shape[0]-1, X_train_gp.shape[1]))
 	for j in range(X_train_gp.shape[0]-1):
 		ic = X_train_gp[j,:] # initial condition
-		sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=np.array([delta_t]))
+		sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic, h=h_euler, method=psi0_ode_int_method, rtol=psi0_ode_int_rtol, atol=psi0_ode_int_atol, max_step=psi0_ode_int_max_step, t_eval=np.array([delta_t]))
 		slow_preds[j,:] = sol.y.T # prediction Psi_slow(Xtrue_j)
 	y_train_gp = X_train_gp[1:,:] - slow_preds # get the residuals
 	X_train_gp = X_train_gp[:-1,:] # get the inputs
@@ -375,7 +399,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	y_clean[0,:] = y0
 	for j in range(len(t_eval)-1):
 		ic_discrete = y_clean[j,:]
-		sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=[delta_t])
+		sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, h=h_euler, method=psi0_ode_int_method, rtol=psi0_ode_int_rtol, atol=psi0_ode_int_atol, max_step=psi0_ode_int_max_step, t_eval=[delta_t])
 		y_pred = sol.y.squeeze()
 		# compute fulltofull GPR correction
 		y_pred += delta_t*gpr_discrete_full.predict(ic_discrete.reshape(1,-1), return_std=False).squeeze()
@@ -398,7 +422,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		ic_discrete = X_test_traj[t,0,:]
 		for j in range(X_test_traj.shape[1]):
 			test_traj_preds[t,j,:] = ic_discrete # prediction Psi_slow(Xtrue_j)
-			sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=np.array([delta_t]))
+			sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, h=h_euler, method=psi0_ode_int_method, rtol=psi0_ode_int_rtol, atol=psi0_ode_int_atol, max_step=psi0_ode_int_max_step, t_eval=np.array([delta_t]))
 			y_pred = sol.y.squeeze()
 			# compute fulltofull GPR correction
 			y_pred += delta_t*gpr_discrete_full.predict(ic_discrete.reshape(1,-1), return_std=False).squeeze()
@@ -432,7 +456,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	y_clean[0,:] = y0
 	for j in range(len(t_eval)-1):
 		ic_discrete = y_clean[j,:]
-		sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=[delta_t])
+		sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, h=h_euler, method=psi0_ode_int_method, rtol=psi0_ode_int_rtol, atol=psi0_ode_int_atol, max_step=psi0_ode_int_max_step, t_eval=[delta_t])
 		y_pred = sol.y.squeeze()
 		# compute shared GPR correction
 		for k in range(K):
@@ -455,7 +479,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		ic_discrete = X_test_traj[t,0,:]
 		for j in range(X_test_traj.shape[1]):
 			test_traj_preds[t,j,:] = ic_discrete # prediction Psi_slow(Xtrue_j)
-			sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=np.array([delta_t]))
+			sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, h=h_euler, method=psi0_ode_int_method, rtol=psi0_ode_int_rtol, atol=psi0_ode_int_atol, max_step=psi0_ode_int_max_step, t_eval=np.array([delta_t]))
 			y_pred = sol.y.squeeze()
 			# compute shared GPR correction
 			for k in range(K):
@@ -510,7 +534,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	# now run gp-corrected ODE
 	ODE.set_predictor(gpr_true.predict)
 	t0 = time()
-	sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
+	sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, h=h_euler, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=t_eval)
 	y_clean = sol.y.T
 	X_test_gpr_true = y_clean[ntsynch:,:K].reshape(-1, 1)
 	foo_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
@@ -530,7 +554,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		ic = X_test_traj[t,0,:]
 		for j in range(X_test_traj.shape[1]):
 			test_traj_preds[t,j,:] = ic # prediction Psi_slow(Xtrue_j)
-			sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=np.array([delta_t]))
+			sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, h=h_euler, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=np.array([delta_t]))
 			ic = sol.y.T.squeeze()
 		# compute traj error
 		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
@@ -551,7 +575,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	# now run gp-corrected ODE
 	ODE.set_predictor(gpr_approx.predict)
 	t0 = time()
-	sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
+	sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, h=h_euler, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=t_eval)
 	y_clean = sol.y.T
 	X_test_gpr_approx = y_clean[ntsynch:,:K].reshape(-1, 1)
 	foo_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
@@ -571,7 +595,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		ic = X_test_traj[t,0,:]
 		for j in range(X_test_traj.shape[1]):
 			test_traj_preds[t,j,:] = ic # prediction Psi_slow(Xtrue_j)
-			sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=np.array([delta_t]))
+			sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, h=h_euler, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=np.array([delta_t]))
 			ic = sol.y.T.squeeze()
 		# compute traj error
 		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
