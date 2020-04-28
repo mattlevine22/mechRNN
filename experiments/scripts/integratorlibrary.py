@@ -73,6 +73,6 @@ class EulerDenseOutput(DenseOutput):
 
     def _call_impl(self, t):
         y = euler_step(self.fun, self.t_old, self.y_old, self.h)
-        return y
+        return y[:,None]
 
 

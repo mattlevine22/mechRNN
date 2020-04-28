@@ -22,48 +22,6 @@ import pdb
 #Note: to use custom euler integrator, simply set delta_t
 # and let --ode_int_method='Euler'
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--h_euler', type=float, default=None, help='Timestep for an euler-integrator')
-parser.add_argument('--delta_t', type=float, default=1e-3, help='Data sampling rate')
-parser.add_argument('--K', type=int, default=9, help='number of slow variables')
-parser.add_argument('--J', type=int, default=8, help='number of fast variables coupled to a single slow variable')
-parser.add_argument('--F', type=float, default=10)
-parser.add_argument('--eps', type=float, default=2**(-7))
-parser.add_argument('--hx', type=float, default=-0.8)
-parser.add_argument('--testcontinuous_ode_int_method', type=str, default='Euler', help='See scipy solve_ivp documentation for options.')
-parser.add_argument('--testcontinuous_ode_int_atol', type=float, default=1e-6, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
-parser.add_argument('--testcontinuous_ode_int_rtol', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
-parser.add_argument('--testcontinuous_ode_int_max_step', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
-parser.add_argument('--psi0_ode_int_method', type=str, default='Euler', help='See scipy solve_ivp documentation for options.')
-parser.add_argument('--psi0_ode_int_atol', type=float, default=1e-6, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
-parser.add_argument('--psi0_ode_int_rtol', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
-parser.add_argument('--psi0_ode_int_max_step', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
-parser.add_argument('--datagen_ode_int_method', type=str, default='Euler', help='See scipy solve_ivp documentation for options.')
-parser.add_argument('--datagen_ode_int_atol', type=float, default=1e-6, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
-parser.add_argument('--datagen_ode_int_rtol', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
-parser.add_argument('--datagen_ode_int_max_step', type=float, default=1e-3, help='This is a much higher-fidelity tolerance than defaults for solve_ivp')
-parser.add_argument('--rng_seed', type=float, default=63)
-parser.add_argument('--t_synch', type=float, default=5)
-parser.add_argument('--t_train', type=float, default=10)
-parser.add_argument('--t_invariant_measure', type=float, default=10)
-parser.add_argument('--t_test_traj', type=float, default=8)
-parser.add_argument('--n_test_traj', type=int, default=20)
-parser.add_argument('--n_subsample_gp', type=int, default=800)
-parser.add_argument('--n_subsample_kde', type=int, default=int(1e9))
-parser.add_argument('--n_restarts_optimizer', type=int, default=15)
-parser.add_argument('--testing_fname', type=str, default='testing.npz')
-parser.add_argument('--training_fname', type=str, default='training.npz')
-parser.add_argument('--dima_data_path', type=str, default='/home/mlevine/mechRNN/experiments/scripts/dima_gp_training_data.npy')
-parser.add_argument('--output_dir', type=str, default='/groups/astuart/mlevine/writeup0/l96_dt_trials_v2/dt0.001/F50_eps0.0078125/reproduce_dima/')
-FLAGS = parser.parse_args()
-
-if FLAGS.h_euler is None:
-	FLAGS.h_euler = FLAGS.delta_t
-
-FLAGS.datagen_ode_int_method = get_custom_solver(FLAGS.datagen_ode_int_method)
-FLAGS.psi0_ode_int_method = get_custom_solver(FLAGS.psi0_ode_int_method)
-FLAGS.testcontinuous_ode_int_method = get_custom_solver(FLAGS.testcontinuous_ode_int_method)
-
 def get_inds(N_total, N_subsample):
 	if N_total > N_subsample:
 		my_inds = np.random.choice(np.arange(N_total), N_subsample, replace=False)
@@ -71,27 +29,27 @@ def get_inds(N_total, N_subsample):
 		my_inds = np.arange(N_total)
 	return my_inds
 
-def eliminate_dima(
-	testing_fname=os.path.join(FLAGS.output_dir,FLAGS.testing_fname),
-	training_fname=os.path.join(FLAGS.output_dir,FLAGS.training_fname),
-	output_dir=FLAGS.output_dir,
-	K=FLAGS.K,
-	J=FLAGS.J,
-	F=FLAGS.F,
-	eps=FLAGS.eps,
-	hx=FLAGS.hx,
-	h_euler=FLAGS.h_euler,
-	ode_int_method=FLAGS.datagen_ode_int_method,
-	ode_int_atol=FLAGS.datagen_ode_int_atol,
-	ode_int_rtol=FLAGS.datagen_ode_int_rtol,
-	ode_int_max_step=FLAGS.datagen_ode_int_max_step,
-	delta_t = FLAGS.delta_t,
-	t_synch = FLAGS.t_synch,
-	t_train = FLAGS.t_train,
-	t_invariant_measure = FLAGS.t_invariant_measure,
-	rng_seed = FLAGS.rng_seed,
-	n_test_traj = FLAGS.n_test_traj,
-	t_test_traj = FLAGS.t_test_traj):
+def make_data(
+	testing_fname,
+	training_fname,
+	output_dir,
+	K,
+	J,
+	F,
+	eps,
+	hx,
+	ode_int_method,
+	ode_int_atol,
+	ode_int_rtol,
+	ode_int_max_step,
+	delta_t,
+	t_synch,
+	t_train,
+	t_invariant_measure,
+	rng_seed,
+	n_test_traj,
+	t_test_traj,
+	**kwargs):
 
 	os.makedirs(output_dir, exist_ok=True)
 
@@ -104,7 +62,7 @@ def eliminate_dima(
 	# Run for 500+T and output solutions at dT
 	t0 = time()
 	y0 = ODE.get_inits().squeeze()
-	sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, h=h_euler, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
+	sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
 	y_clean = sol.y.T
 	print('Generated Training data in:', (time()-t0)/60,'minutes')
 
@@ -127,7 +85,7 @@ def eliminate_dima(
 	t_eval = np.arange(0, (t_synch+t_invariant_measure), delta_t)
 	y0 = ODE.get_inits().squeeze()
 	t0 = time()
-	sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, h=h_euler, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
+	sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
 	y_clean = sol.y.T
 	print('Generated invariant measure Testing data in:', (time()-t0)/60,'minutes')
 
@@ -141,10 +99,10 @@ def eliminate_dima(
 	for c in range(n_test_traj):
 		ic = y_clean[ntsynch+ic_inds[c],:]
 		t0 = time()
-		sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=ic, h=h_euler, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval_traj)
+		sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=ic, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval_traj)
 		X_test_traj[c,:,:] = sol.y.T[:,:K]
 
-	np.savez(testing_fname, X_test_traj=X_test_traj, t_eval_traj=t_eval_traj, X_test=X_test, ntsynch=ntsynch, t_eval=t_eval, y0=y0, h=h_euler, K=K)
+	np.savez(testing_fname, X_test_traj=X_test_traj, t_eval_traj=t_eval_traj, X_test=X_test, ntsynch=ntsynch, t_eval=t_eval, y0=y0, K=K)
 
 	return
 
@@ -157,36 +115,45 @@ def traj_div_time(Xtrue, Xpred, delta_t, avg_output, thresh):
 	t_valid = delta_t*np.argmax(pw_loss > thresh)
 	return t_valid
 
-def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
-	training_fname=os.path.join(FLAGS.output_dir,FLAGS.training_fname),
-	dima_data_path=FLAGS.dima_data_path,
-	output_dir = FLAGS.output_dir,
-	n_subsample_gp=FLAGS.n_subsample_gp,
-	n_subsample_kde=FLAGS.n_subsample_kde,
-	n_restarts_optimizer=FLAGS.n_restarts_optimizer,
-	K=FLAGS.K,
-	J=FLAGS.J,
-	F=FLAGS.F,
-	eps=FLAGS.eps,
-	hx=FLAGS.hx,
-	h_euler=FLAGS.h_euler,
-	psi0_ode_int_method=FLAGS.psi0_ode_int_method,
-	psi0_ode_int_atol=FLAGS.psi0_ode_int_atol,
-	psi0_ode_int_rtol=FLAGS.psi0_ode_int_rtol,
-	psi0_ode_int_max_step=FLAGS.psi0_ode_int_max_step,
-	testcontinuous_ode_int_method=FLAGS.testcontinuous_ode_int_method,
-	testcontinuous_ode_int_atol=FLAGS.testcontinuous_ode_int_atol,
-	testcontinuous_ode_int_rtol=FLAGS.testcontinuous_ode_int_rtol,
-	testcontinuous_ode_int_max_step=FLAGS.testcontinuous_ode_int_max_step,
-	alpha = 1e-10,
-	fit_dima=False,
-	delta_t=FLAGS.delta_t,
+def run_traintest(testing_fname,
+	training_fname,
+	master_output_fname,
+	output_dir,
+	n_subsample_gp,
+	n_subsample_kde,
+	n_restarts_optimizer,
+	K,
+	J,
+	F,
+	eps,
+	hx,
+	psi0_ode_int_method,
+	psi0_ode_int_atol,
+	psi0_ode_int_rtol,
+	psi0_ode_int_max_step,
+	testcontinuous_ode_int_method,
+	testcontinuous_ode_int_atol,
+	testcontinuous_ode_int_rtol,
+	testcontinuous_ode_int_max_step,
+	delta_t,
 	T_plot=10,
 	T_acf=10,
-	t_valid_thresh=0.4):
+	alpha = 1e-10,
+	t_valid_thresh=0.4,
+	**kwargs):
 
 	# make output_dir
 	os.makedirs(output_dir, exist_ok=True)
+
+	# set up master output dictionary to be saved to file
+	try:
+		goo = np.load(master_output_fname, allow_pickle=True)
+		# convert npzFileObject to a dictionary
+		# https://stackoverflow.com/questions/32682928/loading-arrays-from-numpy-npz-files-in-python
+		master_output_dict = dict(zip(("{}".format(k) for k in goo), (goo[k] for k in goo)))
+	except:
+		print('Gotta run it!')
+		master_output_dict = {}
 
 	# set up test-traj dict
 	name_list = ['slow',
@@ -204,7 +171,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	n_plot = len(t_plot)
 
 	# output dir
-	output_fname = os.path.join(output_dir,'eliminate_dima.png')
+	output_fname = os.path.join(output_dir,'continuous_fits.png')
 
 	# initialize ode object
 	ODE = L96M(K=K, J=J, F=F, eps=eps, hx=hx, dima_style=False)
@@ -266,7 +233,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	ax_acf_discrete.set_xlabel('Time')
 	ax_acf_discrete.set_xscale('log')
 	fig.savefig(fname=output_fname, dpi=300)
-	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
 
 	# compute time-avg-norm
 	avg_output = np.mean(goo['X_test']**2)**0.5
@@ -293,7 +260,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	# g0_mean = ODE.hy*X_pred
 	# ax_gp.plot(X_pred, np.mean(ODE.hx)*g0_mean, color='black', linestyle='--', label='G0')
 	t0 = time()
-	sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, h=h_euler, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=t_eval)
+	sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=t_eval)
 	y_clean = sol.y.T
 	X_test_G0 = y_clean[ntsynch:,:K].reshape(-1, 1)
 	print('Generated invariant measure for G0:', (time()-t0)/60,'minutes')
@@ -301,14 +268,22 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	# plot trajectory fits
 	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_slow_plus_cX.png'))
 
+
 	# check null predictor (0)
+	foo_nm = 'null'
 	ODE.set_null_predictor()
 	ODE.dima_style = False
 	# g0_mean = ODE.hy*X_pred
 	# ax_gp.plot(X_pred, np.mean(ODE.hx)*g0_mean, color='black', linestyle='--', label='G0')
 	t0 = time()
-	sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, h=h_euler, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=t_eval)
-	y_clean = sol.y.T
+	try:
+		y_clean = master_output_dict[foo_nm+'_y_clean']
+	except:
+		print('Gotta run it!')
+		sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=t_eval)
+		y_clean = sol.y.T
+		master_output_dict[foo_nm+'_y_clean'] = y_clean
+		np.savez(master_output_fname,**master_output_dict)
 	X_test_null = y_clean[ntsynch:,:K].reshape(-1, 1)
 	foo_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
 	print('Generated invariant measure for G0:', (time()-t0)/60,'minutes')
@@ -323,48 +298,76 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	# plot trajectory fits
 	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_slow_plus_zero.png'))
 	# run model against test trajectories
-	test_traj_preds = np.zeros(X_test_traj.shape)
+
+	try:
+		test_traj_preds = master_output_dict[foo_nm+'_test_traj_preds']
+		do_compute = False
+	except:
+		print('Gotta run it!')
+		test_traj_preds = np.zeros(X_test_traj.shape)
+		do_compute = True
 	for t in range(n_test_traj):
-		ic = X_test_traj[t,0,:]
-		for j in range(X_test_traj.shape[1]):
-			test_traj_preds[t,j,:] = ic # prediction Psi_slow(Xtrue_j)
-			sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, h=h_euler, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=np.array([delta_t]))
-			ic = sol.y.T.squeeze()
+		if do_compute:
+			ic = X_test_traj[t,0,:]
+			for j in range(X_test_traj.shape[1]):
+				test_traj_preds[t,j,:] = ic # prediction Psi_slow(Xtrue_j)
+				sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=np.array([delta_t]))
+				ic = sol.y.T.squeeze()
+			master_output_dict[foo_nm+'_test_traj_preds'] = test_traj_preds
+			np.savez(master_output_fname,**master_output_dict)
+
 		# compute traj error
 		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
 		t_valid['slow'][t] = tval_foo
+
 	for ax in [ax_tvalid_discrete, ax_tvalid]:
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
 		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
 		ax.set_ylabel('Validity Time')
-	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
-	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
+	fig.savefig(fname=os.path.join(output_dir,'continuous_fits.png'), dpi=300)
 
 	# first, make training data for discrete GP training
 	# GP(X_j) ~= Xtrue_{j+1} - Psi_slow(Xtrue_j), where Xtrue are true solutions of the slow variable
-	X_train_gp = foo['X_train']
-	slow_preds = np.zeros((X_train_gp.shape[0]-1, X_train_gp.shape[1]))
-	for j in range(X_train_gp.shape[0]-1):
-		ic = X_train_gp[j,:] # initial condition
-		sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic, h=h_euler, method=psi0_ode_int_method, rtol=psi0_ode_int_rtol, atol=psi0_ode_int_atol, max_step=psi0_ode_int_max_step, t_eval=np.array([delta_t]))
-		slow_preds[j,:] = sol.y.T # prediction Psi_slow(Xtrue_j)
-	y_train_gp = X_train_gp[1:,:] - slow_preds # get the residuals
-	X_train_gp = X_train_gp[:-1,:] # get the inputs
-	gp_train_inds_full = get_inds(N_total=X_train_gp.shape[0], N_subsample=n_subsample_gp)
-	gp_train_inds_share = get_inds(N_total=X_train_gp.reshape(-1,1).shape[0], N_subsample=n_subsample_gp)
+	foo_nm = 'discrete_training'
+	try:
+		X_train_gp = master_output_dict[foo_nm+'_X_train_gp']
+		y_train_gp = master_output_dict[foo_nm+'_y_train_gp']
+		gp_train_inds_full = master_output_dict[foo_nm+'_gp_train_inds_full']
+		gp_train_inds_share = master_output_dict[foo_nm+'_gp_train_inds_share']
+	except:
+		print('Gotta run it!')
+		X_train_gp = foo['X_train']
+		slow_preds = np.zeros((X_train_gp.shape[0]-1, X_train_gp.shape[1]))
+		for j in range(X_train_gp.shape[0]-1):
+			ic = X_train_gp[j,:] # initial condition
+			sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic, method=psi0_ode_int_method, rtol=psi0_ode_int_rtol, atol=psi0_ode_int_atol, max_step=psi0_ode_int_max_step, t_eval=np.array([delta_t]))
+			slow_preds[j,:] = sol.y.T # prediction Psi_slow(Xtrue_j)
+		y_train_gp = X_train_gp[1:,:] - slow_preds # get the residuals
+		X_train_gp = X_train_gp[:-1,:] # get the inputs
+		gp_train_inds_full = get_inds(N_total=X_train_gp.shape[0], N_subsample=n_subsample_gp)
+		gp_train_inds_share = get_inds(N_total=X_train_gp.reshape(-1,1).shape[0], N_subsample=n_subsample_gp)
+		master_output_dict[foo_nm+'_X_train_gp'] = X_train_gp
+		master_output_dict[foo_nm+'_y_train_gp'] = y_train_gp
+		master_output_dict[foo_nm+'_gp_train_inds_full'] = gp_train_inds_full
+		master_output_dict[foo_nm+'_gp_train_inds_share'] = gp_train_inds_share
+		np.savez(master_output_fname,**master_output_dict)
 
 	ax_kde_discrete.set_xlabel(r'$X_k$')
 	ax_kde_discrete.set_ylabel('Probability density')
 	ax_gp_discrete.plot(X_train_gp.reshape(-1,1), y_train_gp.reshape(-1,1)/delta_t, 'o', markersize=2, color='gray', alpha=0.8, label='Training Data (all)')
-	ax_gp_discrete.plot(X_train_gp[gp_train_inds_full,:].reshape(-1,1), y_train_gp[gp_train_inds_full,:].reshape(-1,1)/delta_t, '+', markersize=3, color='cyan', alpha=0.8, label='GP-full Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
-	ax_gp_discrete.plot(X_train_gp.reshape(-1,1)[gp_train_inds_share], y_train_gp.reshape(-1,1)[gp_train_inds_share]/delta_t, 'o', markersize=2, color='red', alpha=0.8, label='GP-share Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
+	# ax_gp_discrete.plot(X_train_gp[gp_train_inds_full,:].reshape(-1,1), y_train_gp[gp_train_inds_full,:].reshape(-1,1)/delta_t, '+', markersize=3, color='cyan', alpha=0.8, label='GP-full Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
+	ax_gp_discrete.plot(X[train_inds], np.mean(ODE.hx)*Y_true[train_inds], 'o', markersize=2, color='red', alpha=0.8, label='True Continuous Training Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
+	ax_gp_discrete.plot(X[train_inds], np.mean(ODE.hx)*Y_inferred[train_inds], '+', linewidth=1, markersize=3, markeredgewidth=1, color='green', alpha=0.8, label='Approximate Continuous Training Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
+	ax_gp_discrete.plot(X_train_gp.reshape(-1,1)[gp_train_inds_share], y_train_gp.reshape(-1,1)[gp_train_inds_share]/delta_t, '+', linewidth=1, markersize=3, markeredgewidth=1, color='purple', alpha=0.8, label='GP-share Discrete Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
+
 	# fig_discrete.suptitle('GPR fits to errors of discrete slow-only forward-map')
 	ax_gp_discrete.set_xlabel(r'$X^{(t)}_k$')
 	ax_gp_discrete.set_ylabel(r'$[X^{(t+1)}_k - \Psi_0(X^{(t)})_k] / \Delta t$')
 	ax_gp_discrete.legend(loc='best', prop={'size': 4})
 
-	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
-	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
+	fig.savefig(fname=os.path.join(output_dir,'continuous_fits.png'), dpi=300)
 
 	# color = color_list[c]
 	# print('alpha=',alpha, color)
@@ -380,53 +383,80 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	)
 
 	######### GP-fulltofull #######
+	foo_nm = 'GP_discrete_full'
 	# fit GP to residuals of discrete operator
 	c += 1
 	color = color_list[c]
-	gpr_discrete_full = my_gpr.fit(X=X_train_gp[gp_train_inds_full,:], y=y_train_gp[gp_train_inds_full,:]/delta_t)
 	X_pred_outer = np.outer(X_pred,np.ones(K))
-	gpr_discrete_full_mean = gpr_discrete_full.predict(X_pred_outer, return_std=False) # evaluate at [0,0,0,0], [0.01,0.01,0.01,0.01], etc.
+	try:
+		gpr_discrete_full_mean = master_output_dict[foo_nm+'_mean']
+		my_kernel = master_output_dict[foo_nm+'_kernel']
+	except:
+		print('Gotta run it!')
+		gpr_discrete_full = my_gpr.fit(X=X_train_gp[gp_train_inds_full,:], y=y_train_gp[gp_train_inds_full,:]/delta_t)
+		my_kernel = my_gpr.kernel_
+		gpr_discrete_full_mean = gpr_discrete_full.predict(X_pred_outer, return_std=False) # evaluate at [0,0,0,0], [0.01,0.01,0.01,0.01], etc.
+		master_output_dict[foo_nm+'_mean'] = gpr_discrete_full_mean
+		master_output_dict[foo_nm+'_kernel'] = my_kernel
+		np.savez(master_output_fname,**master_output_dict)
+
 	# plot training data
-	# ax_gp_discrete.plot(X_pred_outer.reshape(-1,1), gpr_discrete_full_mean.reshape(-1,1), color=color, linestyle='', marker='+', markeredgewidth=0.1, markersize=3, label=r'$\Phi_{{\theta}}(X^{{(t)}}_k)$ ({kernel})'.format(kernel=my_gpr.kernel_))
-	ax_gp_discrete.plot(X_pred_outer.reshape(-1,1), gpr_discrete_full_mean.reshape(-1,1), color=color, linestyle='-', linewidth=1, label=r'$\Phi_{{\theta}}(X^{{(t)}}_k)$ ~ GP({kernel})'.format(kernel=my_gpr.kernel_))
+	# ax_gp_discrete.plot(X_pred_outer.reshape(-1,1), gpr_discrete_full_mean.reshape(-1,1), color=color, linestyle='', marker='+', markeredgewidth=0.1, markersize=3, label=r'$\Phi_{{\theta}}(X^{{(t)}}_k)$ ({kernel})'.format(kernel=my_kernel))
+	# ax_gp_discrete.plot(X_pred_outer.reshape(-1,1), gpr_discrete_full_mean.reshape(-1,1), color=color, linestyle='-', linewidth=1, label=r'$\Phi_{{\theta}}(X^{{(t)}}_k)$ ~ GP({kernel})'.format(kernel=my_kernel))
 	ax_gp_discrete.legend(loc='best', prop={'size': 5.5})
 	ax_kde_discrete.legend(loc='lower center', prop={'size': 8})
 	ax_acf_discrete.legend(loc='best', prop={'size': 8})
-	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
 	t0 = time()
-	# now generate a test trajectory using the learned GPR
-	y_clean = np.zeros((len(t_eval), K))
-	y_clean[0,:] = y0
-	for j in range(len(t_eval)-1):
-		ic_discrete = y_clean[j,:]
-		sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, h=h_euler, method=psi0_ode_int_method, rtol=psi0_ode_int_rtol, atol=psi0_ode_int_atol, max_step=psi0_ode_int_max_step, t_eval=[delta_t])
-		y_pred = sol.y.squeeze()
-		# compute fulltofull GPR correction
-		y_pred += delta_t*gpr_discrete_full.predict(ic_discrete.reshape(1,-1), return_std=False).squeeze()
-		y_clean[j+1,:] = y_pred
+	try:
+		y_clean = master_output_dict[foo_nm+'_y_clean']
+	except:
+		print('Gotta run it!')
+		# now generate a test trajectory using the learned GPR
+		y_clean = np.zeros((len(t_eval), K))
+		y_clean[0,:] = y0
+		for j in range(len(t_eval)-1):
+			ic_discrete = y_clean[j,:]
+			sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, method=psi0_ode_int_method, rtol=psi0_ode_int_rtol, atol=psi0_ode_int_atol, max_step=psi0_ode_int_max_step, t_eval=[delta_t])
+			y_pred = sol.y.squeeze()
+			# compute fulltofull GPR correction
+			y_pred += delta_t*gpr_discrete_full.predict(ic_discrete.reshape(1,-1), return_std=False).squeeze()
+			y_clean[j+1,:] = y_pred
+		master_output_dict[foo_nm+'_y_clean'] = y_clean
+		np.savez(master_output_fname,**master_output_dict)
+
 	X_test_gpr_discrete_full = y_clean[ntsynch:,:K].reshape(-1, 1)
 	foo_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
 	print('Generated invariant measure for GP-discrete-full:', (time()-t0)/60,'minutes')
 	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_discrete_fullGP_alpha{alpha}.png'.format(alpha=alpha)))
 	sns.kdeplot(X_test_gpr_discrete_full[test_inds].squeeze(), ax=ax_kde_discrete, color=color, linestyle='-', label=r'$X_{{k+1}} = \Psi_0(X_k) + \Phi_{{\theta}}(X_k)$')
-	# sns.kdeplot(X_test_gpr_discrete_full[test_inds].squeeze(), ax=ax_kde_discrete, color=color, linestyle='', marker='o', markeredgewidth=1, markersize=2, label=r'$X_{{k+1}} = \Psi_0(X_k) + \Phi_{{\theta}}(X_k)$ ({kernel})'.format(kernel=my_gpr.kernel_))
+	# sns.kdeplot(X_test_gpr_discrete_full[test_inds].squeeze(), ax=ax_kde_discrete, color=color, linestyle='', marker='o', markeredgewidth=1, markersize=2, label=r'$X_{{k+1}} = \Psi_0(X_k) + \Phi_{{\theta}}(X_k)$ ({kernel})'.format(kernel=my_kernel))
 	ax_acf_discrete.plot(t_acf_plot, foo_acf, color=color, linestyle='-', label=r'$X_{{k+1}} = \Psi_0(X_k) + \Phi_{{\theta}}(X_k)$')
 	ax_gp_discrete.legend(loc='best', prop={'size': 5.5})
 	ax_kde_discrete.legend(loc='lower center', prop={'size': 8})
 	ax_acf_discrete.legend(loc='best', prop={'size': 8})
-	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
 
 	# run model against test trajectories
-	test_traj_preds = np.zeros(X_test_traj.shape)
+	try:
+		test_traj_preds = master_output_dict[foo_nm+'_test_traj_preds']
+		do_compute = False
+	except:
+		print('Gotta run it!')
+		test_traj_preds = np.zeros(X_test_traj.shape)
+		do_compute = True
 	for t in range(n_test_traj):
-		ic_discrete = X_test_traj[t,0,:]
-		for j in range(X_test_traj.shape[1]):
-			test_traj_preds[t,j,:] = ic_discrete # prediction Psi_slow(Xtrue_j)
-			sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, h=h_euler, method=psi0_ode_int_method, rtol=psi0_ode_int_rtol, atol=psi0_ode_int_atol, max_step=psi0_ode_int_max_step, t_eval=np.array([delta_t]))
-			y_pred = sol.y.squeeze()
-			# compute fulltofull GPR correction
-			y_pred += delta_t*gpr_discrete_full.predict(ic_discrete.reshape(1,-1), return_std=False).squeeze()
-			ic_discrete = y_pred
+		if do_compute:
+			ic_discrete = X_test_traj[t,0,:]
+			for j in range(X_test_traj.shape[1]):
+				test_traj_preds[t,j,:] = ic_discrete # prediction Psi_slow(Xtrue_j)
+				sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, method=psi0_ode_int_method, rtol=psi0_ode_int_rtol, atol=psi0_ode_int_atol, max_step=psi0_ode_int_max_step, t_eval=np.array([delta_t]))
+				y_pred = sol.y.squeeze()
+				# compute fulltofull GPR correction
+				y_pred += delta_t*gpr_discrete_full.predict(ic_discrete.reshape(1,-1), return_std=False).squeeze()
+				ic_discrete = y_pred
+			master_output_dict[foo_nm+'_test_traj_preds'] = test_traj_preds
+			np.savez(master_output_fname,**master_output_dict)
 		# compute traj error
 		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
 		t_valid['discrete_GP_full'][t] = tval_foo
@@ -434,34 +464,51 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
 		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
 		ax.set_ylabel('Validity Time')
-	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
-	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
+	fig.savefig(fname=os.path.join(output_dir,'continuous_fits.png'), dpi=300)
 
 
 	######### GP-share #######
+	foo_nm = 'GP_discrete_share'
 	c += 1
 	color = color_list[c]
 	# fit GP to residuals of discrete operator
-	gpr_discrete_share = my_gpr.fit(X=X_train_gp.reshape(-1,1)[gp_train_inds_share], y=y_train_gp.reshape(-1,1)[gp_train_inds_share]/delta_t)
-	gpr_discrete_share_mean = gpr_discrete_share.predict(X_pred, return_std=False)
+	X_pred_outer = np.outer(X_pred,np.ones(K))
+	try:
+		gpr_discrete_share_mean = master_output_dict[foo_nm+'_mean']
+		my_kernel = master_output_dict[foo_nm+'_kernel']
+	except:
+		print('Gotta run it!')
+		gpr_discrete_share = my_gpr.fit(X=X_train_gp.reshape(-1,1)[gp_train_inds_share], y=y_train_gp.reshape(-1,1)[gp_train_inds_share]/delta_t)
+		my_kernel = my_gpr.kernel_
+		gpr_discrete_share_mean = gpr_discrete_share.predict(X_pred, return_std=False)
+		master_output_dict[foo_nm+'_mean'] = gpr_discrete_share_mean
+		master_output_dict[foo_nm+'_kernel'] = my_kernel
+		np.savez(master_output_fname,**master_output_dict)
 	# plot training data
-	ax_gp_discrete.plot(X_pred, gpr_discrete_share_mean, color=color, linestyle='-', label=r'$\bar{{\Phi}}_{{\theta}}(X^{{(t)}}_k)$ ~ GP({kernel})'.format(kernel=my_gpr.kernel_))
+	ax_gp_discrete.plot(X_pred, gpr_discrete_share_mean, color=color, linestyle='-', label=r'$\bar{{\Phi}}_{{\theta}}(X^{{(t)}}_k)$ ~ GP({kernel})'.format(kernel=my_kernel))
 	ax_gp_discrete.legend(loc='best', prop={'size': 5.5})
 	ax_kde_discrete.legend(loc='lower center', prop={'size': 8})
 	ax_acf_discrete.legend(loc='best', prop={'size': 8})
-	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
 	t0 = time()
 	# now generate a test trajectory using the learned GPR
-	y_clean = np.zeros((len(t_eval), K))
-	y_clean[0,:] = y0
-	for j in range(len(t_eval)-1):
-		ic_discrete = y_clean[j,:]
-		sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, h=h_euler, method=psi0_ode_int_method, rtol=psi0_ode_int_rtol, atol=psi0_ode_int_atol, max_step=psi0_ode_int_max_step, t_eval=[delta_t])
-		y_pred = sol.y.squeeze()
-		# compute shared GPR correction
-		for k in range(K):
-			y_pred[k] += delta_t*gpr_discrete_share.predict(ic_discrete[k].reshape(1,-1), return_std=False)
-		y_clean[j+1,:] = y_pred
+	try:
+		y_clean = master_output_dict[foo_nm+'_y_clean']
+	except:
+		print('Gotta run it!')
+		y_clean = np.zeros((len(t_eval), K))
+		y_clean[0,:] = y0
+		for j in range(len(t_eval)-1):
+			ic_discrete = y_clean[j,:]
+			sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, method=psi0_ode_int_method, rtol=psi0_ode_int_rtol, atol=psi0_ode_int_atol, max_step=psi0_ode_int_max_step, t_eval=[delta_t])
+			y_pred = sol.y.squeeze()
+			# compute shared GPR correction
+			for k in range(K):
+				y_pred[k] += delta_t*gpr_discrete_share.predict(ic_discrete[k].reshape(1,-1), return_std=False)
+			y_clean[j+1,:] = y_pred
+		master_output_dict[foo_nm+'_y_clean'] = y_clean
+		np.savez(master_output_fname,**master_output_dict)
 	X_test_gpr_discrete_share = y_clean[ntsynch:,:K].reshape(-1, 1)
 	foo_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
 	print('Generated invariant measure for GP-discrete-share:', (time()-t0)/60,'minutes')
@@ -471,20 +518,29 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	ax_gp_discrete.legend(loc='best', prop={'size': 5.5})
 	ax_kde_discrete.legend(loc='lower center', prop={'size': 8})
 	ax_acf_discrete.legend(loc='best', prop={'size': 8})
-	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
 
 	# run model against test trajectories
-	test_traj_preds = np.zeros(X_test_traj.shape)
+	try:
+		test_traj_preds = master_output_dict[foo_nm+'_test_traj_preds']
+		do_compute = False
+	except:
+		print('Gotta run it!')
+		test_traj_preds = np.zeros(X_test_traj.shape)
+		do_compute = True
 	for t in range(n_test_traj):
-		ic_discrete = X_test_traj[t,0,:]
-		for j in range(X_test_traj.shape[1]):
-			test_traj_preds[t,j,:] = ic_discrete # prediction Psi_slow(Xtrue_j)
-			sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, h=h_euler, method=psi0_ode_int_method, rtol=psi0_ode_int_rtol, atol=psi0_ode_int_atol, max_step=psi0_ode_int_max_step, t_eval=np.array([delta_t]))
-			y_pred = sol.y.squeeze()
-			# compute shared GPR correction
-			for k in range(K):
-				y_pred[k] += delta_t*gpr_discrete_share.predict(ic_discrete[k].reshape(1,-1), return_std=False)
-			ic_discrete = y_pred
+		if do_compute:
+			ic_discrete = X_test_traj[t,0,:]
+			for j in range(X_test_traj.shape[1]):
+				test_traj_preds[t,j,:] = ic_discrete # prediction Psi_slow(Xtrue_j)
+				sol = solve_ivp(fun=lambda t, y: ODE.slow(y, t), t_span=(0, delta_t), y0=ic_discrete, method=psi0_ode_int_method, rtol=psi0_ode_int_rtol, atol=psi0_ode_int_atol, max_step=psi0_ode_int_max_step, t_eval=np.array([delta_t]))
+				y_pred = sol.y.squeeze()
+				# compute shared GPR correction
+				for k in range(K):
+					y_pred[k] += delta_t*gpr_discrete_share.predict(ic_discrete[k].reshape(1,-1), return_std=False)
+				ic_discrete = y_pred
+			master_output_dict[foo_nm+'_test_traj_preds'] = test_traj_preds
+			np.savez(master_output_fname,**master_output_dict)
 		# compute traj error
 		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
 		t_valid['discrete_GP_share'][t] = tval_foo
@@ -492,8 +548,8 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
 		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
 		ax.set_ylabel('Validity Time')
-	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
-	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
+	fig.savefig(fname=os.path.join(output_dir,'continuous_fits.png'), dpi=300)
 
 
 	np.savez(os.path.join(output_dir,'test_output_discrete_{alpha}.npz'.format(alpha=alpha)),
@@ -527,21 +583,38 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	)
 
 	# fit GPR-Ybartrue to Xk vs Ybar-true
+	foo_nm = 'GP_continuous_Ytrue'
 	c += 1
 	color = color_list[c]
-	gpr_true = my_gpr.fit(X=X[train_inds], y=np.mean(ODE.hx)*Y_true[train_inds])
-	gpr_true_mean = gpr_true.predict(X_pred, return_std=False)
-	# now run gp-corrected ODE
-	ODE.set_predictor(gpr_true.predict)
+	try:
+		gpr_true_mean = master_output_dict[foo_nm+'_mean']
+		my_kernel = master_output_dict[foo_nm+'_kernel']
+	except:
+		print('Gotta run it!')
+		gpr_true = my_gpr.fit(X=X[train_inds], y=np.mean(ODE.hx)*Y_true[train_inds])
+		my_kernel = my_gpr.kernel_
+		gpr_true_mean = gpr_true.predict(X_pred, return_std=False)
+		master_output_dict[foo_nm+'_mean'] = gpr_true_mean
+		master_output_dict[foo_nm+'_kernel'] = my_kernel
+		np.savez(master_output_fname,**master_output_dict)
+		# now run gp-corrected ODE
+		ODE.set_predictor(gpr_true.predict)
 	t0 = time()
-	sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, h=h_euler, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=t_eval)
-	y_clean = sol.y.T
+	try:
+		y_clean = master_output_dict[foo_nm+'_y_clean']
+	except:
+		print('Gotta run it!')
+		sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=t_eval)
+		y_clean = sol.y.T
+		master_output_dict[foo_nm+'_y_clean'] = y_clean
+		np.savez(master_output_fname,**master_output_dict)
+
 	X_test_gpr_true = y_clean[ntsynch:,:K].reshape(-1, 1)
 	foo_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
 	print('Generated invariant measure for GP-true:', (time()-t0)/60,'minutes')
 	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_YbarTrue_alpha{alpha}.png'.format(alpha=alpha)))
 	sns.kdeplot(X_test_gpr_true[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='-', label='RHS = Slow + GP (True Y-avg)')
-	ax_gp.plot(X_pred, gpr_true_mean, color=color, linestyle='-', label='GP (True Y-avg) ({kernel})'.format(kernel=my_gpr.kernel_))
+	ax_gp.plot(X_pred, gpr_true_mean, color=color, linestyle='-', label='GP (True Y-avg) ({kernel})'.format(kernel=my_kernel))
 	ax_acf.plot(t_acf_plot, foo_acf, color=color, label='RHS = Slow + GP (True Y-avg)')
 	ax_acf.legend(loc='best', prop={'size': 8})
 	ax_gp.legend(loc='best', prop={'size': 5.5})
@@ -549,13 +622,22 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	fig.savefig(fname=output_fname, dpi=300)
 
 	# run model against test trajectories
-	test_traj_preds = np.zeros(X_test_traj.shape)
+	try:
+		test_traj_preds = master_output_dict[foo_nm+'_test_traj_preds']
+		do_compute = False
+	except:
+		print('Gotta run it!')
+		test_traj_preds = np.zeros(X_test_traj.shape)
+		do_compute = True
 	for t in range(n_test_traj):
-		ic = X_test_traj[t,0,:]
-		for j in range(X_test_traj.shape[1]):
-			test_traj_preds[t,j,:] = ic # prediction Psi_slow(Xtrue_j)
-			sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, h=h_euler, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=np.array([delta_t]))
-			ic = sol.y.T.squeeze()
+		if do_compute:
+			ic = X_test_traj[t,0,:]
+			for j in range(X_test_traj.shape[1]):
+				test_traj_preds[t,j,:] = ic # prediction Psi_slow(Xtrue_j)
+				sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=np.array([delta_t]))
+				ic = sol.y.T.squeeze()
+			master_output_dict[foo_nm+'_test_traj_preds'] = test_traj_preds
+			np.savez(master_output_fname,**master_output_dict)
 		# compute traj error
 		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
 		t_valid['continuous_GP_Ytrue'][t] = tval_foo
@@ -563,26 +645,43 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
 		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
 		ax.set_ylabel('Validity Time')
-	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
-	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
+	fig.savefig(fname=os.path.join(output_dir,'continuous_fits.png'), dpi=300)
 
 
 	# fit GPR-Ybarpprox to Xk vs Ybar-infer
+	foo_nm = 'GP_continuous_Yinfer'
 	c += 1
 	color = color_list[c]
-	gpr_approx = my_gpr.fit(X=X[train_inds], y=np.mean(ODE.hx)*Y_inferred[train_inds])
-	gpr_approx_mean = gpr_approx.predict(X_pred, return_std=False)
-	# now run gp-corrected ODE
-	ODE.set_predictor(gpr_approx.predict)
+	try:
+		gpr_approx_mean = master_output_dict[foo_nm+'_mean']
+		my_kernel = master_output_dict[foo_nm+'_kernel']
+	except:
+		print('Gotta run it!')
+		gpr_approx = my_gpr.fit(X=X[train_inds], y=np.mean(ODE.hx)*Y_inferred[train_inds])
+		my_kernel = my_gpr.kernel_
+		gpr_approx_mean = gpr_approx.predict(X_pred, return_std=False)
+		master_output_dict[foo_nm+'_mean'] = gpr_approx_mean
+		master_output_dict[foo_nm+'_kernel'] = my_kernel
+		np.savez(master_output_fname,**master_output_dict)
+		# now run gp-corrected ODE
+		ODE.set_predictor(gpr_approx.predict)
 	t0 = time()
-	sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, h=h_euler, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=t_eval)
-	y_clean = sol.y.T
+
+	try:
+		y_clean = master_output_dict[foo_nm+'_y_clean']
+	except:
+		print('Gotta run it!')
+		sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=t_eval)
+		y_clean = sol.y.T
+		master_output_dict[foo_nm+'_y_clean'] = y_clean
+		np.savez(master_output_fname,**master_output_dict)
 	X_test_gpr_approx = y_clean[ntsynch:,:K].reshape(-1, 1)
 	foo_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
 	print('Generated invariant measure for GP-approx:', (time()-t0)/60,'minutes')
 	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_YbarInfer_alpha{alpha}.png'.format(alpha=alpha)))
 	sns.kdeplot(X_test_gpr_approx[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='--', label='RHS = Slow + GP (Approx Y-avg)')
-	ax_gp.plot(X_pred, gpr_approx_mean, color=color, linestyle='--', label='GP (Inferred Y-avg) ({kernel})'.format(kernel=my_gpr.kernel_))
+	ax_gp.plot(X_pred, gpr_approx_mean, color=color, linestyle='--', label='GP (Inferred Y-avg) ({kernel})'.format(kernel=my_kernel))
 	ax_acf.plot(t_acf_plot, foo_acf, color=color, label='RHS = Slow + GP (Inferred Y-avg)')
 	ax_gp.legend(loc='best', prop={'size': 5.5})
 	ax_acf.legend(loc='best', prop={'size': 8})
@@ -590,13 +689,22 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 	fig.savefig(fname=output_fname, dpi=300)
 
 	# run model against test trajectories
-	test_traj_preds = np.zeros(X_test_traj.shape)
+	try:
+		test_traj_preds = master_output_dict[foo_nm+'_test_traj_preds']
+		do_compute = False
+	except:
+		print('Gotta run it!')
+		test_traj_preds = np.zeros(X_test_traj.shape)
+		do_compute = True
 	for t in range(n_test_traj):
-		ic = X_test_traj[t,0,:]
-		for j in range(X_test_traj.shape[1]):
-			test_traj_preds[t,j,:] = ic # prediction Psi_slow(Xtrue_j)
-			sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, h=h_euler, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=np.array([delta_t]))
-			ic = sol.y.T.squeeze()
+		if do_compute:
+			ic = X_test_traj[t,0,:]
+			for j in range(X_test_traj.shape[1]):
+				test_traj_preds[t,j,:] = ic # prediction Psi_slow(Xtrue_j)
+				sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=np.array([delta_t]))
+				ic = sol.y.T.squeeze()
+			master_output_dict[foo_nm+'_test_traj_preds'] = test_traj_preds
+			np.savez(master_output_fname,**master_output_dict)
 		# compute traj error
 		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
 		t_valid['continuous_GP_Yinferred'][t] = tval_foo
@@ -604,8 +712,8 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
 		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
 		ax.set_ylabel('Validity Time')
-	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fit.png'), dpi=300)
-	fig.savefig(fname=os.path.join(output_dir,'eliminate_dima.png'), dpi=300)
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
+	fig.savefig(fname=os.path.join(output_dir,'continuous_fits.png'), dpi=300)
 
 	# save figure after each loop
 	np.savez(os.path.join(output_dir,'test_output_continuous_{alpha}.npz'.format(alpha=alpha)),
@@ -620,7 +728,7 @@ def plot_data(testing_fname=os.path.join(FLAGS.output_dir, FLAGS.testing_fname),
 
 
 if __name__ == '__main__':
-	eliminate_dima()
-	plot_data()
+	continuous_fits()
+	run_traintest()
 
 
