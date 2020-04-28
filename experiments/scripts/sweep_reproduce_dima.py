@@ -69,15 +69,18 @@ ODE_SETTINGS = {'hifi': {'ode_int_method': 'RK45',
 
 RUN_STYLES = {'short': {'t_synch': 50,
 					't_invariant_measure': 100,
-					'n_test_traj': 5
+					'n_test_traj': 5,
+					'job_hours': 24
 					},
 				'long': {'t_synch': 500,
 					't_invariant_measure': 2000,
-					'n_test_traj': 20
+					'n_test_traj': 20,
+					'job_hours': 48
 					},
 				'temp': {'t_synch': 1,
 					't_invariant_measure': 10,
-					'n_test_traj': 2
+					'n_test_traj': 2,
+					'job_hours': 2
 					}
 				}
 
@@ -130,13 +133,14 @@ def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.expe
 		settings_path = os.path.join(run_path, 'settings.json')
 		dict_to_file(mydict=settings, fname=settings_path)
 		command_flag_dict = {'settings_path': settings_path}
+
 		jobstatus, jobnum = make_and_deploy(bash_run_command=CMD_run_fits,
 			command_flag_dict=command_flag_dict,
 			jobfile_dir=experiment_dir,
 			jobname='{0}'.format(run_nm.replace('/','_')),
 			jobid_dir=run_path,
 			master_job_file=master_job_file,
-			hours=48,
+			hours=settings['job_hours'],
 			no_submit=no_submit)
 
 		if jobstatus!=0:
