@@ -766,7 +766,7 @@ def run_traintest(testing_fname,
 	acf_error_dict = {key: np.linalg.norm(acf_dict[key]-T_test_acf) for key in acf_dict}
 
 	my_kl = lambda Xapprox, Xtrue=X_test, test_inds=test_inds: kl4dummies(Xtrue=Xtrue[test_inds], Xapprox=Xapprox[test_inds], gridsize=1000)
-	kl_dict = {key: my_kl(data_dict[key][test_inds]) for key in data_dict}
+	kl_dict = {key: my_kl(data_dict[key]) for key in data_dict}
 
 	# KDEs
 	ax = axlist[1][0]
