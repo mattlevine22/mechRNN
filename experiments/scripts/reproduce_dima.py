@@ -156,15 +156,26 @@ def run_traintest(testing_fname,
 	t_valid_thresh=0.4,
 	**kwargs):
 
+	try:
+		foo = np.load(training_fname)
+		goo = np.load(testing_fname)
+	except:
+		print('Unable to load training data---no plots were made!')
+		return
+
+	n_subsample_gp = int(n_subsample_gp)
+	n_subsample_kde = int(n_subsample_kde)
+	n_restarts_optimizer = int(n_restarts_optimizer)
+
 	# make output_dir
 	os.makedirs(output_dir, exist_ok=True)
 
 	# set up master output dictionary to be saved to file
 	try:
-		goo = np.load(master_output_fname, allow_pickle=True)
+		boomaster = np.load(master_output_fname, allow_pickle=True)
 		# convert npzFileObject to a dictionary
 		# https://stackoverflow.com/questions/32682928/loading-arrays-from-numpy-npz-files-in-python
-		master_output_dict = dict(zip(("{}".format(k) for k in goo), (goo[k] for k in goo)))
+		master_output_dict = dict(zip(("{}".format(k) for k in boomaster), (boomaster[k] for k in boomaster)))
 	except:
 		master_output_dict = {}
 
@@ -194,9 +205,6 @@ def run_traintest(testing_fname,
 	# get initial colors
 	prop_cycle = plt.rcParams['axes.prop_cycle']
 	color_list = prop_cycle.by_key()['color']
-
-	foo = np.load(training_fname)
-	goo = np.load(testing_fname)
 
 	# plot a phase plot of the training data
 	phase_plot(data=foo['X_train'], output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35)
@@ -562,11 +570,11 @@ def run_traintest(testing_fname,
 	fig.savefig(fname=os.path.join(output_dir,'continuous_fits.png'), dpi=300)
 
 
-	np.savez(os.path.join(output_dir,'test_output_discrete_{alpha}.npz'.format(alpha=alpha)),
-	X_test_gpr_discrete_share=X_test_gpr_discrete_share,
-	X_test_gpr_discrete_full=X_test_gpr_discrete_full,
-	X_test=X_test,
-	X_test_null=X_test_null)
+	# np.savez(os.path.join(output_dir,'test_output_discrete_{alpha}.npz'.format(alpha=alpha)),
+	# 	X_test_gpr_discrete_share=X_test_gpr_discrete_share,
+	# 	X_test_gpr_discrete_full=X_test_gpr_discrete_full,
+	# 	X_test=X_test,
+	# 	X_test_null=X_test_null)
 
 	plt.close(fig_discrete)
 
@@ -720,11 +728,11 @@ def run_traintest(testing_fname,
 	fig.savefig(fname=os.path.join(output_dir,'continuous_fits.png'), dpi=300)
 
 	# save figure after each loop
-	np.savez(os.path.join(output_dir,'test_output_continuous_{alpha}.npz'.format(alpha=alpha)),
-			X_test_gpr_true_share=X_test_gpr_true_share,
-			X_test_gpr_approx_share=X_test_gpr_approx_share,
-			X_test=X_test,
-			X_test_null=X_test_null)
+	# np.savez(os.path.join(output_dir,'test_output_continuous_{alpha}.npz'.format(alpha=alpha)),
+	# 		X_test_gpr_true_share=X_test_gpr_true_share,
+	# 		X_test_gpr_approx_share=X_test_gpr_approx_share,
+	# 		X_test=X_test,
+	# 		X_test_null=X_test_null)
 
 	# dont be a slob...close the fig when you're done!
 	plt.close(fig)
@@ -765,13 +773,16 @@ def run_traintest(testing_fname,
 
 	acf_error_dict = {key: np.linalg.norm(acf_dict[key]-T_test_acf) for key in acf_dict}
 
-	my_kl = lambda Xapprox, Xtrue=X_test, test_inds=test_inds: kl4dummies(Xtrue=Xtrue[test_inds], Xapprox=Xapprox[test_inds], gridsize=1000)
+	t0 = time()
+	print('Starting KL computations...')
+	my_kl = lambda Xapprox, Xtrue=X_test, test_inds=test_inds: kl4dummies(Xtrue=Xtrue[test_inds], Xapprox=Xapprox[test_inds], gridsize=512)
 	kl_dict = {key: my_kl(data_dict[key]) for key in data_dict}
+	print('Finished KL computations in', (time()-t0)/60, 'minutes')
 
 	# KDEs
 	ax = axlist[1][0]
 	for label in data_dict:
-		sns.kdeplot(data_dict[label][test_inds].squeeze(), ax=ax, label=label, **plot_dict[label])
+		sns.kdeplot(data_dict[label][test_inds].squeeze(), ax=ax, label=label, linewidth=2, **plot_dict[label])
 	ax.legend(loc='best', prop={'size': legsize})
 	ax.set_title(r'Invariant Measure KDE')
 	ax.set_xlabel(r'$X_k$')
@@ -785,12 +796,13 @@ def run_traintest(testing_fname,
 	ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='x-large')
 	ax.set_ylabel(r'$D_{\mathrm{KL}}$')
 	ax.set_title(r'$D_{\mathrm{KL}}(\mathrm{Corrected} \ || \ \mathrm{True})$')
+	ax.set_yscale('log')
 	figbig.savefig(fname=os.path.join(output_dir,'big_summary.png'), dpi=300)
 
 	# ACF
 	ax = axlist[1][1]
 	for label in acf_dict:
-		ax.plot(t_acf_plot, acf_dict[label], label=label, **plot_dict[label])
+		ax.plot(t_acf_plot, acf_dict[label], label=label, linewidth=2, **plot_dict[label])
 	ax.set_title(r'Autocorrelation Function ($X_0$)')
 	ax.set_xlabel('Time (lag)')
 	ax.set_ylabel('ACF')
@@ -801,7 +813,7 @@ def run_traintest(testing_fname,
 	# ACF-log
 	ax = axlist[1][2]
 	for label in acf_dict:
-		ax.plot(t_acf_plot, acf_dict[label], label=label, **plot_dict[label])
+		ax.plot(t_acf_plot, acf_dict[label], label=label, linewidth=2, **plot_dict[label])
 	ax.set_title(r'Autocorrelation Function ($X_0$)')
 	ax.set_xlabel('Time (lag)')
 	ax.set_ylabel('ACF')

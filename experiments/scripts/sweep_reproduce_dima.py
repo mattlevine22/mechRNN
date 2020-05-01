@@ -24,7 +24,7 @@ DEFAULT_SETTINGS = {'rng_seed': 63,
 			't_test_traj': 8,
 			'n_test_traj': 20,
 			'n_subsample_gp': 800,
-			'n_subsample_kde': int(1e9),
+			'n_subsample_kde': int(1e5),
 			'n_restarts_optimizer': 15,
 			'testing_fname': 'testing.npz',
 			'training_fname': 'training.npz',
@@ -70,17 +70,12 @@ ODE_SETTINGS = {'hifi': {'ode_int_method': 'RK45',
 RUN_STYLES = {'short': {'t_synch': 50,
 					't_invariant_measure': 100,
 					'n_test_traj': 5,
-					'job_hours': 24
+					'job_hours': 1
 					},
 				'long': {'t_synch': 500,
 					't_invariant_measure': 2000,
 					'n_test_traj': 20,
-					'job_hours': 48
-					},
-				'temp': {'t_synch': 1,
-					't_invariant_measure': 10,
-					'n_test_traj': 2,
-					'job_hours': 2
+					'job_hours': 6
 					}
 				}
 
