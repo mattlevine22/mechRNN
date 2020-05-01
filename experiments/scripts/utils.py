@@ -268,6 +268,9 @@ def kl4dummies(Xtrue, Xapprox, kde_func=kde_scipy, gridsize=1000):
     n_states = Xtrue.shape[1]
     kl_vec = np.zeros(n_states)
     for i in range(n_states):
+        if np.array_equal(Xtrue[:,i],Xapprox[:,i]):
+            kl_vec[i] = 0
+            continue
         zmin = min(min(Xtrue[:,i]), min(Xapprox[:,i]))
         zmax = max(max(Xtrue[:,i]), max(Xapprox[:,i]))
         x_grid = np.linspace(zmin, zmax, gridsize)
