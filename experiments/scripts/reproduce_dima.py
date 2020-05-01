@@ -199,8 +199,22 @@ def run_traintest(testing_fname,
 
 	# initialize ode object
 	ODE = L96M(K=K, J=J, F=F, eps=eps, hx=hx, dima_style=False)
+
+	# First, check settings for chaos
+	sim_model_params = {'ode_params': (),
+					'ode_int_method': testcontinuous_ode_int_method,
+					'ode_int_atol': testcontinuous_ode_int_atol,
+					'ode_int_rtol': testcontinuous_ode_int_rtol,
+					'ode_int_max_step': testcontinuous_ode_int_max_step}
+	make_traj_plots(n_inits=4, sd_perturb=0.01, sim_model_params=sim_model_params, output_dir=output_dir, K=K, J=J, F=F, eps=eps, hx=hx, delta_t=delta_t, T=12, decoupled=False)
+
+
+
 	ODE.set_stencil() # this is a default, empty usage that is required
 	state_limits = ODE.get_state_limits()
+
+
+
 
 	# get initial colors
 	prop_cycle = plt.rcParams['axes.prop_cycle']

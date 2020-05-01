@@ -9,7 +9,7 @@ from line_profiler import LineProfiler
 parser = argparse.ArgumentParser()
 parser.add_argument('--settings_path', type=str, default='datagen_settings.npz', help='pathname of numpy settings dictionary')
 parser.add_argument('--profile', type=str2bool, default=False, help='option for profiling card')
-parser.add_argument('--skip_datagen', type=str2bool, default=True, help='skipping the make-data step')
+parser.add_argument('--skip_datagen', type=str2bool, default=False, help='skipping the make-data step')
 FLAGS = parser.parse_args()
 
 def main(settings_path=FLAGS.settings_path, skip_datagen=FLAGS.skip_datagen):
