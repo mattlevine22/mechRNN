@@ -84,7 +84,7 @@ EXP_LIST = dict_combiner({'hx': [-0.8, -2.0],
 			'delta_t': [1e-2, 1e-3, 1e-4],
 			'datagen_fidelity': ['hifi','defaultfi','lowfi'],
 			'traintest_fidelity': ['hifi','defaultfi','lowfi'],
-			'run_style': ['temp','short','long']
+			'run_style': ['short','long']
 			})
 
 def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.experiment_dir, no_submit=FLAGS.no_submit):
