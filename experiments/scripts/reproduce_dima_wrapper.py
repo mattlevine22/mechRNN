@@ -20,8 +20,13 @@ def main(settings_path=FLAGS.settings_path, skip_datagen=FLAGS.skip_datagen):
 	if skip_datagen:
 		print('skipping data generation step.')
 	else:
-		make_data(**setts)
-		print('Generated data in:', time()-t0)
+		try:
+			np.load(setts['testing_fname'])
+			np.load(setts['training_fname'])
+			print('auto-skipping data generation step.')
+		except:
+			make_data(**setts)
+			print('Generated data in:', time()-t0)
 
 	t1 = time()
 	run_traintest(**setts)
