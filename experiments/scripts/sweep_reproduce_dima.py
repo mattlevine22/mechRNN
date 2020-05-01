@@ -79,9 +79,9 @@ RUN_STYLES = {'short': {'t_synch': 50,
 					}
 				}
 
-EXP_LIST = dict_combiner({'hx': [-0.8, -2.0, -1.5],
+EXP_LIST = dict_combiner({'hx': [-3.0, -2.0, -0.8, -1.5],
 			'F': [10, 15, 20],
-			'eps': [2**(-7), 1, 10],
+			'eps': [5, 2**(-7), 1, 10],
 			'delta_t': [1e-3],
 			'datagen_fidelity': ['defaultfi'],
 			'traintest_fidelity': ['defaultfi'],
