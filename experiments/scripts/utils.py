@@ -32,7 +32,7 @@ except:
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import seaborn
+import seaborn as sns
 import json
 import pickle
 import pandas as pd
@@ -43,6 +43,13 @@ from odelibrary import *
 
 
 LORENZ_DEFAULT_PARAMS = (10, 28, 8/3)
+
+
+def fname_append(fname, append_str=''):
+    filename, file_extension = os.path.splitext(fname)
+    new_filename = os.path.join(filename+append_str,file_extension)
+    return new_filename
+
 
 def mkdir_p(dir):
     '''make a directory (dir) if it doesn't exist'''
@@ -228,7 +235,7 @@ def kde_statsmodels(data, kernel="gau", bw="scott", gridsize=100, cut=3, clip=No
         clip = (-np.inf, np.inf)
 
     # Preprocess the data
-    data = seaborn.utils.remove_na(data)
+    data = sns.utils.remove_na(data)
 
     # Calculate the KDE
     if np.nan_to_num(data.var()) == 0:
@@ -238,7 +245,7 @@ def kde_statsmodels(data, kernel="gau", bw="scott", gridsize=100, cut=3, clip=No
         x, y = np.array([]), np.array([])
 
     # Prefer using statsmodels for kernel flexibility
-    x, y = seaborn.distributions._statsmodels_univariate_kde(data, kernel, bw,
+    x, y = sns.distributions._statsmodels_univariate_kde(data, kernel, bw,
                                        gridsize, cut, clip,
                                        cumulative=cumulative)
 
@@ -922,7 +929,33 @@ def invariant_density_plot(test_data, pred_data, plot_inds, state_names, output_
     return
 
 
-def phase_plot(data, output_fname, delta_t=1, state_lims=None, plot_inds=None, state_names=None, wspace=None, hspace=None):
+def all_kdes_plot(data, output_fname, plot_inds=None, state_names=None):
+
+    # modify output_fname
+    output_fname = fname_append(output_fname, append_str=mode)
+
+    if plot_inds is None:
+        plot_inds = np.arange(data.shape[1])
+    if state_names is None:
+        state_names = [r'$X_{ind}$'.format(ind=k+1) for k in plot_inds]
+
+    fig, ax = plt.subplots(1,1, figsize=[11,11])
+    for i_y in range(len(plot_inds)):
+        yy = plot_inds[i_y]
+        sns.kdeplot(data[:,yy], ax=ax, linewidth=2, label=state_names[yy])
+        ax.set_xlabel(r'$X_k$')
+        ax.set_ylabel('Probability')
+    ax.legend(loc='best', prop={'size': 10})
+    ax.set_title('1-D Invariant Measure KDE')
+    fig.savefig(fname=output_fname)
+    plt.close(fig)
+    return
+
+def phase_plot(data, output_fname, delta_t=1, state_lims=None, plot_inds=None, state_names=None, wspace=None, hspace=None, mode='traj'):
+
+    # modify output_fname
+    output_fname = fname_append(output_fname, append_str=mode)
+
     if plot_inds is None:
         plot_inds = np.arange(data.shape[1])
     if state_names is None:
@@ -941,11 +974,17 @@ def phase_plot(data, output_fname, delta_t=1, state_lims=None, plot_inds=None, s
 
             ax = ax_list[i_y][i_x]
             if xx<yy:
-                ax.plot(data[:,xx],data[:,yy])
-                # if state_lims:
-                #     ax.set
+                if mode=='traj':
+                    ax.plot(data[:,xx],data[:,yy])
+                elif mode=='scatter':
+                    ax.scatter(data[:,xx],data[:,yy])
+                elif mode=='density':
+                    sns.kdeplot(data=data[:,xx],data2=data[:,yy], ax=ax)
             elif xx==yy:
-                ax.plot(delta_t*np.arange(data.shape[0]), data[:,xx])
+                if mode=='traj':
+                    ax.plot(delta_t*np.arange(data.shape[0]), data[:,xx])
+                elif mode=='scatter' or mode=='density':
+                    sns.kdeplot(data[:,xx], ax=ax, linewidth=2)
             else:
                 ax.axis('off')
             if bottom_x:
