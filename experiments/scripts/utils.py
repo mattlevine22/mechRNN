@@ -32,7 +32,7 @@ except:
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
+import seaborn
 import json
 import pickle
 import pandas as pd
@@ -182,6 +182,70 @@ def get_lorenz_inits(model=None, params=None, n=2):
         init_vec[k,:] = [xrand, yrand, zrand]
     return init_vec
 
+def kde_statsmodels(data, kernel="gau", bw="scott", gridsize=100, cut=3, clip=None,
+            cumulative=False, **kwargs):
+    """Fit and plot a univariate or bivariate kernel density estimate.
+    Parameters
+    ----------
+    data : 1d array-like
+        Input data.
+    kernel : {'gau' | 'cos' | 'biw' | 'epa' | 'tri' | 'triw' }, optional
+        Code for shape of kernel to fit with. Bivariate KDE can only use
+        gaussian kernel.
+    bw : {'scott' | 'silverman' | scalar | pair of scalars }, optional
+        Name of reference method to determine kernel size, scalar factor,
+        or scalar for each dimension of the bivariate plot. Note that the
+        underlying computational libraries have different interperetations
+        for this parameter: ``statsmodels`` uses it directly, but ``scipy``
+        treats it as a scaling factor for the standard deviation of the
+        data.
+    gridsize : int, optional
+        Number of discrete points in the evaluation grid.
+    cut : scalar, optional
+        Draw the estimate to cut * bw from the extreme data points.
+    clip : pair of scalars, or pair of pair of scalars, optional
+        Lower and upper bounds for datapoints used to fit KDE. Can provide
+        a pair of (low, high) bounds for bivariate plots.
+    cumulative : bool, optional
+        If True, draw the cumulative distribution estimated by the kde.
+    kwargs : key, value pairings
+        Other keyword arguments are passed to ``plt.plot()`` or
+        ``plt.contour{f}`` depending on whether a univariate or bivariate
+        plot is being drawn.
+    """
+
+    if isinstance(data, list):
+        data = np.asarray(data)
+
+    if len(data) == 0:
+        return np.array([]), np.array([])
+
+    data = data.astype(np.float64)
+
+
+    # Sort out the clipping
+    if clip is None:
+        clip = (-np.inf, np.inf)
+
+    # Preprocess the data
+    data = seaborn.utils.remove_na(data)
+
+    # Calculate the KDE
+    if np.nan_to_num(data.var()) == 0:
+        # Don't try to compute KDE on singular data
+        msg = "Data must have variance to compute a kernel density estimate."
+        warnings.warn(msg, UserWarning)
+        x, y = np.array([]), np.array([])
+
+    # Prefer using statsmodels for kernel flexibility
+    x, y = seaborn.distributions._statsmodels_univariate_kde(data, kernel, bw,
+                                       gridsize, cut, clip,
+                                       cumulative=cumulative)
+
+    # Make sure the density is nonnegative
+    y = np.amax(np.c_[np.zeros_like(y), y], axis=1)
+
+    return x, y
 
 def kde_scipy(x, x_grid, **kwargs):
     """Kernel Density Estimation with Scipy"""
@@ -200,13 +264,13 @@ def kde_scipy(x, x_grid, **kwargs):
 #     kde.fit(**kwargs)
 #     return kde.evaluate(x_grid)
 
-def kl4dummies(Xtrue, Xapprox, kde_func=kde_scipy):
+def kl4dummies(Xtrue, Xapprox, kde_func=kde_scipy, gridsize=1000):
     n_states = Xtrue.shape[1]
     kl_vec = np.zeros(n_states)
     for i in range(n_states):
         zmin = min(min(Xtrue[:,i]), min(Xapprox[:,i]))
         zmax = max(max(Xtrue[:,i]), max(Xapprox[:,i]))
-        x_grid = np.linspace(zmin, zmax, 10000)
+        x_grid = np.linspace(zmin, zmax, gridsize)
         Pk = kde_func(Xapprox[:,i].astype(np.float), x_grid) # P is approx dist
         Qk = kde_func(Xtrue[:,i].astype(np.float), x_grid) # Q is reference dist
         kl_vec[i] = entropy(Pk, Qk) # compute Dkl(P | Q)
@@ -855,7 +919,12 @@ def invariant_density_plot(test_data, pred_data, plot_inds, state_names, output_
     return
 
 
-def phase_plot(data, plot_inds, state_names, output_fname, delta_t=1, state_lims=None):
+def phase_plot(data, output_fname, delta_t=1, state_lims=None, plot_inds=None, state_names=None, wspace=None, hspace=None):
+    if plot_inds is None:
+        plot_inds = np.arange(data.shape[1])
+    if state_names is None:
+        state_names = [r'$X_{ind}$'.format(ind=k+1) for k in plot_inds]
+
     fig, ax_list = plt.subplots(len(plot_inds),len(plot_inds), figsize=[11,11])
     for i_y in range(len(plot_inds)):
         yy = plot_inds[i_y]
@@ -882,6 +951,7 @@ def phase_plot(data, plot_inds, state_names, output_fname, delta_t=1, state_lims
                 ax.set_ylabel(state_names[yy])
                 left_y = False
     fig.suptitle('ODE simulation')
+    fig.subplots_adjust(wspace=wspace, hspace=hspace)
     fig.savefig(fname=output_fname)
     plt.close(fig)
     return
