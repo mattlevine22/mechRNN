@@ -79,12 +79,13 @@ RUN_STYLES = {'short': {'t_synch': 50,
 					}
 				}
 
-EXP_LIST = dict_combiner({'hx': [-0.8, -2.0],
-			'eps': [2**(-7), 0.01, 0.1, 1, 10],
-			'delta_t': [1e-2, 1e-3, 1e-4],
-			'datagen_fidelity': ['hifi','defaultfi','lowfi'],
-			'traintest_fidelity': ['hifi','defaultfi','lowfi'],
-			'run_style': ['short','long']
+EXP_LIST = dict_combiner({'hx': [-0.8, -2.0, -1.5],
+			'F': [10, 15, 20],
+			'eps': [2**(-7), 1, 10],
+			'delta_t': [1e-3],
+			'datagen_fidelity': ['defaultfi'],
+			'traintest_fidelity': ['defaultfi'],
+			'run_style': ['short']
 			})
 
 def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.experiment_dir, no_submit=FLAGS.no_submit):
@@ -115,7 +116,7 @@ def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.expe
 		settings.update(exp)
 
 		# create the run-name
-		run_nm = 'dt{delta_t}/eps{eps}_hx{hx}/datagen{datagen_fidelity}_traintest{traintest_fidelity}/{run_style}'.format(**settings)
+		run_nm = 'dt{delta_t}/eps{eps}_hx{hx}_F{F}/datagen{datagen_fidelity}_traintest{traintest_fidelity}/{run_style}'.format(**settings)
 		run_path = os.path.join(experiment_dir, run_nm)
 
 		# now create a settings path and write settings dict to that path

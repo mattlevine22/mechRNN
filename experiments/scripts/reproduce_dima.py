@@ -60,7 +60,7 @@ def make_data(
 					'ode_int_atol':1e-6,
 					'ode_int_rtol':1e-3,
 					'ode_int_max_step':1e-3}
-	make_traj_plots(n_inits=4, sd_perturb=0.01, sim_model_params=sim_model_params, output_dir=output_dir, K=K, J=J, F=F, eps=eps, hx=hx, delta_t=delta_t, T=12, decoupled=False)
+	make_traj_plots(n_inits=4, sd_perturb=0.01, sim_model_params=sim_model_params, output_dir=output_dir, K=K, J=J, F=F, eps=eps, hx=hx, delta_t=delta_t, T=15, decoupled=False)
 
 
 	# initialize ode object
@@ -206,7 +206,7 @@ def run_traintest(testing_fname,
 					'ode_int_atol': testcontinuous_ode_int_atol,
 					'ode_int_rtol': testcontinuous_ode_int_rtol,
 					'ode_int_max_step': testcontinuous_ode_int_max_step}
-	make_traj_plots(n_inits=4, sd_perturb=0.01, sim_model_params=sim_model_params, output_dir=output_dir, K=K, J=J, F=F, eps=eps, hx=hx, delta_t=delta_t, T=12, decoupled=False)
+	make_traj_plots(n_inits=4, sd_perturb=0.01, sim_model_params=sim_model_params, output_dir=output_dir, K=K, J=J, F=F, eps=eps, hx=hx, delta_t=delta_t, T=15, decoupled=False)
 
 
 
