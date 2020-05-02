@@ -79,13 +79,13 @@ RUN_STYLES = {'short': {'t_synch': 50,
 					}
 				}
 
-EXP_LIST = dict_combiner({'hx': [-3.0, -2.0, -0.8, -1.5],
+EXP_LIST = dict_combiner({'hx': [-2.0, -0.8, -1.5],
 			'F': [10, 15, 20],
-			'eps': [5, 2**(-7), 1, 10],
+			'eps': [2**(-7), 1, 10],
 			'delta_t': [1e-3],
 			'datagen_fidelity': ['defaultfi'],
 			'traintest_fidelity': ['defaultfi'],
-			'run_style': ['short']
+			'run_style': ['long']
 			})
 
 def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.experiment_dir, no_submit=FLAGS.no_submit):
