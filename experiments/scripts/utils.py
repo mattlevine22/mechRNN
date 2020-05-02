@@ -932,9 +932,6 @@ def invariant_density_plot(test_data, pred_data, plot_inds, state_names, output_
 
 def all_kdes_plot(data, output_fname, plot_inds=None, state_names=None):
 
-    # modify output_fname
-    output_fname = fname_append(output_fname, append_str=mode)
-
     if plot_inds is None:
         plot_inds = np.arange(data.shape[1])
     if state_names is None:
