@@ -28,8 +28,6 @@ try:
     import torch.cuda
 except:
     pass
-
-from reproduce_dima import get_inds
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -45,6 +43,13 @@ from odelibrary import *
 
 LORENZ_DEFAULT_PARAMS = (10, 28, 8/3)
 
+
+def get_inds(N_total, N_subsample):
+    if N_total > N_subsample:
+        my_inds = np.random.choice(np.arange(N_total), N_subsample, replace=False)
+    else:
+        my_inds = np.arange(N_total)
+    return my_inds
 
 def fname_append(fname, append_str=''):
     # https://stackoverflow.com/questions/541390/extracting-extension-from-filename-in-python

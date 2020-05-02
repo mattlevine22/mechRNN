@@ -3,7 +3,7 @@ import json
 import numpy as np
 import argparse
 from time import time
-from utils import phase_plot, kl4dummies, fname_append, all_kdes_plot
+from utils import get_inds, phase_plot, kl4dummies, fname_append, all_kdes_plot
 from check_L96_chaos import make_traj_plots
 from scipy.integrate import solve_ivp
 from scipy.stats import gaussian_kde
@@ -23,12 +23,6 @@ import pdb
 #Note: to use custom euler integrator, simply set delta_t
 # and let --ode_int_method='Euler'
 
-def get_inds(N_total, N_subsample):
-	if N_total > N_subsample:
-		my_inds = np.random.choice(np.arange(N_total), N_subsample, replace=False)
-	else:
-		my_inds = np.arange(N_total)
-	return my_inds
 
 def make_data(
 	testing_fname,
