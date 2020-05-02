@@ -29,6 +29,7 @@ try:
 except:
     pass
 
+from reproduce_dima import get_inds
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -949,10 +950,13 @@ def all_kdes_plot(data, output_fname, plot_inds=None, state_names=None):
     plt.close(fig)
     return
 
-def phase_plot(data, output_fname, delta_t=1, state_lims=None, plot_inds=None, state_names=None, wspace=None, hspace=None, mode='traj'):
+def phase_plot(data, output_fname, delta_t=1, state_lims=None, plot_inds=None, state_names=None, wspace=None, hspace=None, mode='traj', n_subsample_kde=1e7):
 
     # modify output_fname
     output_fname = fname_append(output_fname, append_str=mode)
+
+    if mode=='density':
+        biv_kde_inds = get_inds(N_total=data.shape[0], N_subsample=n_subsample_kde)
 
     if plot_inds is None:
         plot_inds = np.arange(data.shape[1])
@@ -977,7 +981,7 @@ def phase_plot(data, output_fname, delta_t=1, state_lims=None, plot_inds=None, s
                 elif mode=='scatter':
                     ax.plot(data[:,xx],data[:,yy],'o',markersize=2)
                 elif mode=='density':
-                    sns.kdeplot(data=data[:,xx],data2=data[:,yy], ax=ax)
+                    sns.kdeplot(data=data[biv_kde_inds,xx],data2=data[biv_kde_inds,yy], ax=ax)
             elif xx==yy:
                 if mode=='traj':
                     ax.plot(delta_t*np.arange(data.shape[0]), data[:,xx])
