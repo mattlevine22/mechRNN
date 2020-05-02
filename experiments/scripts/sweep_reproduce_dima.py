@@ -70,7 +70,7 @@ ODE_SETTINGS = {'hifi': {'ode_int_method': 'RK45',
 RUN_STYLES = {'short': {'t_synch': 50,
 					't_invariant_measure': 100,
 					'n_test_traj': 5,
-					'job_hours': 4
+					'job_hours': 2
 					},
 				'long': {'t_synch': 500,
 					't_invariant_measure': 2000,
