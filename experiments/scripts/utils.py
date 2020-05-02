@@ -975,7 +975,7 @@ def phase_plot(data, output_fname, delta_t=1, state_lims=None, plot_inds=None, s
                 if mode=='traj':
                     ax.plot(data[:,xx],data[:,yy])
                 elif mode=='scatter':
-                    ax.plot(data[:,xx],data[:,yy],'o',markersize=3)
+                    ax.plot(data[:,xx],data[:,yy],'o',markersize=2)
                 elif mode=='density':
                     sns.kdeplot(data=data[:,xx],data2=data[:,yy], ax=ax)
             elif xx==yy:
