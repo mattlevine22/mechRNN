@@ -945,7 +945,7 @@ def all_kdes_plot(data, output_fname, plot_inds=None, state_names=None):
         ax.set_ylabel('Probability')
     ax.legend(loc='best', prop={'size': 10})
     ax.set_title('1-D Invariant Measure KDE')
-    fig.savefig(fname=output_fname)
+    fig.savefig(fname=output_fname, dpi=300)
     plt.close(fig)
     return
 
@@ -975,7 +975,7 @@ def phase_plot(data, output_fname, delta_t=1, state_lims=None, plot_inds=None, s
                 if mode=='traj':
                     ax.plot(data[:,xx],data[:,yy])
                 elif mode=='scatter':
-                    ax.scatter(data[:,xx],data[:,yy])
+                    ax.plot(data[:,xx],data[:,yy],'o',markersize=3)
                 elif mode=='density':
                     sns.kdeplot(data=data[:,xx],data2=data[:,yy], ax=ax)
             elif xx==yy:
@@ -992,7 +992,7 @@ def phase_plot(data, output_fname, delta_t=1, state_lims=None, plot_inds=None, s
                 left_y = False
     fig.suptitle('ODE simulation')
     fig.subplots_adjust(wspace=wspace, hspace=hspace)
-    fig.savefig(fname=output_fname)
+    fig.savefig(fname=output_fname, dpi=300)
     plt.close(fig)
     return
 
