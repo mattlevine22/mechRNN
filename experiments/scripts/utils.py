@@ -46,6 +46,7 @@ LORENZ_DEFAULT_PARAMS = (10, 28, 8/3)
 
 
 def fname_append(fname, append_str=''):
+    # https://stackoverflow.com/questions/541390/extracting-extension-from-filename-in-python
     filename, file_extension = os.path.splitext(fname)
     new_filename = filename+append_str+file_extension
     return new_filename

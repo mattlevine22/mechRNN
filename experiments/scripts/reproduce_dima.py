@@ -3,7 +3,7 @@ import json
 import numpy as np
 import argparse
 from time import time
-from utils import phase_plot, kl4dummies, fname_append
+from utils import phase_plot, kl4dummies, fname_append, all_kdes_plot
 from check_L96_chaos import make_traj_plots
 from scipy.integrate import solve_ivp
 from scipy.stats import gaussian_kde
@@ -88,9 +88,9 @@ def make_data(
 	np.savez(training_fname, X_train=X_train, y_fast=y_fast, Ybar_true=Ybar_true, Ybar_data_inferred=Ybar_data_inferred)
 
 	phase_plot(data=X_train, output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35)
-	phase_plot(data=X_train, output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='density')
+	phase_plot(data=X_train, output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='scatter')
 	phase_plot(data=y_fast[:,:J], state_names=[r'$Y_{{{ind},1}}$'.format(ind=j+1) for j in range(J)], output_fname=os.path.join(output_dir,'phase_plot_training_data_FAST.png'), delta_t=delta_t, wspace=0.35, hspace=0.35)
-	phase_plot(data=y_fast[:,:J], state_names=[r'$Y_{{{ind},1}}$'.format(ind=j+1) for j in range(J)], output_fname=os.path.join(output_dir,'phase_plot_training_data_FAST.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='density')
+	phase_plot(data=y_fast[:,:J], state_names=[r'$Y_{{{ind},1}}$'.format(ind=j+1) for j in range(J)], output_fname=os.path.join(output_dir,'phase_plot_training_data_FAST.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='scatter')
 
 	all_kdes_plot(data=X_train, output_fname=os.path.join(output_dir,'all_kdes_SLOW.png'))
 	all_kdes_plot(data=y_fast[:,:J], output_fname=os.path.join(output_dir,'all_kdes_FAST.png'))
@@ -227,11 +227,11 @@ def run_traintest(testing_fname,
 
 	# plot a phase plot of the training data
 	phase_plot(data=foo['X_train'], output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35)
-	phase_plot(data=foo['X_train'], output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='density')
+	phase_plot(data=foo['X_train'], output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='scatter')
 	all_kdes_plot(data=foo['X_train'], output_fname=os.path.join(output_dir,'all_kdes_SLOW.png'))
 	try:
 		phase_plot(data=foo['y_fast'][:,:J], state_names=[r'$Y_{{{ind},1}}$'.format(ind=j+1) for j in range(J)], output_fname=os.path.join(output_dir,'phase_plot_training_data_FAST.png'), delta_t=delta_t, wspace=0.35, hspace=0.35)
-		phase_plot(data=foo['y_fast'][:,:J], state_names=[r'$Y_{{{ind},1}}$'.format(ind=j+1) for j in range(J)], output_fname=os.path.join(output_dir,'phase_plot_training_data_FAST.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='density')
+		phase_plot(data=foo['y_fast'][:,:J], state_names=[r'$Y_{{{ind},1}}$'.format(ind=j+1) for j in range(J)], output_fname=os.path.join(output_dir,'phase_plot_training_data_FAST.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='scatter')
 		all_kdes_plot(data=foo['y_fast'][:,:J], output_fname=os.path.join(output_dir,'all_kdes_FAST.png'))
 	except:
 		print('Could not plot fast data...it wasnt saved in old data-generation runs')
