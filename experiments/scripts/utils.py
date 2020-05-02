@@ -47,7 +47,7 @@ LORENZ_DEFAULT_PARAMS = (10, 28, 8/3)
 
 def fname_append(fname, append_str=''):
     filename, file_extension = os.path.splitext(fname)
-    new_filename = os.path.join(filename+append_str,file_extension)
+    new_filename = filename+append_str+file_extension
     return new_filename
 
 
