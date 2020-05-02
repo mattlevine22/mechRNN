@@ -44,6 +44,7 @@ def make_data(
 	rng_seed,
 	n_test_traj,
 	t_test_traj,
+	n_subsample_kde,
 	**kwargs):
 
 	os.makedirs(output_dir, exist_ok=True)
