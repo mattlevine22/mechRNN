@@ -79,7 +79,7 @@ RUN_STYLES = {'short': {'t_synch': 50,
 					}
 				}
 
-EXP_LIST = dict_combiner({'hx': [-2.0, -0.8, -1.5],
+EXP_LIST = dict_combiner({'hx': [-2.0, -0.8, -1.5, -3.0],
 			'F': [10, 15, 20],
 			'eps': [2**(-7), 1, 10],
 			'delta_t': [1e-3],
