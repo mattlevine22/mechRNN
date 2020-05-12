@@ -88,8 +88,8 @@ def make_data(
 	phase_plot(data=y_fast[:,:J], state_names=[r'$Y_{{{ind},1}}$'.format(ind=j+1) for j in range(J)], output_fname=os.path.join(output_dir,'phase_plot_training_data_FAST.png'), delta_t=delta_t, wspace=0.35, hspace=0.35)
 	phase_plot(data=y_fast[:,:J], state_names=[r'$Y_{{{ind},1}}$'.format(ind=j+1) for j in range(J)], output_fname=os.path.join(output_dir,'phase_plot_training_data_FAST.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='scatter')
 
-	all_kdes_plot(data=X_train, output_fname=os.path.join(output_dir,'all_kdes_SLOW.png'))
-	all_kdes_plot(data=y_fast[:,:J], output_fname=os.path.join(output_dir,'all_kdes_FAST.png'))
+	all_kdes_plot(data=X_train, output_fname=os.path.join(output_dir,'all_kdes_train_SLOW.png'))
+	all_kdes_plot(data=y_fast[:,:J], output_fname=os.path.join(output_dir,'all_kdes_train_FAST.png'))
 
 	# Get data for estimating the true invariant measure:
 	# Run for 5k and output solutions at dT
@@ -105,6 +105,7 @@ def make_data(
 
 	# Remove first 500 and plot KDE
 	X_test = y_clean[ntsynch:,:K]
+	all_kdes_plot(data=X_test, output_fname=os.path.join(output_dir,'all_kdes_test_SLOW.png'))
 
 	# create short testing trajectories with initial conditions sampled from invariant density
 	t_eval_traj = np.arange(0, t_test_traj, delta_t)
@@ -224,12 +225,13 @@ def run_traintest(testing_fname,
 	# plot a phase plot of the training data
 	phase_plot(data=foo['X_train'], output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35)
 	phase_plot(data=foo['X_train'], output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='scatter')
-	phase_plot(data=foo['X_train'], output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='density', n_subsample_kde=n_subsample_kde)
-	all_kdes_plot(data=foo['X_train'], output_fname=os.path.join(output_dir,'all_kdes_SLOW.png'))
+	# phase_plot(data=foo['X_train'], output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='density', n_subsample_kde=n_subsample_kde)
+	all_kdes_plot(data=foo['X_train'], output_fname=os.path.join(output_dir,'all_kdes_train_SLOW.png'))
+	all_kdes_plot(data=goo['X_test'], output_fname=os.path.join(output_dir,'all_kdes_test_SLOW.png'))
 	try:
 		phase_plot(data=foo['y_fast'][:,:J], state_names=[r'$Y_{{{ind},1}}$'.format(ind=j+1) for j in range(J)], output_fname=os.path.join(output_dir,'phase_plot_training_data_FAST.png'), delta_t=delta_t, wspace=0.35, hspace=0.35)
 		phase_plot(data=foo['y_fast'][:,:J], state_names=[r'$Y_{{{ind},1}}$'.format(ind=j+1) for j in range(J)], output_fname=os.path.join(output_dir,'phase_plot_training_data_FAST.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='scatter')
-		all_kdes_plot(data=foo['y_fast'][:,:J], output_fname=os.path.join(output_dir,'all_kdes_FAST.png'))
+		all_kdes_plot(data=foo['y_fast'][:,:J], output_fname=os.path.join(output_dir,'all_kdes_train_FAST.png'))
 	except:
 		print('Could not plot fast data...it wasnt saved in old data-generation runs')
 
