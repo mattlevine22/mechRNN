@@ -186,7 +186,9 @@ def run_traintest(testing_fname,
 				'Discrete Full',
 				'Discrete Share',
 				'Continuous Share Y-True',
-				'Continuous Share Y-Approx']
+				'Continuous Share Y-Approx',
+				'Continuous Full Y-True',
+				'Continuous Full Y-Approx']
 
 	# set up acf lags
 	nlags = int(T_acf/delta_t) - 1
@@ -208,7 +210,7 @@ def run_traintest(testing_fname,
 					'ode_int_atol': testcontinuous_ode_int_atol,
 					'ode_int_rtol': testcontinuous_ode_int_rtol,
 					'ode_int_max_step': testcontinuous_ode_int_max_step}
-	make_traj_plots(n_inits=4, sd_perturb=0.01, sim_model_params=sim_model_params, output_dir=output_dir, K=K, J=J, F=F, eps=eps, hx=hx, delta_t=delta_t, T=15, decoupled=False)
+	# make_traj_plots(n_inits=4, sd_perturb=0.01, sim_model_params=sim_model_params, output_dir=output_dir, K=K, J=J, F=F, eps=eps, hx=hx, delta_t=delta_t, T=15, decoupled=False)
 
 
 
@@ -242,6 +244,12 @@ def run_traintest(testing_fname,
 	train_inds = get_inds(N_total=X.shape[0], N_subsample=n_subsample_gp)
 	X_pred = np.arange(np.min(X),np.max(X),0.01).reshape(-1, 1) # mesh to evaluate GPR
 
+	X_full = foo['X_train'][:-1,:]
+	Y_true_full = foo['Ybar_true']
+	Y_inferred_full = foo['Ybar_data_inferred']
+	train_inds_full = get_inds(N_total=X_full.shape[0], N_subsample=n_subsample_gp)
+
+	X_test_full = goo['X_test']
 	X_test = goo['X_test'].reshape(-1,1)
 	t_eval = goo['t_eval']
 	ntsynch = goo['ntsynch']
@@ -249,6 +257,7 @@ def run_traintest(testing_fname,
 	# y0 = goo['y0'][:K]
 	y0 = goo['X_test'][0,:]
 	test_inds = get_inds(N_total=X_test.shape[0], N_subsample=n_subsample_kde)
+	test_inds_full = get_inds(N_total=X_test_full.shape[0], N_subsample=n_subsample_kde)
 	fig, (ax_gp, ax_kde, ax_acf, ax_tvalid) = plt.subplots(1,4,figsize=[24,7])
 	fig_discrete, (ax_gp_discrete, ax_kde_discrete, ax_acf_discrete, ax_tvalid_discrete) = plt.subplots(1,4, figsize=[24,7])
 	t0 = time()
@@ -651,9 +660,9 @@ def run_traintest(testing_fname,
 	T_test_gpr_true_share_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
 	print('Generated invariant measure for GP-true-share:', (time()-t0)/60,'minutes')
 	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_YbarTrue_alpha{alpha}.png'.format(alpha=alpha)))
-	sns.kdeplot(X_test_gpr_true_share[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='-', label='RHS = Slow + GP (True Y-avg)')
-	ax_gp.plot(X_pred, gpr_true_mean, color=color, linestyle='-', label='GP (True Y-avg) ({kernel})'.format(kernel=my_kernel))
-	ax_acf.plot(t_acf_plot, T_test_gpr_true_share_acf, color=color, label='RHS = Slow + GP (True Y-avg)')
+	sns.kdeplot(X_test_gpr_true_share[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='-', label='RHS = Slow + share-GP (True Y-avg)')
+	ax_gp.plot(X_pred, gpr_true_mean, color=color, linestyle='-', label='share-GP (True Y-avg) ({kernel})'.format(kernel=my_kernel))
+	ax_acf.plot(t_acf_plot, T_test_gpr_true_share_acf, color=color, label='RHS = Slow + share-GP (True Y-avg)')
 	ax_acf.legend(loc='best', prop={'size': 8})
 	ax_gp.legend(loc='best', prop={'size': 5.5})
 	ax_kde.legend(loc='lower center', prop={'size': 8})
@@ -685,9 +694,74 @@ def run_traintest(testing_fname,
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
 	fig.savefig(fname=os.path.join(output_dir,'continuous_fits.png'), dpi=300)
 
+	# fit GPR-Ybartrue to Xk vs Ybar-true
+	foo_nm = 'GP_continuous_Ytrue_full'
+	ODE.share_gp = False
+	c += 1
+	color = color_list[c]
+	try:
+		gpr_true_mean_full = master_output_dict[foo_nm+'_mean']
+		my_kernel = master_output_dict[foo_nm+'_kernel']
+	except:
+		gpr_true_full = my_gpr.fit(X=X_full[train_inds_full,:], y=np.mean(ODE.hx)*Y_true_full[train_inds_full,:])
+		my_kernel = my_gpr.kernel_
+		gpr_true_mean_full = gpr_true_full.predict(X_pred_outer, return_std=False)
+		master_output_dict[foo_nm+'_mean'] = gpr_true_mean_full
+		master_output_dict[foo_nm+'_kernel'] = my_kernel
+		np.savez(master_output_fname,**master_output_dict)
+		# now run gp-corrected ODE
+		ODE.set_predictor(gpr_true_full.predict)
+	t0 = time()
+	try:
+		y_clean = master_output_dict[foo_nm+'_y_clean']
+	except:
+		sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=t_eval)
+		y_clean = sol.y.T
+		master_output_dict[foo_nm+'_y_clean'] = y_clean
+		np.savez(master_output_fname,**master_output_dict)
+
+	X_test_gpr_true_full = y_clean[ntsynch:,:K].reshape(-1, 1)
+	T_test_gpr_true_full_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
+	print('Generated invariant measure for GP-true-full:', (time()-t0)/60,'minutes')
+	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_YbarTrue_fullGP_alpha{alpha}.png'.format(alpha=alpha)))
+	sns.kdeplot(X_test_gpr_true_full[test_inds_full].squeeze(), ax=ax_kde, color=color, linestyle='-', label='RHS = Slow + full-GP (True Y-avg)')
+	# ax_gp.plot(X_pred, gpr_true_mean_full, color=color, linestyle='-', label='Full-GP (True Y-avg) ({kernel})'.format(kernel=my_kernel))
+	ax_acf.plot(t_acf_plot, T_test_gpr_true_full_acf, color=color, label='RHS = Slow + full-GP (True Y-avg)')
+	ax_acf.legend(loc='best', prop={'size': 8})
+	ax_gp.legend(loc='best', prop={'size': 5.5})
+	ax_kde.legend(loc='lower center', prop={'size': 8})
+	fig.savefig(fname=output_fname, dpi=300)
+
+	# run model against test trajectories
+	try:
+		test_traj_preds = master_output_dict[foo_nm+'_test_traj_preds']
+		do_compute = False
+	except:
+		test_traj_preds = np.zeros(X_test_traj.shape)
+		do_compute = True
+	for t in range(n_test_traj):
+		if do_compute:
+			ic = X_test_traj[t,0,:]
+			for j in range(X_test_traj.shape[1]):
+				test_traj_preds[t,j,:] = ic # prediction Psi_slow(Xtrue_j)
+				sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=np.array([delta_t]))
+				ic = sol.y.T.squeeze()
+			master_output_dict[foo_nm+'_test_traj_preds'] = test_traj_preds
+			np.savez(master_output_fname,**master_output_dict)
+		# compute traj error
+		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
+		t_valid['Continuous Full Y-True'][t] = tval_foo
+	for ax in [ax_tvalid_discrete, ax_tvalid]:
+		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
+		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
+		ax.set_ylabel('Validity Time')
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
+	fig.savefig(fname=os.path.join(output_dir,'continuous_fits.png'), dpi=300)
+
 
 	# fit GPR-Ybarpprox to Xk vs Ybar-infer
 	foo_nm = 'GP_continuous_Yinfer'
+	ODE.share_gp = True
 	c += 1
 	color = color_list[c]
 	try:
@@ -714,10 +788,10 @@ def run_traintest(testing_fname,
 	X_test_gpr_approx_share = y_clean[ntsynch:,:K].reshape(-1, 1)
 	T_test_gpr_approx_share_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
 	print('Generated invariant measure for GP-approx-share:', (time()-t0)/60,'minutes')
-	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_YbarInfer_alpha{alpha}.png'.format(alpha=alpha)))
-	sns.kdeplot(X_test_gpr_approx_share[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='--', label='RHS = Slow + GP (Approx Y-avg)')
-	ax_gp.plot(X_pred, gpr_approx_mean, color=color, linestyle='--', label='GP (Inferred Y-avg) ({kernel})'.format(kernel=my_kernel))
-	ax_acf.plot(t_acf_plot, T_test_gpr_approx_share_acf, color=color, label='RHS = Slow + GP (Inferred Y-avg)')
+	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_YbarInfer_shareGP_alpha{alpha}.png'.format(alpha=alpha)))
+	sns.kdeplot(X_test_gpr_approx_share[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='--', label='RHS = Slow + share-GP (Approx Y-avg)')
+	ax_gp.plot(X_pred, gpr_approx_mean, color=color, linestyle='--', label='share-GP (Inferred Y-avg) ({kernel})'.format(kernel=my_kernel))
+	ax_acf.plot(t_acf_plot, T_test_gpr_approx_share_acf, color=color, label='RHS = Slow + share-GP (Inferred Y-avg)')
 	ax_gp.legend(loc='best', prop={'size': 5.5})
 	ax_acf.legend(loc='best', prop={'size': 8})
 	ax_kde.legend(loc='lower center', prop={'size': 8})
@@ -749,6 +823,72 @@ def run_traintest(testing_fname,
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
 	fig.savefig(fname=os.path.join(output_dir,'continuous_fits.png'), dpi=300)
 
+
+	# fit GPR-Ybarpprox to Xk vs Ybar-infer
+	foo_nm = 'GP_continuous_Yinfer_full'
+	ODE.share_gp = False
+	c += 1
+	color = color_list[c]
+	try:
+		gpr_approx_mean_full = master_output_dict[foo_nm+'_mean']
+		my_kernel = master_output_dict[foo_nm+'_kernel']
+	except:
+		gpr_approx_full = my_gpr.fit(X=X_full[train_inds_full,:], y=np.mean(ODE.hx)*Y_inferred_full[train_inds_full,:])
+		my_kernel = my_gpr.kernel_
+		gpr_approx_mean_full = gpr_approx_full.predict(X_pred_outer, return_std=False)
+		master_output_dict[foo_nm+'_mean'] = gpr_approx_mean
+		master_output_dict[foo_nm+'_kernel'] = my_kernel
+		np.savez(master_output_fname,**master_output_dict)
+		# now run gp-corrected ODE
+		ODE.set_predictor(gpr_approx_full.predict)
+	t0 = time()
+
+	try:
+		y_clean = master_output_dict[foo_nm+'_y_clean']
+	except:
+		sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(t_eval[0], t_eval[-1]), y0=y0, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=t_eval)
+		y_clean = sol.y.T
+		master_output_dict[foo_nm+'_y_clean'] = y_clean
+		np.savez(master_output_fname,**master_output_dict)
+	X_test_gpr_approx_full = y_clean[ntsynch:,:K].reshape(-1, 1)
+	T_test_gpr_approx_full_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
+	print('Generated invariant measure for GP-approx-full:', (time()-t0)/60,'minutes')
+	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_YbarInfer_fullGP_alpha{alpha}.png'.format(alpha=alpha)))
+	sns.kdeplot(X_test_gpr_approx_full[test_inds_full].squeeze(), ax=ax_kde, color=color, linestyle='--', label='RHS = Slow + full-GP (Approx Y-avg)')
+	ax_gp.plot(X_pred, gpr_approx_mean, color=color, linestyle='--', label='full-GP (Inferred Y-avg) ({kernel})'.format(kernel=my_kernel))
+	ax_acf.plot(t_acf_plot, T_test_gpr_approx_full_acf, color=color, label='RHS = Slow + full-GP (Inferred Y-avg)')
+	ax_gp.legend(loc='best', prop={'size': 5.5})
+	ax_acf.legend(loc='best', prop={'size': 8})
+	ax_kde.legend(loc='lower center', prop={'size': 8})
+	fig.savefig(fname=output_fname, dpi=300)
+
+	# run model against test trajectories
+	try:
+		test_traj_preds = master_output_dict[foo_nm+'_test_traj_preds']
+		do_compute = False
+	except:
+		test_traj_preds = np.zeros(X_test_traj.shape)
+		do_compute = True
+	for t in range(n_test_traj):
+		if do_compute:
+			ic = X_test_traj[t,0,:]
+			for j in range(X_test_traj.shape[1]):
+				test_traj_preds[t,j,:] = ic # prediction Psi_slow(Xtrue_j)
+				sol = solve_ivp(fun=lambda t, y: ODE.regressed(y, t), t_span=(0, delta_t), y0=ic, method=testcontinuous_ode_int_method, rtol=testcontinuous_ode_int_rtol, atol=testcontinuous_ode_int_atol, max_step=testcontinuous_ode_int_max_step, t_eval=np.array([delta_t]))
+				ic = sol.y.T.squeeze()
+			master_output_dict[foo_nm+'_test_traj_preds'] = test_traj_preds
+			np.savez(master_output_fname,**master_output_dict)
+		# compute traj error
+		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
+		t_valid['Continuous Full Y-Approx'][t] = tval_foo
+	for ax in [ax_tvalid_discrete, ax_tvalid]:
+		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
+		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
+		ax.set_ylabel('Validity Time')
+	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
+	fig.savefig(fname=os.path.join(output_dir,'continuous_fits.png'), dpi=300)
+
+
 	# save figure after each loop
 	# np.savez(os.path.join(output_dir,'test_output_continuous_{alpha}.npz'.format(alpha=alpha)),
 	# 		X_test_gpr_true_share=X_test_gpr_true_share,
@@ -772,7 +912,9 @@ def run_traintest(testing_fname,
 				'Discrete Full': {'color':color_list[0], 'linestyle':'--'},
 				'Discrete Share': {'color':'purple', 'linestyle':'--'},
 				'Continuous Share Y-True': {'color':color_list[2], 'linestyle':'-'},
-				'Continuous Share Y-Approx': {'color':color_list[3], 'linestyle':'-'}
+				'Continuous Share Y-Approx': {'color':color_list[3], 'linestyle':'-'},
+				'Continuous Full Y-True': {'color':color_list[1], 'linestyle':'-'},
+				'Continuous Full Y-Approx': {'color':color_list[5], 'linestyle':'-'}
 			}
 
 	palette = {key: plot_dict[key]['color'] for key in plot_dict}
@@ -782,7 +924,9 @@ def run_traintest(testing_fname,
 				'Discrete Full': X_test_gpr_discrete_full,
 				'Discrete Share': X_test_gpr_discrete_share,
 				'Continuous Share Y-True': X_test_gpr_true_share,
-				'Continuous Share Y-Approx': X_test_gpr_approx_share
+				'Continuous Share Y-Approx': X_test_gpr_approx_share,
+				'Continuous Full Y-True': X_test_gpr_true_full,
+				'Continuous Full Y-Approx': X_test_gpr_approx_full
 			}
 
 	acf_dict = {'RHS = Full Multiscale': T_test_acf,
@@ -790,7 +934,9 @@ def run_traintest(testing_fname,
 			'Discrete Full': T_test_gpr_discrete_full_acf,
 			'Discrete Share': T_test_gpr_discrete_share_acf,
 			'Continuous Share Y-True': T_test_gpr_true_share_acf,
-			'Continuous Share Y-Approx': T_test_gpr_approx_share_acf
+			'Continuous Share Y-Approx': T_test_gpr_approx_share_acf,
+			'Continuous Full Y-True': T_test_gpr_true_full_acf,
+			'Continuous Full Y-Approx': T_test_gpr_approx_full_acf
 		}
 
 	acf_error_dict = {key: np.linalg.norm(acf_dict[key]-T_test_acf) for key in acf_dict}
