@@ -741,6 +741,8 @@ def run_traintest(testing_fname,
 	try:
 		gpr_true_mean_full = master_output_dict[foo_nm+'_mean']
 		my_kernel = master_output_dict[foo_nm+'_kernel']
+		if gpr_true_mean_full.shape[0]!=X_full.shape[0]:
+			raise
 	except:
 		gpr_true_full = my_gpr.fit(X=X_full[train_inds_full,:], y=np.mean(ODE.hx)*Y_true_full[train_inds_full,:])
 		my_kernel = my_gpr.kernel_
@@ -877,6 +879,8 @@ def run_traintest(testing_fname,
 	try:
 		gpr_approx_mean_full = master_output_dict[foo_nm+'_mean']
 		my_kernel = master_output_dict[foo_nm+'_kernel']
+		if gpr_approx_mean_full.shape[0]!=X_full.shape[0]:
+			raise
 	except:
 		gpr_approx_full = my_gpr.fit(X=X_full[train_inds_full,:], y=np.mean(ODE.hx)*Y_inferred_full[train_inds_full,:])
 		my_kernel = my_gpr.kernel_
