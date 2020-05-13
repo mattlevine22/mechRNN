@@ -486,6 +486,8 @@ def run_traintest(testing_fname,
 		gpr_discrete_full_mean = master_output_dict[foo_nm+'_mean']
 		my_kernel = master_output_dict[foo_nm+'_kernel']
 		gpr_discrete_full_mean_shift = master_output_dict[foo_nm+'_mean_shift']
+		if gpr_discrete_full_mean.shape[0]!= X_train_gp.shape[0]
+			raise
 	except:
 		gpr_discrete_full = my_gpr.fit(X=X_train_gp[gp_train_inds_full,:], y=y_train_gp[gp_train_inds_full,:]/delta_t)
 		my_kernel = my_gpr.kernel_
@@ -576,6 +578,8 @@ def run_traintest(testing_fname,
 	try:
 		gpr_discrete_share_mean = master_output_dict[foo_nm+'_mean']
 		my_kernel = master_output_dict[foo_nm+'_kernel']
+		if gpr_discrete_share_mean.shape[0]!= X_pred.shape[0]
+			raise
 	except:
 		gpr_discrete_share = my_gpr.fit(X=X_train_gp.reshape(-1,1)[gp_train_inds_share], y=y_train_gp.reshape(-1,1)[gp_train_inds_share]/delta_t)
 		my_kernel = my_gpr.kernel_
@@ -685,6 +689,8 @@ def run_traintest(testing_fname,
 	try:
 		gpr_true_mean = master_output_dict[foo_nm+'_mean']
 		my_kernel = master_output_dict[foo_nm+'_kernel']
+		if gpr_true_mean.shape[0]!= X_pred.shape[0]
+			raise
 	except:
 		gpr_true = my_gpr.fit(X=X[train_inds], y=np.mean(ODE.hx)*Y_true[train_inds])
 		my_kernel = my_gpr.kernel_
@@ -827,6 +833,8 @@ def run_traintest(testing_fname,
 	try:
 		gpr_approx_mean = master_output_dict[foo_nm+'_mean']
 		my_kernel = master_output_dict[foo_nm+'_kernel']
+		if gpr_approx_mean.shape[0]!= X_pred.shape[0]
+			raise
 	except:
 		gpr_approx = my_gpr.fit(X=X[train_inds], y=np.mean(ODE.hx)*Y_inferred[train_inds])
 		my_kernel = my_gpr.kernel_
