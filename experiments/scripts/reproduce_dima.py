@@ -217,8 +217,6 @@ def run_traintest(testing_fname,
 	state_limits = ODE.get_state_limits()
 
 
-
-
 	# get initial colors
 	prop_cycle = plt.rcParams['axes.prop_cycle']
 	color_list = prop_cycle.by_key()['color']
@@ -240,14 +238,21 @@ def run_traintest(testing_fname,
 	X = foo['X_train'][:-1,:].reshape(-1,1)
 	Y_true = foo['Ybar_true'].reshape(-1,1)
 	Y_inferred = foo['Ybar_data_inferred'].reshape(-1,1)
-	train_inds = get_inds(N_total=X.shape[0], N_subsample=n_subsample_gp)
+	try:
+		train_inds = master_output_dict['train_inds']
+	except:
+		train_inds = get_inds(N_total=X.shape[0], N_subsample=n_subsample_gp)
+		master_output_dict['train_inds'] = train_inds
 	X_pred = np.arange(np.min(X),np.max(X),0.01).reshape(-1, 1) # mesh to evaluate GPR
 
 	X_full = foo['X_train'][:-1,:]
 	Y_true_full = foo['Ybar_true']
 	Y_inferred_full = foo['Ybar_data_inferred']
-	train_inds_full = get_inds(N_total=X_full.shape[0], N_subsample=n_subsample_gp)
-
+	try:
+		train_inds_full = master_output_dict['train_inds_full']
+	except:
+		train_inds_full = get_inds(N_total=X_full.shape[0], N_subsample=n_subsample_gp)
+		master_output_dict['train_inds_full'] = train_inds_full
 	X_test_full = goo['X_test']
 	X_test = goo['X_test'].reshape(-1,1)
 	t_eval = goo['t_eval']
@@ -255,8 +260,17 @@ def run_traintest(testing_fname,
 	K = goo['K']
 	# y0 = goo['y0'][:K]
 	y0 = goo['X_test'][0,:]
-	test_inds = get_inds(N_total=X_test.shape[0], N_subsample=n_subsample_kde)
-	test_inds_full = get_inds(N_total=X_test_full.shape[0], N_subsample=n_subsample_kde)
+	try:
+		test_inds = master_output_dict['test_inds']
+	except:
+		test_inds = get_inds(N_total=X_test.shape[0], N_subsample=n_subsample_kde)
+		master_output_dict['test_inds'] = test_inds
+	try:
+		test_inds_full = master_output_dict['test_inds_full']
+	except:
+		test_inds_full = get_inds(N_total=X_test_full.shape[0], N_subsample=n_subsample_kde)
+		master_output_dict['test_inds_full'] = test_inds_full
+	fig_full, (ax_gp_cont_full, ax_gp_discrete_full, ax_gp_full) = plt.subplots(1,3,figsize=[18,7])
 	fig, (ax_gp, ax_kde, ax_acf, ax_tvalid) = plt.subplots(1,4,figsize=[24,7])
 	fig_discrete, (ax_gp_discrete, ax_kde_discrete, ax_acf_discrete, ax_tvalid_discrete) = plt.subplots(1,4, figsize=[24,7])
 	t0 = time()
@@ -272,6 +286,14 @@ def run_traintest(testing_fname,
 	X_test_traj = goo['X_test_traj']
 	n_test_traj = X_test_traj.shape[0]
 	t_valid = {nm: np.nan*np.ones(n_test_traj) for nm in name_list}
+
+	# plot FULL training data
+	ax_gp_cont_full.plot(np.linalg.norm(X_full,axis=1), np.linalg.norm(np.mean(ODE.hx)*Y_true_full,axis=1), 'o', markersize=2, color='gray', alpha=0.8, label='True Training Data (all)')
+	ax_gp_cont_full.plot(np.linalg.norm(X_full[train_inds_full,:],axis=1), np.linalg.norm(np.mean(ODE.hx)*Y_true_full[train_inds_full,:],axis=1), 'o', markersize=2, color='red', alpha=0.8, label='True Training Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
+	ax_gp_cont_full.plot(np.linalg.norm(X_full[train_inds_full,:],axis=1), np.linalg.norm(np.mean(ODE.hx)*Y_inferred_full[train_inds_full,:],axis=1), '+', linewidth=1, markersize=3, markeredgewidth=1, color='green', alpha=0.8, label='Approximate Training Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
+	ax_gp_cont_full.legend(loc='best', prop={'size': 5.5})
+	fig_full.savefig(fname=os.path.join(output_dir,'gp_full_fits.png'), dpi=300)
+
 
 	# plot training data
 	ax_gp.plot(X, np.mean(ODE.hx)*Y_true, 'o', markersize=2, color='gray', alpha=0.8, label='True Training Data (all)')
@@ -421,8 +443,21 @@ def run_traintest(testing_fname,
 	ax_gp_discrete.set_ylabel(r'$[X^{(n+1)}_k - \Psi_0(X^{(n)})_k] / \Delta t$')
 	ax_gp_discrete.legend(loc='best', prop={'size': 4})
 
+	# Full GPs
+	ax_gp_discrete_full.plot(np.linalg.norm(X_train_gp,axis=1), np.linalg.norm(y_train_gp,axis=1)/delta_t, 'o', markersize=2, color='gray', alpha=0.8, label='Training Data (all)')
+	ax_gp_discrete_full.plot(np.linalg.norm(X_train_gp[gp_train_inds_full,:],axis=1), np.linalg.norm(y_train_gp[gp_train_inds_full,:],axis=1)/delta_t, '+', linewidth=1, markersize=3, markeredgewidth=1, color='cyan', alpha=0.8, label='GP-full Discrete Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
+	# ax_gp_discrete_full.plot(np.linalg.norm(X_full[train_inds_full,:],axis=1), np.linalg.norm(np.mean(ODE.hx)*Y_true[train_inds_full,:],axis=1), 'o', markersize=2, color='red', alpha=0.8, label='True Continuous Training Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
+	# ax_gp_discrete_full.plot(np.linalg.norm(X_full[train_inds_full,:],axis=1), np.linalg.norm(np.mean(ODE.hx)*Y_inferred[train_inds_full,:],axis=1), '+', linewidth=1, markersize=3, markeredgewidth=1, color='green', alpha=0.8, label='Approximate Continuous Training Data (subset={n_subsample_gp})'.format(n_subsample_gp=n_subsample_gp))
+
+	# fig_discrete.suptitle('GPR fits to errors of discrete slow-only forward-map')
+	ax_gp_discrete_full.set_xlabel(r'$||X^{(n)}||$')
+	ax_gp_discrete_full.set_ylabel(r'$||X^{(n+1)} - \Psi_0(X^{(n)})|| / \Delta t$')
+	ax_gp_discrete_full.legend(loc='best', prop={'size': 4})
+
+
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
 	fig.savefig(fname=os.path.join(output_dir,'continuous_fits.png'), dpi=300)
+	fig_full.savefig(fname=os.path.join(output_dir,'gp_full_fits.png'), dpi=300)
 
 	# color = color_list[c]
 	# print('alpha=',alpha, color)
@@ -449,7 +484,7 @@ def run_traintest(testing_fname,
 	except:
 		gpr_discrete_full = my_gpr.fit(X=X_train_gp[gp_train_inds_full,:], y=y_train_gp[gp_train_inds_full,:]/delta_t)
 		my_kernel = my_gpr.kernel_
-		gpr_discrete_full_mean = gpr_discrete_full.predict(X_pred_outer, return_std=False) # evaluate at [0,0,0,0], [0.01,0.01,0.01,0.01], etc.
+		gpr_discrete_full_mean = gpr_discrete_full.predict(X_train_gp, return_std=False) # evaluate at [0,0,0,0], [0.01,0.01,0.01,0.01], etc.
 		master_output_dict[foo_nm+'_mean'] = gpr_discrete_full_mean
 		master_output_dict[foo_nm+'_kernel'] = my_kernel
 		np.savez(master_output_fname,**master_output_dict)
@@ -478,6 +513,9 @@ def run_traintest(testing_fname,
 		master_output_dict[foo_nm+'_y_clean'] = y_clean
 		np.savez(master_output_fname,**master_output_dict)
 
+	# Plot FULL stuff
+	ax_gp_discrete_full.plot(np.linalg.norm(X_train_gp,axis=1), np.linalg.norm(gpr_discrete_full_mean,axis=1), 's', linewidth=1, markersize=3, markeredgewidth=1, color=color, alpha=0.8, label='GP-full ({kernel})'.format(kernel=my_kernel))
+
 	X_test_gpr_discrete_full = y_clean[ntsynch:,:K].reshape(-1, 1)
 	T_test_gpr_discrete_full_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
 	print('Generated invariant measure for GP-discrete-full:', (time()-t0)/60,'minutes')
@@ -488,7 +526,9 @@ def run_traintest(testing_fname,
 	ax_gp_discrete.legend(loc='best', prop={'size': 5.5})
 	ax_kde_discrete.legend(loc='lower center', prop={'size': 8})
 	ax_acf_discrete.legend(loc='best', prop={'size': 8})
+	ax_gp_discrete_full.legend(loc='best', prop={'size': 4})
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
+	fig_full.savefig(fname=os.path.join(output_dir,'gp_full_fits.png'), dpi=300)
 
 	# run model against test trajectories
 	try:
@@ -704,7 +744,7 @@ def run_traintest(testing_fname,
 	except:
 		gpr_true_full = my_gpr.fit(X=X_full[train_inds_full,:], y=np.mean(ODE.hx)*Y_true_full[train_inds_full,:])
 		my_kernel = my_gpr.kernel_
-		gpr_true_mean_full = gpr_true_full.predict(X_pred_outer, return_std=False)
+		gpr_true_mean_full = gpr_true_full.predict(X_full, return_std=False)
 		master_output_dict[foo_nm+'_mean'] = gpr_true_mean_full
 		master_output_dict[foo_nm+'_kernel'] = my_kernel
 		np.savez(master_output_fname,**master_output_dict)
@@ -719,17 +759,23 @@ def run_traintest(testing_fname,
 		master_output_dict[foo_nm+'_y_clean'] = y_clean
 		np.savez(master_output_fname,**master_output_dict)
 
+	# plot FULL stuff
+	ax_gp_full.plot(np.linalg.norm(X_full,axis=1), np.linalg.norm(gpr_true_mean_full,axis=1), 's', linewidth=1, markersize=3, markeredgewidth=1, color=color, alpha=0.8, label='full-GP (True Y-avg) ({kernel})'.format(kernel=my_kernel))
+	ax_gp_cont_full.plot(np.linalg.norm(X_full,axis=1), np.linalg.norm(gpr_true_mean_full,axis=1), 's', linewidth=1, markersize=3, markeredgewidth=1, color=color, alpha=0.8, label='full-GP (True Y-avg) ({kernel})'.format(kernel=my_kernel))
+
+
 	X_test_gpr_true_full = y_clean[ntsynch:,:K].reshape(-1, 1)
 	T_test_gpr_true_full_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
 	print('Generated invariant measure for GP-true-full:', (time()-t0)/60,'minutes')
 	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_YbarTrue_fullGP_alpha{alpha}.png'.format(alpha=alpha)))
 	sns.kdeplot(X_test_gpr_true_full[test_inds_full].squeeze(), ax=ax_kde, color=color, linestyle='-', label='RHS = Slow + full-GP (True Y-avg)')
-	# ax_gp.plot(X_pred, gpr_true_mean_full, color=color, linestyle='-', label='Full-GP (True Y-avg) ({kernel})'.format(kernel=my_kernel))
 	ax_acf.plot(t_acf_plot, T_test_gpr_true_full_acf, color=color, label='RHS = Slow + full-GP (True Y-avg)')
 	ax_acf.legend(loc='best', prop={'size': 8})
 	ax_gp.legend(loc='best', prop={'size': 5.5})
+	ax_gp_full.legend(loc='best', prop={'size': 5.5})
 	ax_kde.legend(loc='lower center', prop={'size': 8})
 	fig.savefig(fname=output_fname, dpi=300)
+	fig_full.savefig(fname=os.path.join(output_dir,'gp_full_fits.png'), dpi=300)
 
 	# run model against test trajectories
 	try:
@@ -834,8 +880,8 @@ def run_traintest(testing_fname,
 	except:
 		gpr_approx_full = my_gpr.fit(X=X_full[train_inds_full,:], y=np.mean(ODE.hx)*Y_inferred_full[train_inds_full,:])
 		my_kernel = my_gpr.kernel_
-		gpr_approx_mean_full = gpr_approx_full.predict(X_pred_outer, return_std=False)
-		master_output_dict[foo_nm+'_mean'] = gpr_approx_mean
+		gpr_approx_mean_full = gpr_approx_full.predict(X_full, return_std=False)
+		master_output_dict[foo_nm+'_mean'] = gpr_approx_mean_full
 		master_output_dict[foo_nm+'_kernel'] = my_kernel
 		np.savez(master_output_fname,**master_output_dict)
 		# now run gp-corrected ODE
@@ -849,17 +895,23 @@ def run_traintest(testing_fname,
 		y_clean = sol.y.T
 		master_output_dict[foo_nm+'_y_clean'] = y_clean
 		np.savez(master_output_fname,**master_output_dict)
+
+	# plot FULL stuff
+	ax_gp_full.plot(np.linalg.norm(X_full,axis=1), np.linalg.norm(gpr_approx_mean_full,axis=1), 's', linewidth=1, markersize=3, markeredgewidth=1, color=color, alpha=0.8, label='share-GP (Approx Y-avg) ({kernel})'.format(kernel=my_kernel))
+
 	X_test_gpr_approx_full = y_clean[ntsynch:,:K].reshape(-1, 1)
 	T_test_gpr_approx_full_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
 	print('Generated invariant measure for GP-approx-full:', (time()-t0)/60,'minutes')
 	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_YbarInfer_fullGP_alpha{alpha}.png'.format(alpha=alpha)))
 	sns.kdeplot(X_test_gpr_approx_full[test_inds_full].squeeze(), ax=ax_kde, color=color, linestyle='--', label='RHS = Slow + full-GP (Approx Y-avg)')
-	ax_gp.plot(X_pred, gpr_approx_mean, color=color, linestyle='--', label='full-GP (Inferred Y-avg) ({kernel})'.format(kernel=my_kernel))
+	# ax_gp.plot(X_pred, gpr_approx_mean, color=color, linestyle='--', label='full-GP (Inferred Y-avg) ({kernel})'.format(kernel=my_kernel))
 	ax_acf.plot(t_acf_plot, T_test_gpr_approx_full_acf, color=color, label='RHS = Slow + full-GP (Inferred Y-avg)')
 	ax_gp.legend(loc='best', prop={'size': 5.5})
+	ax_gp_full.legend(loc='best', prop={'size': 5.5})
 	ax_acf.legend(loc='best', prop={'size': 8})
 	ax_kde.legend(loc='lower center', prop={'size': 8})
 	fig.savefig(fname=output_fname, dpi=300)
+	fig_full.savefig(fname=os.path.join(output_dir,'gp_full_fits.png'), dpi=300)
 
 	# run model against test trajectories
 	try:
