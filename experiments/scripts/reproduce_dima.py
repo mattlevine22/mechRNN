@@ -270,7 +270,7 @@ def run_traintest(testing_fname,
 	except:
 		test_inds_full = get_inds(N_total=X_test_full.shape[0], N_subsample=n_subsample_kde)
 		master_output_dict['test_inds_full'] = test_inds_full
-	fig_full, (ax_gp_cont_full, ax_gp_discrete_full, ax_gp_full) = plt.subplots(1,3,figsize=[18,7])
+	fig_full, (ax_gp_cont_full, ax_gp_discrete_full, ax_gp_full, ax_gp_shift) = plt.subplots(1,4,figsize=[24,7])
 	fig, (ax_gp, ax_kde, ax_acf, ax_tvalid) = plt.subplots(1,4,figsize=[24,7])
 	fig_discrete, (ax_gp_discrete, ax_kde_discrete, ax_acf_discrete, ax_tvalid_discrete) = plt.subplots(1,4, figsize=[24,7])
 	t0 = time()
@@ -455,6 +455,10 @@ def run_traintest(testing_fname,
 	ax_gp_discrete_full.legend(loc='best', prop={'size': 4})
 
 
+	ax_gp_shift.set_xlabel(r'$||g(X)||$')
+	ax_gp_shift.set_ylabel(r'$||g(X) - g(X_s)|| / ||g(X)||$')
+	ax_gp_shift.set_title('Relative GP-shift error')
+
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
 	fig.savefig(fname=os.path.join(output_dir,'continuous_fits.png'), dpi=300)
 	fig_full.savefig(fname=os.path.join(output_dir,'gp_full_fits.png'), dpi=300)
@@ -481,10 +485,13 @@ def run_traintest(testing_fname,
 	try:
 		gpr_discrete_full_mean = master_output_dict[foo_nm+'_mean']
 		my_kernel = master_output_dict[foo_nm+'_kernel']
+		gpr_discrete_full_mean_shift = master_output_dict[foo_nm+'_mean_shift']
 	except:
 		gpr_discrete_full = my_gpr.fit(X=X_train_gp[gp_train_inds_full,:], y=y_train_gp[gp_train_inds_full,:]/delta_t)
 		my_kernel = my_gpr.kernel_
 		gpr_discrete_full_mean = gpr_discrete_full.predict(X_train_gp, return_std=False) # evaluate at [0,0,0,0], [0.01,0.01,0.01,0.01], etc.
+		gpr_discrete_full_mean_shift = gpr_discrete_full.predict(np.roll(X_train_gp,1,axis=1), return_std=False)
+		master_output_dict[foo_nm+'_mean_shift'] = gpr_discrete_full_mean_shift
 		master_output_dict[foo_nm+'_mean'] = gpr_discrete_full_mean
 		master_output_dict[foo_nm+'_kernel'] = my_kernel
 		np.savez(master_output_fname,**master_output_dict)
@@ -515,6 +522,7 @@ def run_traintest(testing_fname,
 
 	# Plot FULL stuff
 	ax_gp_discrete_full.plot(np.linalg.norm(X_train_gp,axis=1), np.linalg.norm(gpr_discrete_full_mean,axis=1), 's', linewidth=1, markersize=3, markeredgewidth=1, color=color, alpha=0.8, label='GP-full ({kernel})'.format(kernel=my_kernel))
+	ax_gp_shift.plot(np.linalg.norm(gpr_discrete_full_mean,axis=1), np.linalg.norm(gpr_discrete_full_mean_shift-gpr_discrete_full_mean,axis=1) / np.linalg.norm(gpr_discrete_full_mean,axis=1), 'o', linewidth=1, markersize=3, markeredgewidth=1, color=color, alpha=0.8, label='GP-full')
 
 	X_test_gpr_discrete_full = y_clean[ntsynch:,:K].reshape(-1, 1)
 	T_test_gpr_discrete_full_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
@@ -741,12 +749,15 @@ def run_traintest(testing_fname,
 	try:
 		gpr_true_mean_full = master_output_dict[foo_nm+'_mean']
 		my_kernel = master_output_dict[foo_nm+'_kernel']
+		gpr_true_mean_full_shift = master_output_dict[foo_nm+'_mean_shift']
 		if gpr_true_mean_full.shape[0]!=X_full.shape[0]:
 			raise
 	except:
 		gpr_true_full = my_gpr.fit(X=X_full[train_inds_full,:], y=np.mean(ODE.hx)*Y_true_full[train_inds_full,:])
 		my_kernel = my_gpr.kernel_
 		gpr_true_mean_full = gpr_true_full.predict(X_full, return_std=False)
+		gpr_true_mean_full_shift = gpr_true_full.predict(np.roll(X_full,1,axis=1), return_std=False)
+		master_output_dict[foo_nm+'_mean_shift'] = gpr_true_mean_full_shift
 		master_output_dict[foo_nm+'_mean'] = gpr_true_mean_full
 		master_output_dict[foo_nm+'_kernel'] = my_kernel
 		np.savez(master_output_fname,**master_output_dict)
@@ -764,6 +775,7 @@ def run_traintest(testing_fname,
 	# plot FULL stuff
 	ax_gp_full.plot(np.linalg.norm(X_full,axis=1), np.linalg.norm(gpr_true_mean_full,axis=1), 's', linewidth=1, markersize=3, markeredgewidth=1, color=color, alpha=0.8, label='full-GP (True Y-avg) ({kernel})'.format(kernel=my_kernel))
 	ax_gp_cont_full.plot(np.linalg.norm(X_full,axis=1), np.linalg.norm(gpr_true_mean_full,axis=1), 's', linewidth=1, markersize=3, markeredgewidth=1, color=color, alpha=0.8, label='full-GP (True Y-avg) ({kernel})'.format(kernel=my_kernel))
+	ax_gp_shift.plot(np.linalg.norm(gpr_true_mean_full,axis=1), np.linalg.norm(gpr_true_mean_full-gpr_true_mean_full_shift,axis=1) / np.linalg.norm(gpr_true_mean_full,axis=1), 'o', linewidth=1, markersize=3, markeredgewidth=1, color=color, alpha=0.8, label='full-GP (True Y-avg)')
 
 
 	X_test_gpr_true_full = y_clean[ntsynch:,:K].reshape(-1, 1)
@@ -775,6 +787,7 @@ def run_traintest(testing_fname,
 	ax_acf.legend(loc='best', prop={'size': 8})
 	ax_gp.legend(loc='best', prop={'size': 5.5})
 	ax_gp_full.legend(loc='best', prop={'size': 5.5})
+	ax_gp_shift.legend(loc='best', prop={'size': 5.5})
 	ax_kde.legend(loc='lower center', prop={'size': 8})
 	fig.savefig(fname=output_fname, dpi=300)
 	fig_full.savefig(fname=os.path.join(output_dir,'gp_full_fits.png'), dpi=300)
@@ -879,12 +892,15 @@ def run_traintest(testing_fname,
 	try:
 		gpr_approx_mean_full = master_output_dict[foo_nm+'_mean']
 		my_kernel = master_output_dict[foo_nm+'_kernel']
+		gpr_approx_mean_full_shift = master_output_dict[foo_nm+'_mean_shift']
 		if gpr_approx_mean_full.shape[0]!=X_full.shape[0]:
 			raise
 	except:
 		gpr_approx_full = my_gpr.fit(X=X_full[train_inds_full,:], y=np.mean(ODE.hx)*Y_inferred_full[train_inds_full,:])
 		my_kernel = my_gpr.kernel_
 		gpr_approx_mean_full = gpr_approx_full.predict(X_full, return_std=False)
+		gpr_approx_mean_full_shift = gpr_approx_full.predict(np.roll(X_full,1,axis=1), return_std=False)
+		master_output_dict[foo_nm+'_mean_shift'] = gpr_approx_mean_full_shift
 		master_output_dict[foo_nm+'_mean'] = gpr_approx_mean_full
 		master_output_dict[foo_nm+'_kernel'] = my_kernel
 		np.savez(master_output_fname,**master_output_dict)
@@ -901,7 +917,8 @@ def run_traintest(testing_fname,
 		np.savez(master_output_fname,**master_output_dict)
 
 	# plot FULL stuff
-	ax_gp_full.plot(np.linalg.norm(X_full,axis=1), np.linalg.norm(gpr_approx_mean_full,axis=1), 's', linewidth=1, markersize=3, markeredgewidth=1, color=color, alpha=0.8, label='share-GP (Approx Y-avg) ({kernel})'.format(kernel=my_kernel))
+	ax_gp_full.plot(np.linalg.norm(X_full,axis=1), np.linalg.norm(gpr_approx_mean_full,axis=1), 's', linewidth=1, markersize=3, markeredgewidth=1, color=color, alpha=0.8, label='full-GP (Approx Y-avg) ({kernel})'.format(kernel=my_kernel))
+	ax_gp_shift.plot(np.linalg.norm(gpr_approx_mean_full,axis=1), np.linalg.norm(gpr_approx_mean_full-gpr_approx_mean_full_shift,axis=1) / np.linalg.norm(gpr_approx_mean_full,axis=1), 'o', linewidth=1, markersize=3, markeredgewidth=1, color=color, alpha=0.8, label='full-GP (Approx Y-avg)')
 
 	X_test_gpr_approx_full = y_clean[ntsynch:,:K].reshape(-1, 1)
 	T_test_gpr_approx_full_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
@@ -912,6 +929,7 @@ def run_traintest(testing_fname,
 	ax_acf.plot(t_acf_plot, T_test_gpr_approx_full_acf, color=color, label='RHS = Slow + full-GP (Inferred Y-avg)')
 	ax_gp.legend(loc='best', prop={'size': 5.5})
 	ax_gp_full.legend(loc='best', prop={'size': 5.5})
+	ax_gp_shift.legend(loc='best', prop={'size': 5.5})
 	ax_acf.legend(loc='best', prop={'size': 8})
 	ax_kde.legend(loc='lower center', prop={'size': 8})
 	fig.savefig(fname=output_fname, dpi=300)
