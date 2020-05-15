@@ -1,4 +1,5 @@
 import argparse
+import numpy as np
 import json
 from time import time
 from utils import str2bool
