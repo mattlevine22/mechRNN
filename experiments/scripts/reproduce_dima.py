@@ -456,7 +456,7 @@ def run_traintest(testing_fname,
 
 
 	ax_gp_shift.set_xlabel(r'$||g(X)||$')
-	ax_gp_shift.set_ylabel(r'$||g(X) - g(X_s)|| / ||g(X)||$')
+	ax_gp_shift.set_ylabel(r'$||g(X) - g_s(X_s)|| / ||g(X)||$')
 	ax_gp_shift.set_title('Relative GP-shift error')
 
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
@@ -492,7 +492,7 @@ def run_traintest(testing_fname,
 		gpr_discrete_full = my_gpr.fit(X=X_train_gp[gp_train_inds_full,:], y=y_train_gp[gp_train_inds_full,:]/delta_t)
 		my_kernel = my_gpr.kernel_
 		gpr_discrete_full_mean = gpr_discrete_full.predict(X_train_gp, return_std=False) # evaluate at [0,0,0,0], [0.01,0.01,0.01,0.01], etc.
-		gpr_discrete_full_mean_shift = gpr_discrete_full.predict(np.roll(X_train_gp,1,axis=1), return_std=False)
+		gpr_discrete_full_mean_shift = np.roll(gpr_discrete_full.predict(np.roll(X_train_gp,1,axis=1), return_std=False), -1, axis=1)
 		master_output_dict[foo_nm+'_mean_shift'] = gpr_discrete_full_mean_shift
 		master_output_dict[foo_nm+'_mean'] = gpr_discrete_full_mean
 		master_output_dict[foo_nm+'_kernel'] = my_kernel
@@ -762,7 +762,7 @@ def run_traintest(testing_fname,
 		gpr_true_full = my_gpr.fit(X=X_full[train_inds_full,:], y=np.mean(ODE.hx)*Y_true_full[train_inds_full,:])
 		my_kernel = my_gpr.kernel_
 		gpr_true_mean_full = gpr_true_full.predict(X_full, return_std=False)
-		gpr_true_mean_full_shift = gpr_true_full.predict(np.roll(X_full,1,axis=1), return_std=False)
+		gpr_true_mean_full_shift = np.roll(gpr_true_full.predict(np.roll(X_full,1,axis=1), return_std=False), -1, axis=1)
 		master_output_dict[foo_nm+'_mean_shift'] = gpr_true_mean_full_shift
 		master_output_dict[foo_nm+'_mean'] = gpr_true_mean_full
 		master_output_dict[foo_nm+'_kernel'] = my_kernel
@@ -907,7 +907,7 @@ def run_traintest(testing_fname,
 		gpr_approx_full = my_gpr.fit(X=X_full[train_inds_full,:], y=np.mean(ODE.hx)*Y_inferred_full[train_inds_full,:])
 		my_kernel = my_gpr.kernel_
 		gpr_approx_mean_full = gpr_approx_full.predict(X_full, return_std=False)
-		gpr_approx_mean_full_shift = gpr_approx_full.predict(np.roll(X_full,1,axis=1), return_std=False)
+		gpr_approx_mean_full_shift = np.roll(gpr_approx_full.predict(np.roll(X_full,1,axis=1), return_std=False), -1, axis=1)
 		master_output_dict[foo_nm+'_mean_shift'] = gpr_approx_mean_full_shift
 		master_output_dict[foo_nm+'_mean'] = gpr_approx_mean_full
 		master_output_dict[foo_nm+'_kernel'] = my_kernel
