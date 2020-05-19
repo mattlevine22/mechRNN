@@ -161,6 +161,8 @@ def run_traintest(testing_fname,
 	T_acf=10,
 	alpha = 1e-10,
 	t_valid_thresh=0.4,
+	rnn_hidden_size=50,
+	rnn_n_epochs=1000,
 	**kwargs):
 
 	try:
@@ -991,8 +993,8 @@ def run_traintest(testing_fname,
 	ODEinst = L96M(K=K, J=J, F=F, eps=eps, hx=hx, slow_only=True)
 
 	# update some custom settings
-	rnn_settings = {'n_epochs': 1000,
-					'hidden_size': 50,
+	rnn_settings = {'n_epochs': rnn_n_epochs,
+					'hidden_size': rnn_hidden_size,
 					'model_params': {'delta_t': delta_t,
 								'ode_int_method': psi0_ode_int_method,
 								'ode_int_atol': psi0_ode_int_atol,
