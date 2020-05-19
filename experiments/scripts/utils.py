@@ -47,7 +47,6 @@ LORENZ_DEFAULT_PARAMS = (10, 28, 8/3)
 
 
 def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
-    pdb.set_trace()
     t0 = time()
 
     # read TRAIN data
