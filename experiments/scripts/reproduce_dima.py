@@ -4,6 +4,7 @@ import numpy as np
 import argparse
 from time import time
 from utils import get_inds, phase_plot, kl4dummies, fname_append, all_kdes_plot
+from utils import setup_RNN, train_chaosRNN, forward_chaos_pureML, forward_chaos_hybrid_full
 from check_L96_chaos import make_traj_plots
 from scipy.integrate import solve_ivp
 from scipy.stats import gaussian_kde
@@ -45,6 +46,7 @@ def make_data(
 	n_test_traj,
 	t_test_traj,
 	n_subsample_kde,
+	t_test_traj_synch=0,
 	**kwargs):
 
 	os.makedirs(output_dir, exist_ok=True)
@@ -108,16 +110,19 @@ def make_data(
 	all_kdes_plot(data=X_test, output_fname=os.path.join(output_dir,'all_kdes_test_SLOW.png'))
 
 	# create short testing trajectories with initial conditions sampled from invariant density
-	t_eval_traj = np.arange(0, t_test_traj, delta_t)
+	t_eval_traj = np.arange(0, t_test_traj + t_test_traj_synch, delta_t)
+	ntsynch_traj = int((t_test_traj_synch)/delta_t)
 	ic_inds = get_inds(N_total=X_test.shape[0], N_subsample=n_test_traj)
-	X_test_traj = np.zeros((n_test_traj,len(t_eval_traj),K))
+	X_test_traj = np.zeros((n_test_traj,len(t_eval_traj)-ntsynch_traj,K))
+	X_test_traj_synch = np.zeros((n_test_traj,ntsynch_traj,K))
 	for c in range(n_test_traj):
 		ic = y_clean[ntsynch+ic_inds[c],:]
 		t0 = time()
 		sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=ic, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval_traj)
-		X_test_traj[c,:,:] = sol.y.T[:,:K]
+		X_test_traj[c,:,:] = sol.y.T[ntsynch_traj:,:K]
+		X_test_traj_synch[c,:,:] = sol.y.T[:ntsynch_traj,:K]
 
-	np.savez(testing_fname, X_test_traj=X_test_traj, t_eval_traj=t_eval_traj, X_test=X_test, ntsynch=ntsynch, t_eval=t_eval, y0=y0, K=K)
+	np.savez(testing_fname, X_test_traj=X_test_traj, X_test_traj_synch=X_test_traj_synch, t_eval_traj=t_eval_traj, X_test=X_test, ntsynch=ntsynch, ntsynch_traj=ntsynch_traj, t_eval=t_eval, y0=y0, K=K)
 
 
 	return
@@ -178,6 +183,7 @@ def run_traintest(testing_fname,
 		# convert npzFileObject to a dictionary
 		# https://stackoverflow.com/questions/32682928/loading-arrays-from-numpy-npz-files-in-python
 		master_output_dict = dict(zip(("{}".format(k) for k in boomaster), (boomaster[k] for k in boomaster)))
+		# master_output_dict = {key: master_output_dict[key] for key in master_output_dict if not key.endswith('_shift')}
 	except:
 		master_output_dict = {}
 
@@ -979,6 +985,33 @@ def run_traintest(testing_fname,
 
 	# dont be a slob...close the fig when you're done!
 	plt.close(fig)
+
+
+	######## RNN fits! #######
+	ODEinst = L96M(K=K, J=J, F=F, eps=eps, hx=hx, slow_only=True)
+
+	# update some custom settings
+	rnn_settings = {'n_epochs': 1000,
+					'hidden_size': 50,
+					'model_params': {'delta_t': delta_t,
+								'ode_int_method': psi0_ode_int_method,
+								'ode_int_atol': psi0_ode_int_atol,
+								'ode_int_rtol': psi0_ode_int_rtol,
+								'ode_int_max_step': psi0_ode_int_max_step,
+								'ode_params': (),
+								'time_avg_norm': avg_output
+								}
+					}
+
+	## Run vanilla residual RNN
+	foo_nm = 'resRNN_vanilla'
+	rnn_settings['forward'] = forward_chaos_pureML
+	rnn_settings['learn_residuals'] = True
+	rnn_settings['stack_hidden'] = False
+	rnn_settings['stack_output'] = False
+	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output')
+	setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
+	# train_chaosRNN(**rnn_settings)
 
 	##### okay, now lets plot everything on big sucker!
 

@@ -39,10 +39,75 @@ import pdb
 
 from odelibrary import *
 
+from line_profiler import LineProfiler
+
 
 
 LORENZ_DEFAULT_PARAMS = (10, 28, 8/3)
 
+
+def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
+    pdb.set_trace()
+    t0 = time()
+
+    # read TRAIN data
+    train_set = np.load(training_fname)
+    y_clean_train = train_set['X_train']
+    y_noisy_train = train_set['X_train']
+
+    normz_info = {
+                'Ymax': np.max(y_noisy_train, axis=0),
+                'Ymin': np.min(y_noisy_train, axis=0),
+                'Ymean': np.mean(y_noisy_train),
+                'Ysd': np.std(y_noisy_train)
+                }
+
+    setts['normz_info'] = normz_info
+
+    setts['y_clean_train'] = f_normalize_minmax(normz_info, y_clean_train)
+    setts['y_noisy_train'] = f_normalize_minmax(normz_info, y_noisy_train)
+    # setts['y_clean_trainSynch'] = f_normalize_minmax(normz_info, train_set['y_clean_synch'])
+    # setts['y_noisy_trainSynch'] = f_normalize_minmax(normz_info, train_set['y_noisy_synch'])
+    setts['y_fast_train'] = train_set['y_fast']
+
+    # read and normalize TEST data
+    test_set = np.load(testing_fname)
+    y_clean_test = []
+    y_noisy_test = []
+    y_clean_testSynch = []
+    y_noisy_testSynch = []
+    for c in range(test_set['X_test_traj'].shape[0]):
+        y_clean_test.append(f_normalize_minmax(normz_info, test_set['X_test_traj'][c,:,:]))
+        y_noisy_test.append(f_normalize_minmax(normz_info, test_set['X_test_traj'][c,:,:]))
+        y_clean_testSynch.append(f_normalize_minmax(normz_info, test_set['X_test_traj_synch'][c,:,:]))
+        y_noisy_testSynch.append(f_normalize_minmax(normz_info, test_set['X_test_traj_synch'][c,:,:]))
+
+    setts['y_clean_test'] = np.stack(y_clean_test)
+    setts['y_noisy_test'] = np.stack(y_noisy_test)
+    setts['y_clean_testSynch'] = np.stack(y_clean_testSynch)
+    setts['y_noisy_testSynch'] = np.stack(y_noisy_testSynch)
+
+    # get state names
+    setts['model_params']['state_names'] = odeInst.get_state_names()
+
+    setts['model'] = odeInst.rhs
+
+    setts['plot_state_indices'] = odeInst.plot_state_indices()
+
+    setts['ODE'] = odeInst
+
+    if profile:
+        lp = LineProfiler()
+        lp.add_function(forward_chaos_pureML)
+        lp.add_function(forward_chaos_hybrid_full)
+        lp_wrapper = lp(train_chaosRNN)
+        lp_wrapper(**setts)
+        lp.print_stats()
+    else:
+        train_chaosRNN(**setts)
+
+    print('Ran training in:', time()-t0)
+    return
 
 def get_inds(N_total, N_subsample):
     if N_total > N_subsample:
