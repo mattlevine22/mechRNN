@@ -136,7 +136,6 @@ def traj_div_time(Xtrue, Xpred, delta_t, avg_output, thresh):
 	t_valid = delta_t*np.argmax(pw_loss > thresh)
 	if t_valid==0 and pw_loss[-1] <= thresh:
 		t_valid = delta_t*(len(pw_loss)-1)
-	pdb.set_trace()
 	return t_valid
 
 def run_traintest(testing_fname,
