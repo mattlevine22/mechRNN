@@ -2178,7 +2178,7 @@ def train_chaosRNN(forward,
     output_clean_train = torch.FloatTensor(y_clean_train).type(dtype)
     output_test = torch.FloatTensor(y_noisy_test).type(dtype)
     output_clean_test = torch.FloatTensor(y_clean_test).type(dtype)
-    test_synch_clean = torch.FloatTensor(y_clean_testSynch).type(dtype)
+    test_synch_clean = y_clean_testSynch
     test_synch_noisy = torch.FloatTensor(y_noisy_testSynch).type(dtype)
 
     try:
@@ -2612,9 +2612,6 @@ def train_chaosRNN(forward,
         if  (i_epoch==(n_epochs-1)) or (save_iterEpochs and (i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0)):
              # plot predictions vs truth
             # fig, (ax1, ax3) = plt.subplots(1, 2)
-            fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-            if not isinstance(ax_list,np.ndarray):
-                ax_list = [ax_list]
             # first run and plot training fits
             hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
             # init.normal_(hidden_state,0.0,0.1)
@@ -2638,21 +2635,44 @@ def train_chaosRNN(forward,
             # y_noisy_train_raw = y_noisy_train
             # y_clean_train_raw = y_clean_train
             # predictions_raw = predictions
+
+            ## Plot first part of training
+            fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+            if not isinstance(ax_list,np.ndarray):
+                ax_list = [ax_list]
             for kk in range(len(ax_list)):
                 ax1 = ax_list[kk]
                 t_plot = np.arange(0,round(len(y_noisy_train[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
-                ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+                # ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
                 ax1.plot(t_plot, y_clean_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', label='clean data')
                 ax1.plot(t_plot, predictions_raw[:n_plttrain,plot_state_indices[kk]], color='black', label='NN fit')
                 ax1.set_xlabel('time')
                 ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)', color='red')
                 ax1.tick_params(axis='y', labelcolor='red')
-
             ax_list[0].legend()
-
             fig.suptitle('Training Fit')
-            fig.savefig(fname=output_dir+'/rnn_train_fit_ode_iterEpochs'+str(i_epoch))
+            fig.savefig(fname=output_dir+'/rnn_train_fit_START_ode_iterEpochs'+str(i_epoch))
             plt.close(fig)
+
+            ## Plot end part of training
+            fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+            if not isinstance(ax_list,np.ndarray):
+                ax_list = [ax_list]
+            for kk in range(len(ax_list)):
+                ax1 = ax_list[kk]
+                t_plot = np.arange(0,round(len(y_noisy_train[-n_plttrain:,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+                # ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+                ax1.plot(t_plot, y_clean_train_raw[-n_plttrain:,plot_state_indices[kk]], color='red', label='clean data')
+                ax1.plot(t_plot, predictions_raw[-n_plttrain:,plot_state_indices[kk]], color='black', label='NN fit')
+                ax1.set_xlabel('time')
+                ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)', color='red')
+                ax1.tick_params(axis='y', labelcolor='red')
+            ax_list[0].legend()
+            fig.suptitle('Training Fit')
+            fig.savefig(fname=output_dir+'/rnn_train_fit_END_ode_iterEpochs'+str(i_epoch))
+            plt.close(fig)
+
+
 
             # plot dynamics of hidden state over training set
             n_hidden_plots = min(10, hidden_size)
@@ -2679,6 +2699,8 @@ def train_chaosRNN(forward,
             ALLgpr_test_predictions_raw = []
             for kkt in range(n_test_sets):
                 y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
+                test_synch_clean_raw = f_unNormalize_Y(normz_info,test_synch_clean[kkt,:,:])
+                figsynch, (ax_list_synch) = plt.subplots(len(plot_state_indices),1)
                 fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
                 if not isinstance(ax_list,np.ndarray):
                     ax_list = [ax_list]
@@ -2688,8 +2710,22 @@ def train_chaosRNN(forward,
                     # first, synchronize the hidden state
                     hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
                     solver_failed = False
+                    synch_predictions = np.zeros([synch_length, output_size])
                     for i in range(synch_length-1):
                         (pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
+                        synch_predictions[i+1,:] = pred.data.numpy().ravel()
+                    synch_predictions_raw = f_unNormalize_Y(normz_info,synch_predictions)
+                    for kk in range(len(ax_list_synch)):
+                        ax3 = ax_list_synch[kk]
+                        t_plot = np.arange(0,len(test_synch_clean[kkt,:,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+                        # ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
+                        ax3.plot(t_plot, test_synch_clean_raw[:,plot_state_indices[kk]], color='red', label='clean synch data')
+                        ax3.plot(t_plot, synch_predictions_raw[:,plot_state_indices[kk]], color='black', label='NN fit')
+                        ax3.set_xlabel('time')
+                        ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
+                        ax3.tick_params(axis='y', labelcolor='red')
+
+                    # set prediction
                     pred = test_synch_noisy[kkt,-1,:,None]
                 else:
                     pred = output_train[-1,:,None]
@@ -2721,6 +2757,12 @@ def train_chaosRNN(forward,
                 fig.suptitle('RNN TEST fit to ODE simulation--' + str(i_epoch) + 'training epochs')
                 fig.savefig(fname=output_dir+'/rnn_test_fit_ode_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
                 plt.close(fig)
+
+                ax_list_synch[0].legend()
+
+                figsynch.suptitle('RNN Synch fit to ODE simulation--' + str(i_epoch) + 'training epochs')
+                figsynch.savefig(fname=output_dir+'/rnn_synch_fit_ode_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
+                plt.close(figsynch)
 
                 ## Plot phase plots
                 # phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt), delta_t=model_params['delta_t'])
@@ -2854,7 +2896,7 @@ def train_chaosRNN(forward,
     for kk in range(len(ax_list)):
         ax1 = ax_list[kk]
         t_plot = np.arange(0,round(len(y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
-        ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+        # ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
         ax1.plot(t_plot, y_clean_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', label='clean data')
         ax1.plot(t_plot, predictions_raw[:n_plttrain,plot_state_indices[kk]], color='black', label='NN fit')
         ax1.set_xlabel('time')
