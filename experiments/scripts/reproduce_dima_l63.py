@@ -202,7 +202,7 @@ def run_traintest(testing_fname,
 	rnn_settings['stack_hidden'] = False
 	rnn_settings['stack_output'] = False
 	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
-	# setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
+	setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
 
 	## Run vanilla residual RNN
 	foo_nm = 'resRNN_vanilla'
@@ -212,7 +212,6 @@ def run_traintest(testing_fname,
 	rnn_settings['stack_output'] = False
 	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
 	setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
-	train_chaosRNN(**rnn_settings)
 
 
 	### NOW DO THE REST OF THE STUFF (GP)
@@ -1212,5 +1211,3 @@ def run_traintest(testing_fname,
 if __name__ == '__main__':
 	continuous_fits()
 	run_traintest()
-
-
