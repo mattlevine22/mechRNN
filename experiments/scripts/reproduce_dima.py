@@ -86,7 +86,7 @@ def make_data(
 
 	phase_plot(data=X_train, output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35)
 	phase_plot(data=X_train, output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='scatter')
-	phase_plot(data=X_train, output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='density', n_subsample_kde=n_subsample_kde)
+	# phase_plot(data=X_train, output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='density', n_subsample_kde=n_subsample_kde)
 	phase_plot(data=y_fast[:,:J], state_names=[r'$Y_{{{ind},1}}$'.format(ind=j+1) for j in range(J)], output_fname=os.path.join(output_dir,'phase_plot_training_data_FAST.png'), delta_t=delta_t, wspace=0.35, hspace=0.35)
 	phase_plot(data=y_fast[:,:J], state_names=[r'$Y_{{{ind},1}}$'.format(ind=j+1) for j in range(J)], output_fname=os.path.join(output_dir,'phase_plot_training_data_FAST.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='scatter')
 
@@ -162,16 +162,59 @@ def run_traintest(testing_fname,
 	alpha = 1e-10,
 	t_valid_thresh=0.4,
 	rnn_hidden_size=50,
-	rnn_n_epochs=1000,
+	rnn_n_epochs=100,
 	**kwargs):
+
+
 
 	try:
 		foo = np.load(training_fname)
 		goo = np.load(testing_fname)
+		# compute time-avg-norm
+		avg_output = np.mean(goo['X_test']**2)**0.5
 	except:
 		print('Unable to load training data---no plots were made!')
 		return
 
+
+	######## RNN fits! #######
+	ODEinst = L96M(K=K, J=J, F=F, eps=eps, hx=hx, slow_only=True)
+
+	# update some custom settings
+	rnn_settings = {'max_plot': goo['X_test_traj'].shape[1],
+					'n_epochs': rnn_n_epochs,
+					'hidden_size': rnn_hidden_size,
+					'model_params': {'delta_t': delta_t,
+								'ode_int_method': psi0_ode_int_method,
+								'ode_int_atol': psi0_ode_int_atol,
+								'ode_int_rtol': psi0_ode_int_rtol,
+								'ode_int_max_step': psi0_ode_int_max_step,
+								'ode_params': (),
+								'time_avg_norm': avg_output
+								}
+					}
+
+	## Run vanilla residual RNN
+	foo_nm = 'pureRNN_vanilla'
+	rnn_settings['forward'] = forward_chaos_pureML
+	rnn_settings['learn_residuals'] = False
+	rnn_settings['stack_hidden'] = False
+	rnn_settings['stack_output'] = False
+	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
+	setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
+
+	## Run vanilla residual RNN
+	# foo_nm = 'resRNN_vanilla'
+	# rnn_settings['forward'] = forward_chaos_pureML
+	# rnn_settings['learn_residuals'] = True
+	# rnn_settings['stack_hidden'] = False
+	# rnn_settings['stack_output'] = False
+	# rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
+	# setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
+	# train_chaosRNN(**rnn_settings)
+
+
+	### NOW DO THE REST OF THE STUFF (GP)
 	n_subsample_gp = int(n_subsample_gp)
 	n_subsample_kde = int(n_subsample_kde)
 	n_restarts_optimizer = int(n_restarts_optimizer)
@@ -323,8 +366,6 @@ def run_traintest(testing_fname,
 	fig.savefig(fname=output_fname, dpi=300)
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
 
-	# compute time-avg-norm
-	avg_output = np.mean(goo['X_test']**2)**0.5
 
 
 	def plot_traj(X_learned, plot_fname, t_plot=t_plot, X_true=goo['X_test'][:n_plot,:K], state_limits=state_limits):
@@ -989,31 +1030,6 @@ def run_traintest(testing_fname,
 	plt.close(fig)
 
 
-	######## RNN fits! #######
-	ODEinst = L96M(K=K, J=J, F=F, eps=eps, hx=hx, slow_only=True)
-
-	# update some custom settings
-	rnn_settings = {'n_epochs': rnn_n_epochs,
-					'hidden_size': rnn_hidden_size,
-					'model_params': {'delta_t': delta_t,
-								'ode_int_method': psi0_ode_int_method,
-								'ode_int_atol': psi0_ode_int_atol,
-								'ode_int_rtol': psi0_ode_int_rtol,
-								'ode_int_max_step': psi0_ode_int_max_step,
-								'ode_params': (),
-								'time_avg_norm': avg_output
-								}
-					}
-
-	## Run vanilla residual RNN
-	foo_nm = 'resRNN_vanilla'
-	rnn_settings['forward'] = forward_chaos_pureML
-	rnn_settings['learn_residuals'] = True
-	rnn_settings['stack_hidden'] = False
-	rnn_settings['stack_output'] = False
-	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output')
-	setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
-	# train_chaosRNN(**rnn_settings)
 
 	##### okay, now lets plot everything on big sucker!
 
