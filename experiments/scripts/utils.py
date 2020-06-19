@@ -15,19 +15,22 @@ import math
 import numpy as np
 import numpy.matlib
 try:
-    from scipy.stats import entropy
-    from scipy.integrate import odeint, solve_ivp
-    # from statsmodels.nonparametric.kde import KDEUnivariate
-    from scipy.stats import gaussian_kde
-    import scipy.optimize
+	from scipy.stats import entropy
+	from scipy.integrate import odeint, solve_ivp
+	# from statsmodels.nonparametric.kde import KDEUnivariate
+	from scipy.stats import gaussian_kde
+	import scipy.optimize
 
-    from sklearn.gaussian_process import GaussianProcessRegressor
-    import torch
-    from torch.autograd import Variable
-    import torch.nn.init as init
-    import torch.cuda
+	from sklearn.gaussian_process import GaussianProcessRegressor
+	import torch
+	from torch.autograd import Variable
+	import torch.nn.init as init
+	import torch.nn as nn
+	import torch.nn.functional as F
+	import torch.optim as optim
+	import torch.cuda
 except:
-    pass
+	pass
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -39,299 +42,243 @@ import pdb
 
 from odelibrary import *
 
-from line_profiler import LineProfiler
-
-
 
 LORENZ_DEFAULT_PARAMS = (10, 28, 8/3)
 
-
-def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
-    t0 = time()
-
-    # read TRAIN data
-    train_set = np.load(training_fname)
-    y_clean_train = train_set['X_train']
-    y_noisy_train = train_set['X_train']
-
-    normz_info = {
-                'Ymax': np.max(y_noisy_train, axis=0),
-                'Ymin': np.min(y_noisy_train, axis=0),
-                'Ymean': np.mean(y_noisy_train),
-                'Ysd': np.std(y_noisy_train)
-                }
-
-    setts['normz_info'] = normz_info
-
-    setts['y_clean_train'] = f_normalize_minmax(normz_info, y_clean_train)
-    setts['y_noisy_train'] = f_normalize_minmax(normz_info, y_noisy_train)
-    # setts['y_clean_trainSynch'] = f_normalize_minmax(normz_info, train_set['y_clean_synch'])
-    # setts['y_noisy_trainSynch'] = f_normalize_minmax(normz_info, train_set['y_noisy_synch'])
-    setts['y_fast_train'] = train_set['y_fast']
-
-    # read and normalize TEST data
-    test_set = np.load(testing_fname)
-    y_clean_test = []
-    y_noisy_test = []
-    y_clean_testSynch = []
-    y_noisy_testSynch = []
-    for c in range(test_set['X_test_traj'].shape[0]):
-        y_clean_test.append(f_normalize_minmax(normz_info, test_set['X_test_traj'][c,:,:]))
-        y_noisy_test.append(f_normalize_minmax(normz_info, test_set['X_test_traj'][c,:,:]))
-        y_clean_testSynch.append(f_normalize_minmax(normz_info, test_set['X_test_traj_synch'][c,:,:]))
-        y_noisy_testSynch.append(f_normalize_minmax(normz_info, test_set['X_test_traj_synch'][c,:,:]))
-
-    setts['y_clean_test'] = np.stack(y_clean_test)
-    setts['y_noisy_test'] = np.stack(y_noisy_test)
-    setts['y_clean_testSynch'] = np.stack(y_clean_testSynch)
-    setts['y_noisy_testSynch'] = np.stack(y_noisy_testSynch)
-
-    # get state names
-    setts['model_params']['state_names'] = odeInst.get_state_names()
-
-    setts['model'] = odeInst.rhs
-
-    setts['plot_state_indices'] = odeInst.plot_state_indices()
-
-    setts['ODE'] = odeInst
-
-    if profile:
-        lp = LineProfiler()
-        lp.add_function(forward_chaos_pureML)
-        lp.add_function(forward_chaos_hybrid_full)
-        lp_wrapper = lp(train_chaosRNN)
-        lp_wrapper(**setts)
-        lp.print_stats()
-    else:
-        train_chaosRNN(**setts)
-
-    print('Ran training in:', time()-t0)
-    return
+def traj_div_time(Xtrue, Xpred, delta_t, avg_output, thresh=0.4):
+	# avg_output = np.mean(Xtrue**2)**0.5
+	pw_loss = np.zeros((Xtrue.shape[0]))
+	for j in range(Xtrue.shape[0]):
+		pw_loss[j] = sum((Xtrue[j,:] - Xpred[j,:])**2)**0.5 / avg_output
+	t_valid = delta_t*np.argmax(pw_loss > thresh)
+	if t_valid==0 and pw_loss[-1] <= thresh:
+		t_valid = delta_t*(len(pw_loss)-1)
+	return t_valid
 
 def get_inds(N_total, N_subsample):
-    if N_total > N_subsample:
-        my_inds = np.random.choice(np.arange(N_total), N_subsample, replace=False)
-    else:
-        my_inds = np.arange(N_total)
-    return my_inds
+	if N_total > N_subsample:
+		my_inds = np.random.choice(np.arange(N_total), N_subsample, replace=False)
+	else:
+		my_inds = np.arange(N_total)
+	return my_inds
 
 def fname_append(fname, append_str=''):
-    # https://stackoverflow.com/questions/541390/extracting-extension-from-filename-in-python
-    filename, file_extension = os.path.splitext(fname)
-    new_filename = filename+append_str+file_extension
-    return new_filename
+	# https://stackoverflow.com/questions/541390/extracting-extension-from-filename-in-python
+	filename, file_extension = os.path.splitext(fname)
+	new_filename = filename+append_str+file_extension
+	return new_filename
 
 
 def mkdir_p(dir):
-    '''make a directory (dir) if it doesn't exist'''
-    if not os.path.exists(dir):
-        os.mkdir(dir)
+	'''make a directory (dir) if it doesn't exist'''
+	if not os.path.exists(dir):
+		os.mkdir(dir)
 
 def dict_combiner(mydict):
-    if mydict:
-        keys, values = zip(*mydict.items())
-        experiment_list = [dict(zip(keys, v)) for v in itertools.product(*values)]
-    else:
-        experiment_list = [{}]
-    return experiment_list
+	if mydict:
+		keys, values = zip(*mydict.items())
+		experiment_list = [dict(zip(keys, v)) for v in itertools.product(*values)]
+	else:
+		experiment_list = [{}]
+	return experiment_list
 
 def make_cmd(cmd='echo $Home', command_flag_dict={}):
-    for key in command_flag_dict:
-        cmd += ' --{0} {1}'.format(key, command_flag_dict[key])
-    return cmd
+	for key in command_flag_dict:
+		cmd += ' --{0} {1}'.format(key, command_flag_dict[key])
+	return cmd
 
 def resubmit_glob_jobs(glob_str, old_str=None, new_str=''):
-    for job_file in glob.glob(glob_str):
-        if old_str is not None:
-            with open(job_file, 'rt') as f:
-                data = f.read()
-                data = data.replace(old_str, new_str)
-            with open(job_file, 'wt') as f:
-                f.write(data)
+	for job_file in glob.glob(glob_str):
+		if old_str is not None:
+			with open(job_file, 'rt') as f:
+				data = f.read()
+				data = data.replace(old_str, new_str)
+			with open(job_file, 'wt') as f:
+				f.write(data)
 
-        cmd = ['sbatch', job_file]
+		cmd = ['sbatch', job_file]
 
-        proc = subprocess.run(cmd, capture_output=True, text=True)
-        # check for successful run and print the error
-        status = proc.returncode
-        if status!=0:
-            print('Job submission FAILED:', proc.stdout, cmd)
-        else:
-            print('Job submitted:', ' '.join(cmd))
-    return
+		proc = subprocess.run(cmd, capture_output=True, text=True)
+		# check for successful run and print the error
+		status = proc.returncode
+		if status!=0:
+			print('Job submission FAILED:', proc.stdout, cmd)
+		else:
+			print('Job submitted:', ' '.join(cmd))
+	return
 
 def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=[], jobid_dir=None, master_job_file=None, report_status=True, exclusive=True, hours=24, no_submit=False):
 
-    # build sbatch job script and write to file
-    job_directory = os.path.join(jobfile_dir,'.job')
-    out_directory = os.path.join(jobfile_dir,'.out')
-    mkdir_p(job_directory)
-    mkdir_p(out_directory)
+	# build sbatch job script and write to file
+	job_directory = os.path.join(jobfile_dir,'.job')
+	out_directory = os.path.join(jobfile_dir,'.out')
+	mkdir_p(job_directory)
+	mkdir_p(out_directory)
 
 
-    job_file = os.path.join(job_directory,"{0}.job".format(jobname))
+	job_file = os.path.join(job_directory,"{0}.job".format(jobname))
 
-    sbatch_str = ""
-    sbatch_str += "#!/bin/bash\n"
-    sbatch_str += "#SBATCH --account=astuart\n" # account name
-    sbatch_str += "#SBATCH --job-name=%s.job\n" % jobname
-    sbatch_str += "#SBATCH --output=%s.out\n" % os.path.join(out_directory,jobname)
-    sbatch_str += "#SBATCH --error=%s.err\n" % os.path.join(out_directory,jobname)
-    sbatch_str += "#SBATCH --time={0}:00:00\n".format(hours) # default 24hrs. Shorter time gets more priority.
-    if exclusive:
-        sbatch_str += "#SBATCH --exclusive\n" # exclusive use of a node for the submitted job
-    sbatch_str += bash_run_command
-    # sbatch_str += "python $HOME/mechRNN/experiments/scripts/run_fits.py"
-    for key in command_flag_dict:
-        sbatch_str += ' --{0} {1}'.format(key, command_flag_dict[key])
-    # sbatch_str += ' --output_path %s\n' % experiment_dir
+	sbatch_str = ""
+	sbatch_str += "#!/bin/bash\n"
+	sbatch_str += "#SBATCH --account=astuart\n" # account name
+	sbatch_str += "#SBATCH --job-name=%s.job\n" % jobname
+	sbatch_str += "#SBATCH --output=%s.out\n" % os.path.join(out_directory,jobname)
+	sbatch_str += "#SBATCH --error=%s.err\n" % os.path.join(out_directory,jobname)
+	sbatch_str += "#SBATCH --time={0}:00:00\n".format(hours) # default 24hrs. Shorter time gets more priority.
+	if exclusive:
+		sbatch_str += "#SBATCH --exclusive\n" # exclusive use of a node for the submitted job
+	sbatch_str += bash_run_command
+	# sbatch_str += "python $HOME/mechRNN/experiments/scripts/run_fits.py"
+	for key in command_flag_dict:
+		sbatch_str += ' --{0} {1}'.format(key, command_flag_dict[key])
+	# sbatch_str += ' --output_path %s\n' % experiment_dir
 
-    sbatch_str += '\n'
-    with open(job_file, 'w') as fh:
-        fh.writelines(sbatch_str)
+	sbatch_str += '\n'
+	with open(job_file, 'w') as fh:
+		fh.writelines(sbatch_str)
 
-    # run the sbatch job script
-    depending_jobs = [z for z in depending_jobs if z is not None]
-    cmd = ['sbatch']
-    if depending_jobs:
-        depstr = ','.join(depending_jobs) #depending_jobs must be list of strings
-        cmd.append('--dependency=after:{0}'.format(depstr))
+	# run the sbatch job script
+	depending_jobs = [z for z in depending_jobs if z is not None]
+	cmd = ['sbatch']
+	if depending_jobs:
+		depstr = ','.join(depending_jobs) #depending_jobs must be list of strings
+		cmd.append('--dependency=after:{0}'.format(depstr))
 
-    cmd.append(job_file)
+	cmd.append(job_file)
 
-    if no_submit:
-        print('Job created (not submitted):', ' '.join(cmd))
-        return 0, None
+	if no_submit:
+		print('Job created (not submitted):', ' '.join(cmd))
+		return 0, None
 
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    # check for successful run and print the error
-    status = proc.returncode
-    if report_status:
-        if status!=0:
-            print('Job submission FAILED:', proc.stdout, cmd)
-        else:
-            print('Job submitted:', ' '.join(cmd))
+	proc = subprocess.run(cmd, capture_output=True, text=True)
+	# check for successful run and print the error
+	status = proc.returncode
+	if report_status:
+		if status!=0:
+			print('Job submission FAILED:', proc.stdout, cmd)
+		else:
+			print('Job submitted:', ' '.join(cmd))
 
-    jobnum = proc.stdout.strip().split(' ')[-1]
-    if master_job_file:
-        with open(master_job_file, 'a') as f:
-            f.write('{0},{1}\n'.format(jobnum, ' '.join(cmd)))
+	jobnum = proc.stdout.strip().split(' ')[-1]
+	if master_job_file:
+		with open(master_job_file, 'a') as f:
+			f.write('{0},{1}\n'.format(jobnum, ' '.join(cmd)))
 
-    if jobid_dir:
-        # write job_id to its target directory for easy checking later
-        with open(os.path.join(jobid_dir,'{0}.id'.format(jobnum)), 'w') as fp:
-            pass
+	if jobid_dir:
+		# write job_id to its target directory for easy checking later
+		with open(os.path.join(jobid_dir,'{0}.id'.format(jobnum)), 'w') as fp:
+			pass
 
-    return status, jobnum
+	return status, jobnum
 
 
 def getval(x):
-    try:
-        return getattr(x, '__dict__', str(x))
-    except:
-        return None
+	try:
+		return getattr(x, '__dict__', str(x))
+	except:
+		return None
 
 def dict_to_file(mydict, fname):
-    with open(fname, 'w') as f:
-        json.dump(mydict, f, indent=2)
-    return
+	with open(fname, 'w') as f:
+		json.dump(mydict, f, indent=2)
+	return
 
 
 def write_settings(FLAGS, settings_fname):
-    with open(settings_fname, 'w') as f:
-        json.dump(FLAGS.__dict__, f, default=lambda x: getval(x) , indent=2)
-    return
+	with open(settings_fname, 'w') as f:
+		json.dump(FLAGS.__dict__, f, default=lambda x: getval(x) , indent=2)
+	return
 
 def str2array(x):
-    # x = '[[1,0,0],[0,1,0],[0,0,1]]'
-    y = np.array([[float(d) for d in c] for c in [b.split(',') for b in [a.strip('[').strip(']') for a in x.split('],[')]]])
-    return y
+	# x = '[[1,0,0],[0,1,0],[0,0,1]]'
+	y = np.array([[float(d) for d in c] for c in [b.split(',') for b in [a.strip('[').strip(']') for a in x.split('],[')]]])
+	return y
 
 def get_lorenz_inits(model=None, params=None, n=2):
-    init_vec = np.zeros((n, 3))
-    for k in range(n):
-        (xmin, xmax) = (-10,10)
-        (ymin, ymax) = (-20,30)
-        (zmin, zmax) = (10,40)
+	init_vec = np.zeros((n, 3))
+	for k in range(n):
+		(xmin, xmax) = (-10,10)
+		(ymin, ymax) = (-20,30)
+		(zmin, zmax) = (10,40)
 
-        xrand = xmin+(xmax-xmin)*np.random.random()
-        yrand = ymin+(ymax-ymin)*np.random.random()
-        zrand = zmin+(zmax-zmin)*np.random.random()
-        init_vec[k,:] = [xrand, yrand, zrand]
-    return init_vec
+		xrand = xmin+(xmax-xmin)*np.random.random()
+		yrand = ymin+(ymax-ymin)*np.random.random()
+		zrand = zmin+(zmax-zmin)*np.random.random()
+		init_vec[k,:] = [xrand, yrand, zrand]
+	return init_vec
 
 def kde_statsmodels(data, kernel="gau", bw="scott", gridsize=100, cut=3, clip=None,
-            cumulative=False, **kwargs):
-    """Fit and plot a univariate or bivariate kernel density estimate.
-    Parameters
-    ----------
-    data : 1d array-like
-        Input data.
-    kernel : {'gau' | 'cos' | 'biw' | 'epa' | 'tri' | 'triw' }, optional
-        Code for shape of kernel to fit with. Bivariate KDE can only use
-        gaussian kernel.
-    bw : {'scott' | 'silverman' | scalar | pair of scalars }, optional
-        Name of reference method to determine kernel size, scalar factor,
-        or scalar for each dimension of the bivariate plot. Note that the
-        underlying computational libraries have different interperetations
-        for this parameter: ``statsmodels`` uses it directly, but ``scipy``
-        treats it as a scaling factor for the standard deviation of the
-        data.
-    gridsize : int, optional
-        Number of discrete points in the evaluation grid.
-    cut : scalar, optional
-        Draw the estimate to cut * bw from the extreme data points.
-    clip : pair of scalars, or pair of pair of scalars, optional
-        Lower and upper bounds for datapoints used to fit KDE. Can provide
-        a pair of (low, high) bounds for bivariate plots.
-    cumulative : bool, optional
-        If True, draw the cumulative distribution estimated by the kde.
-    kwargs : key, value pairings
-        Other keyword arguments are passed to ``plt.plot()`` or
-        ``plt.contour{f}`` depending on whether a univariate or bivariate
-        plot is being drawn.
-    """
+			cumulative=False, **kwargs):
+	"""Fit and plot a univariate or bivariate kernel density estimate.
+	Parameters
+	----------
+	data : 1d array-like
+		Input data.
+	kernel : {'gau' | 'cos' | 'biw' | 'epa' | 'tri' | 'triw' }, optional
+		Code for shape of kernel to fit with. Bivariate KDE can only use
+		gaussian kernel.
+	bw : {'scott' | 'silverman' | scalar | pair of scalars }, optional
+		Name of reference method to determine kernel size, scalar factor,
+		or scalar for each dimension of the bivariate plot. Note that the
+		underlying computational libraries have different interperetations
+		for this parameter: ``statsmodels`` uses it directly, but ``scipy``
+		treats it as a scaling factor for the standard deviation of the
+		data.
+	gridsize : int, optional
+		Number of discrete points in the evaluation grid.
+	cut : scalar, optional
+		Draw the estimate to cut * bw from the extreme data points.
+	clip : pair of scalars, or pair of pair of scalars, optional
+		Lower and upper bounds for datapoints used to fit KDE. Can provide
+		a pair of (low, high) bounds for bivariate plots.
+	cumulative : bool, optional
+		If True, draw the cumulative distribution estimated by the kde.
+	kwargs : key, value pairings
+		Other keyword arguments are passed to ``plt.plot()`` or
+		``plt.contour{f}`` depending on whether a univariate or bivariate
+		plot is being drawn.
+	"""
 
-    if isinstance(data, list):
-        data = np.asarray(data)
+	if isinstance(data, list):
+		data = np.asarray(data)
 
-    if len(data) == 0:
-        return np.array([]), np.array([])
+	if len(data) == 0:
+		return np.array([]), np.array([])
 
-    data = data.astype(np.float64)
+	data = data.astype(np.float64)
 
 
-    # Sort out the clipping
-    if clip is None:
-        clip = (-np.inf, np.inf)
+	# Sort out the clipping
+	if clip is None:
+		clip = (-np.inf, np.inf)
 
-    # Preprocess the data
-    data = sns.utils.remove_na(data)
+	# Preprocess the data
+	data = sns.utils.remove_na(data)
 
-    # Calculate the KDE
-    if np.nan_to_num(data.var()) == 0:
-        # Don't try to compute KDE on singular data
-        msg = "Data must have variance to compute a kernel density estimate."
-        warnings.warn(msg, UserWarning)
-        x, y = np.array([]), np.array([])
+	# Calculate the KDE
+	if np.nan_to_num(data.var()) == 0:
+		# Don't try to compute KDE on singular data
+		msg = "Data must have variance to compute a kernel density estimate."
+		warnings.warn(msg, UserWarning)
+		x, y = np.array([]), np.array([])
 
-    # Prefer using statsmodels for kernel flexibility
-    x, y = sns.distributions._statsmodels_univariate_kde(data, kernel, bw,
-                                       gridsize, cut, clip,
-                                       cumulative=cumulative)
+	# Prefer using statsmodels for kernel flexibility
+	x, y = sns.distributions._statsmodels_univariate_kde(data, kernel, bw,
+									   gridsize, cut, clip,
+									   cumulative=cumulative)
 
-    # Make sure the density is nonnegative
-    y = np.amax(np.c_[np.zeros_like(y), y], axis=1)
+	# Make sure the density is nonnegative
+	y = np.amax(np.c_[np.zeros_like(y), y], axis=1)
 
-    return x, y
+	return x, y
 
 def kde_scipy(x, x_grid, **kwargs):
-    """Kernel Density Estimation with Scipy"""
-    # Note that scipy weights its bandwidth by the covariance of the
-    # input data.  To make the results comparable to the other methods,
-    # we divide the bandwidth by the sample standard deviation here.
-    kde = gaussian_kde(x, **kwargs)
-    return kde.evaluate(x_grid)
+	"""Kernel Density Estimation with Scipy"""
+	# Note that scipy weights its bandwidth by the covariance of the
+	# input data.  To make the results comparable to the other methods,
+	# we divide the bandwidth by the sample standard deviation here.
+	kde = gaussian_kde(x, **kwargs)
+	return kde.evaluate(x_grid)
 
 # def d(x, x_grid, **kwargs):
 #     """Univariate Kernel Density Estimation with Statsmodels.
@@ -343,3916 +290,3916 @@ def kde_scipy(x, x_grid, **kwargs):
 #     return kde.evaluate(x_grid)
 
 def kl4dummies(Xtrue, Xapprox, kde_func=kde_scipy, gridsize=1000):
-    n_states = Xtrue.shape[1]
-    kl_vec = np.zeros(n_states)
-    for i in range(n_states):
-        if np.array_equal(Xtrue[:,i],Xapprox[:,i]):
-            kl_vec[i] = 0
-            continue
-        zmin = min(min(Xtrue[:,i]), min(Xapprox[:,i]))
-        zmax = max(max(Xtrue[:,i]), max(Xapprox[:,i]))
-        x_grid = np.linspace(zmin, zmax, gridsize)
-        Pk = kde_func(Xapprox[:,i].astype(np.float), x_grid) # P is approx dist
-        Qk = kde_func(Xtrue[:,i].astype(np.float), x_grid) # Q is reference dist
-        kl_vec[i] = entropy(Pk, Qk) # compute Dkl(P | Q)
-    return kl_vec
+	n_states = Xtrue.shape[1]
+	kl_vec = np.zeros(n_states)
+	for i in range(n_states):
+		if np.array_equal(Xtrue[:,i],Xapprox[:,i]):
+			kl_vec[i] = 0
+			continue
+		zmin = min(min(Xtrue[:,i]), min(Xapprox[:,i]))
+		zmax = max(max(Xtrue[:,i]), max(Xapprox[:,i]))
+		x_grid = np.linspace(zmin, zmax, gridsize)
+		Pk = kde_func(Xapprox[:,i].astype(np.float), x_grid) # P is approx dist
+		Qk = kde_func(Xtrue[:,i].astype(np.float), x_grid) # Q is reference dist
+		kl_vec[i] = entropy(Pk, Qk) # compute Dkl(P | Q)
+	return kl_vec
 
 ### ODE simulation section
 ## 1. Simulate ODE
 def str2bool(v):
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
+	if v.lower() in ('yes', 'true', 't', 'y', '1'):
+		return True
+	elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+		return False
+	else:
+		raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def oscillator_2d(Y,t,a,b,c):
-    (x,y) = Y
-    dxdt = a*x + b*y -c*x*( x**2 + y**2 )
-    dydt = -a*x + b*y -c*y*( x**2 + y**2 )
-    dYdt = [dxdt, dydt]
-    return dYdt
+	(x,y) = Y
+	dxdt = a*x + b*y -c*x*( x**2 + y**2 )
+	dydt = -a*x + b*y -c*y*( x**2 + y**2 )
+	dYdt = [dxdt, dydt]
+	return dYdt
 
 def harmonic_motion(Y,t,k,m):
-    (x,v) = Y
-    dxdt = v
-    dvdt = -k/m*x
-    dYdt = [dxdt, dvdt]
-    return dYdt
+	(x,v) = Y
+	dxdt = v
+	dvdt = -k/m*x
+	dYdt = [dxdt, dvdt]
+	return dYdt
 
 def single_well(y,t,a,b):
-    dydt = -a*y + b
-    return dydt
+	dydt = -a*y + b
+	return dydt
 
 def sine_wave(y,t,a,b):
-    dydt = -a*np.cos(b*y)
-    return dydt
+	dydt = -a*np.cos(b*y)
+	return dydt
 
 def double_well(y,t,a,b,c):
-    dydt = a*y - b*y**3 + c
-    return dydt
+	dydt = a*y - b*y**3 + c
+	return dydt
 
 # function that returns dy/dt
 def exp_decay_model(y,t,yb,c_gamma,x):
-    x_t = x[np.where(x[:,0] <= t)[0][-1], 1]
-    dydt = -c_gamma*(y-yb) + x_t
-    return dydt
+	x_t = x[np.where(x[:,0] <= t)[0][-1], 1]
+	dydt = -c_gamma*(y-yb) + x_t
+	return dydt
 
 def easy_exp_decay_model(y_in,t,yb,c_gamma,x_in):
-    dydt = -c_gamma*(y_in-yb) + x_in[0]
-    return dydt
+	dydt = -c_gamma*(y_in-yb) + x_in[0]
+	return dydt
 
 def vanderpol_oscillator(Y,t,mu):
-    (x,y) = Y
-    dxdt = y
-    dydt = mu*( 1-(x**2) )*y - x
+	(x,y) = Y
+	dxdt = y
+	dydt = mu*( 1-(x**2) )*y - x
 
-    dYdt = [dxdt, dydt]
-    return dYdt
+	dYdt = [dxdt, dydt]
+	return dYdt
 
 def linear_dynamics_model(Y,t,A):
-    dYdt = np.matmul(A,Y)
-    return dYdt
+	dYdt = np.matmul(A,Y)
+	return dYdt
 
 def lorenz63(Y,t,a,b,c):
-    (x,y,z) = Y
-    dxdt = -a*x + a*y
-    dydt = b*x - y - x*z
-    dzdt = -c*z + x*y
+	(x,y,z) = Y
+	dxdt = -a*x + a*y
+	dydt = b*x - y - x*z
+	dzdt = -c*z + x*y
 
-    dYdt = [dxdt, dydt, dzdt]
-    return dYdt
+	dYdt = [dxdt, dydt, dzdt]
+	return dYdt
 
 def lorenz63_perturbed(Y,t,a=10,b=28,c=8/3,gamma=1,delta=0):
-    (x,y,z) = Y
-    x = x + delta*(np.sin(gamma*x*y*z))
-    y = y + delta*(np.sin(gamma*x*y*z))
-    z = z + delta*(np.sin(gamma*x*y*z))
-    dxdt = -a*x + a*y
-    dydt = b*x - y - x*z
-    dzdt = -c*z + x*y
+	(x,y,z) = Y
+	x = x + delta*(np.sin(gamma*x*y*z))
+	y = y + delta*(np.sin(gamma*x*y*z))
+	z = z + delta*(np.sin(gamma*x*y*z))
+	dxdt = -a*x + a*y
+	dydt = b*x - y - x*z
+	dzdt = -c*z + x*y
 
-    dYdt = [dxdt, dydt, dzdt]
-    return dYdt
+	dYdt = [dxdt, dydt, dzdt]
+	return dYdt
 
 def compute_lyapounov_time(model, model_params, Tdatagen=1000, Teval=10, Teval_step=0.01, burn_in_frac=0.5, output_dir=".", num_ics=500, eps=0.01):
 
-    # FIRST, get lots of data from the attractor
-    y0 = model_params['state_init']
-    t_eval = np.arange(start=0, stop=Tdatagen, step=Teval_step)
-    sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(0, Tdatagen), y0=np.array(y0).T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=t_eval)
-    y_clean = sol.y.T
-    start_ind = np.int(burn_in_frac*len(y_clean))
+	# FIRST, get lots of data from the attractor
+	y0 = model_params['state_init']
+	t_eval = np.arange(start=0, stop=Tdatagen, step=Teval_step)
+	sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(0, Tdatagen), y0=np.array(y0).T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=t_eval)
+	y_clean = sol.y.T
+	start_ind = np.int(burn_in_frac*len(y_clean))
 
-    # randoly reorder the trajectory
-    ic_vec = np.random.permutation(y_clean[start_ind:,:])
+	# randoly reorder the trajectory
+	ic_vec = np.random.permutation(y_clean[start_ind:,:])
 
-    t_eval = np.arange(start=0, stop=Teval, step=Teval_step)
-    my_lyap_time0 = np.zeros((num_ics,len(y0)))
-    # my_lyap_time1 = np.zeros((num_ics,len(y0)))
-    for i in range(num_ics):
-        y0 = ic_vec[i,:]
-        sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(0, Teval), y0=np.array(y0).T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=t_eval)
-        for d in range(len(y0)):
-            y0eps = np.copy(y0)
-            y0eps[d] += eps
+	t_eval = np.arange(start=0, stop=Teval, step=Teval_step)
+	my_lyap_time0 = np.zeros((num_ics,len(y0)))
+	# my_lyap_time1 = np.zeros((num_ics,len(y0)))
+	for i in range(num_ics):
+		y0 = ic_vec[i,:]
+		sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(0, Teval), y0=np.array(y0).T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=t_eval)
+		for d in range(len(y0)):
+			y0eps = np.copy(y0)
+			y0eps[d] += eps
 
-            soleps = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(0, Teval), y0=np.array(y0eps).T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=t_eval)
+			soleps = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(0, Teval), y0=np.array(y0eps).T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=t_eval)
 
-            soldiff = np.abs(sol.y[d,:] - soleps.y[d,:])
-            where0 = np.argmax(soldiff > eps*np.exp(1))
-            # where1 = np.argmax( np.log(soldiff) > (np.log(eps)+1) )
+			soldiff = np.abs(sol.y[d,:] - soleps.y[d,:])
+			where0 = np.argmax(soldiff > eps*np.exp(1))
+			# where1 = np.argmax( np.log(soldiff) > (np.log(eps)+1) )
 
-            my_lyap_time0[i,d] = t_eval[where0]
-            # my_lyap_time1[i,d] = t_eval[where1]
-        if (i%20 == 0):
-            print('Lyapunov time for d=',1, 'is',np.mean(my_lyap_time0[0:i,1]),'\\pm',np.std(my_lyap_time0[0:i,1]))
+			my_lyap_time0[i,d] = t_eval[where0]
+			# my_lyap_time1[i,d] = t_eval[where1]
+		if (i%20 == 0):
+			print('Lyapunov time for d=',1, 'is',np.mean(my_lyap_time0[0:i,1]),'\\pm',np.std(my_lyap_time0[0:i,1]))
 
-    for d in range(len(y0)):
-        print('Lyapunov time for d=',d, 'is',np.mean(my_lyap_time0[:,d]),'\\pm',np.std(my_lyap_time0[:,d]))
-        # print('Lyapunov time (v1) for d=',d, 'is',np.mean(my_lyap_time1[:,d]),'\\pm',np.std(my_lyap_time1[:,d]))
+	for d in range(len(y0)):
+		print('Lyapunov time for d=',d, 'is',np.mean(my_lyap_time0[:,d]),'\\pm',np.std(my_lyap_time0[:,d]))
+		# print('Lyapunov time (v1) for d=',d, 'is',np.mean(my_lyap_time1[:,d]),'\\pm',np.std(my_lyap_time1[:,d]))
 
-    return
+	return
 
 def f_normalize_ztrans(norm_dict,y):
-    y_norm = (y - norm_dict['Xmean']) / norm_dict['Xsd']
-    return y_norm
+	y_norm = (y - norm_dict['Xmean']) / norm_dict['Xsd']
+	return y_norm
 
 def f_unNormalize_ztrans(norm_dict,y_norm):
-    y = norm_dict['Xsd']*y_norm + norm_dict['Xmean']
-    return y
+	y = norm_dict['Xsd']*y_norm + norm_dict['Xmean']
+	return y
 
 def f_normalize_minmax(norm_dict,y):
-    y_norm = (y - norm_dict['Ymin']) / (norm_dict['Ymax'] - norm_dict['Ymin'])
-    return y_norm
+	y_norm = (y - norm_dict['Ymin']) / (norm_dict['Ymax'] - norm_dict['Ymin'])
+	return y_norm
 
 def f_unNormalize_minmax(norm_dict,y_norm):
-    # foo = np.matlib.repmat(norm_dict['Ymax'] - norm_dict['Ymin'], y_norm.shape[0], 1)
-    # y = norm_dict['Ymin'] + y_norm * foo
-    y = norm_dict['Ymin'] + y_norm * (norm_dict['Ymax'] - norm_dict['Ymin'])
-    return y
+	# foo = np.matlib.repmat(norm_dict['Ymax'] - norm_dict['Ymin'], y_norm.shape[0], 1)
+	# y = norm_dict['Ymin'] + y_norm * foo
+	y = norm_dict['Ymin'] + y_norm * (norm_dict['Ymax'] - norm_dict['Ymin'])
+	return y
 
 
 def generate_data(
-        t_length=100,
-        t_synch=10,
-        delta_t=0.1,
-        ODE=L63(),
-        noise_frac=0,
-        ode_int_method='RK45',
-        ode_int_atol=1.5e-8,
-        ode_int_rtol=1.5e-8,
-        ode_int_max_step=1.5e-3,
-        rng_seed=None,
-        slow_name='slow_data.npz',
-        fast_name='fast_data.npz',
-        slow_lims=None,
-        fast_lims=None):
-    '''To generate training data, set t_synch=0. For testing data, set t_synch>0.'''
+		t_length=100,
+		t_synch=10,
+		delta_t=0.1,
+		ODE=L63(),
+		noise_frac=0,
+		ode_int_method='RK45',
+		ode_int_atol=1.5e-8,
+		ode_int_rtol=1.5e-8,
+		ode_int_max_step=1.5e-3,
+		rng_seed=None,
+		slow_name='slow_data.npz',
+		fast_name='fast_data.npz',
+		slow_lims=None,
+		fast_lims=None):
+	'''To generate training data, set t_synch=0. For testing data, set t_synch>0.'''
 
 
-    if rng_seed:
-        np.random.seed(rng_seed)
+	if rng_seed:
+		np.random.seed(rng_seed)
 
-    t_eval = np.arange(0,(t_synch+t_length),delta_t)  #np.arange(0,10000,delta_t)
-    ntsynch = int(t_synch/delta_t)
+	t_eval = np.arange(0,(t_synch+t_length),delta_t)  #np.arange(0,10000,delta_t)
+	ntsynch = int(t_synch/delta_t)
 
-    # Generate N data sets
-    y0 = ODE.get_inits().squeeze()
-    sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=np.array(y0).T, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
-    y_clean = sol.y.T
-    y_noisy = y_clean + noise_frac*(np.max(y_clean,0) - np.min(y_clean,0))*np.random.randn(len(y_clean),y_clean.shape[1])
+	# Generate N data sets
+	y0 = ODE.get_inits().squeeze()
+	sol = solve_ivp(fun=lambda t, y: ODE.rhs(y, t), t_span=(t_eval[0], t_eval[-1]), y0=np.array(y0).T, method=ode_int_method, rtol=ode_int_rtol, atol=ode_int_atol, max_step=ode_int_max_step, t_eval=t_eval)
+	y_clean = sol.y.T
+	y_noisy = y_clean + noise_frac*(np.max(y_clean,0) - np.min(y_clean,0))*np.random.randn(len(y_clean),y_clean.shape[1])
 
-    output_dict_all = {'y_clean': y_clean[ntsynch:,:],
-                    'y_noisy': y_noisy[ntsynch:,:],
-                    'y_clean_synch': y_clean[:ntsynch,:],
-                    'y_noisy_synch': y_noisy[:ntsynch,:]
-                    }
+	output_dict_all = {'y_clean': y_clean[ntsynch:,:],
+					'y_noisy': y_noisy[ntsynch:,:],
+					'y_clean_synch': y_clean[:ntsynch,:],
+					'y_noisy_synch': y_noisy[:ntsynch,:]
+					}
 
 
-    if ODE.K==y_clean.shape[1]:
-        #only considering slow system anyway, so output every state
-        np.savez(file=slow_name, **output_dict_all)
-        # save phase plot
-        phase_plot(data=y_clean, plot_inds=ODE.plot_state_indices(), state_names=ODE.get_state_names(), output_fname=base_path+'_phase_plot', delta_t=delta_t, state_lims=slow_lims)
-    else:
-        output_dict_slow_only = {'y_clean': y_clean[ntsynch:,:ODE.K],
-                'y_noisy': y_noisy[ntsynch:,:ODE.K],
-                'y_clean_synch': y_clean[:ntsynch,:ODE.K],
-                'y_noisy_synch': y_noisy[:ntsynch,:ODE.K]
-                }
+	if ODE.K==y_clean.shape[1]:
+		#only considering slow system anyway, so output every state
+		np.savez(file=slow_name, **output_dict_all)
+		# save phase plot
+		phase_plot(data=y_clean, plot_inds=ODE.plot_state_indices(), state_names=ODE.get_state_names(), output_fname=base_path+'_phase_plot', delta_t=delta_t, state_lims=slow_lims)
+	else:
+		output_dict_slow_only = {'y_clean': y_clean[ntsynch:,:ODE.K],
+				'y_noisy': y_noisy[ntsynch:,:ODE.K],
+				'y_clean_synch': y_clean[:ntsynch,:ODE.K],
+				'y_noisy_synch': y_noisy[:ntsynch,:ODE.K]
+				}
 
-        output_dict_fast_only = {'y_clean': y_clean[ntsynch:,ODE.K:],
-                'y_noisy': y_noisy[ntsynch:,ODE.K:],
-                'y_clean_synch': y_clean[:ntsynch,ODE.K:],
-                'y_noisy_synch': y_noisy[:ntsynch,ODE.K:]
-                }
+		output_dict_fast_only = {'y_clean': y_clean[ntsynch:,ODE.K:],
+				'y_noisy': y_noisy[ntsynch:,ODE.K:],
+				'y_clean_synch': y_clean[:ntsynch,ODE.K:],
+				'y_noisy_synch': y_noisy[:ntsynch,ODE.K:]
+				}
 
-        np.savez(file=slow_name, **output_dict_slow_only)
+		np.savez(file=slow_name, **output_dict_slow_only)
 
-        # also save full slow/fast data
-        np.savez(file=fast_name, **output_dict_fast_only)
+		# also save full slow/fast data
+		np.savez(file=fast_name, **output_dict_fast_only)
 
-        # save fast phase plot
-        (base_path, ext) = os.path.splitext(fast_name)
-        plot_inds = np.arange(ODE.K, ODE.K+ODE.J).tolist()
-        phase_plot(data=output_dict_fast_only['y_clean'], plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True), output_fname=base_path+'_phase_plot', delta_t=delta_t, state_lims=slow_lims)
+		# save fast phase plot
+		(base_path, ext) = os.path.splitext(fast_name)
+		plot_inds = np.arange(ODE.K, ODE.K+ODE.J).tolist()
+		phase_plot(data=output_dict_fast_only['y_clean'], plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True), output_fname=base_path+'_phase_plot', delta_t=delta_t, state_lims=slow_lims)
 
-        # save slow phase plot
-        (base_path, ext) = os.path.splitext(slow_name)
-        plot_inds = np.arange(ODE.K).tolist()
-        phase_plot(data=output_dict_slow_only['y_clean'], plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True), output_fname=base_path+'_phase_plot', delta_t=delta_t, state_lims=fast_lims)
+		# save slow phase plot
+		(base_path, ext) = os.path.splitext(slow_name)
+		plot_inds = np.arange(ODE.K).tolist()
+		phase_plot(data=output_dict_slow_only['y_clean'], plot_inds=plot_inds, state_names=ODE.get_state_names(get_all=True), output_fname=base_path+'_phase_plot', delta_t=delta_t, state_lims=fast_lims)
 
-        # generate slow-data-inferred Ybar [THIS IS THE IMPORTANT ONE]
-        X_in = output_dict_slow_only['y_clean'][:-1,:]
-        X_out = output_dict_slow_only['y_clean'][1:,:]
-        Ybar_data_inferred = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=delta_t)
-        scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_data_inferred, output_fname=base_path+'_YbarSlowDataInferred_vs_X')
+		# generate slow-data-inferred Ybar [THIS IS THE IMPORTANT ONE]
+		X_in = output_dict_slow_only['y_clean'][:-1,:]
+		X_out = output_dict_slow_only['y_clean'][1:,:]
+		Ybar_data_inferred = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=delta_t)
+		scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_data_inferred, output_fname=base_path+'_YbarSlowDataInferred_vs_X')
 
-        # plot inferred Ybar vs true Ybar
-        y_fast = output_dict_fast_only['y_clean'][:-1,:]
-        Ybar_true = y_fast.reshape( (y_fast.shape[0], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
-        timeseries_Ybar_plots(delta_t=delta_t, Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=base_path+'_infer_Ybar_timeseries')
-        scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=base_path+'_EulerInfer_Ybar')
+		# plot inferred Ybar vs true Ybar
+		y_fast = output_dict_fast_only['y_clean'][:-1,:]
+		Ybar_true = y_fast.reshape( (y_fast.shape[0], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
+		timeseries_Ybar_plots(delta_t=delta_t, Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=base_path+'_infer_Ybar_timeseries')
+		scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=base_path+'_EulerInfer_Ybar')
 
-        # save data needed for Ybar reconstruction
-        np.savez(file=base_path+'_YbarData.npz',
-                    Ybar_data_inferred=Ybar_data_inferred,
-                    Ybar_true=Ybar_true,
-                    X = X_in)
+		# save data needed for Ybar reconstruction
+		np.savez(file=base_path+'_YbarData.npz',
+					Ybar_data_inferred=Ybar_data_inferred,
+					Ybar_true=Ybar_true,
+					X = X_in)
 
-    return
+	return
 
 
 def run_ode_model(model, tspan, sim_model_params, tau=50, noise_frac=0, output_dir=".", drive_system=True, plot_state_indices=None):
-    # time points
-    # tau = 50 # window length of persistence
+	# time points
+	# tau = 50 # window length of persistence
 
-    if drive_system:
-        # tmp = np.arange(0,1000,tau)
-        tmp = np.arange(0,tspan[-1],tau)
-        x = np.zeros([len(tmp),2])
-        x[:,0] = tmp
-        x[:,1] = 0*10*np.random.rand(len(x))
-        my_args = sim_model_params['ode_params'] + (x,)
-    else:
-        my_args = sim_model_params['ode_params']
-        x = None
+	if drive_system:
+		# tmp = np.arange(0,1000,tau)
+		tmp = np.arange(0,tspan[-1],tau)
+		x = np.zeros([len(tmp),2])
+		x[:,0] = tmp
+		x[:,1] = 0*10*np.random.rand(len(x))
+		my_args = sim_model_params['ode_params'] + (x,)
+	else:
+		my_args = sim_model_params['ode_params']
+		x = None
 
-    y0 = sim_model_params['state_init']
-    # y_clean = odeint(model, y0, tspan, args=my_args, mxstep=0)
+	y0 = sim_model_params['state_init']
+	# y_clean = odeint(model, y0, tspan, args=my_args, mxstep=0)
 
-    # pdb.set_trace()
-    sol = solve_ivp(fun=lambda t, y: model(y, t, *my_args), t_span=(tspan[0], tspan[-1]), y0=np.array(y0).T, method=sim_model_params['ode_int_method'], rtol=sim_model_params['ode_int_rtol'], atol=sim_model_params['ode_int_atol'], max_step=sim_model_params['ode_int_max_step'], t_eval=tspan)
-    y_clean = sol.y.T
+	# pdb.set_trace()
+	sol = solve_ivp(fun=lambda t, y: model(y, t, *my_args), t_span=(tspan[0], tspan[-1]), y0=np.array(y0).T, method=sim_model_params['ode_int_method'], rtol=sim_model_params['ode_int_rtol'], atol=sim_model_params['ode_int_atol'], max_step=sim_model_params['ode_int_max_step'], t_eval=tspan)
+	y_clean = sol.y.T
 
 
-    # CHOOSE noise size based on range of the data...if you base on mean or mean(abs),
-    # can get disproportionate SDs if one state oscillates between pos/neg, and another state is always POS.
-    y_noisy = y_clean + noise_frac*(np.max(y_clean,0) - np.min(y_clean,0))*np.random.randn(len(y_clean),y_clean.shape[1])
+	# CHOOSE noise size based on range of the data...if you base on mean or mean(abs),
+	# can get disproportionate SDs if one state oscillates between pos/neg, and another state is always POS.
+	y_noisy = y_clean + noise_frac*(np.max(y_clean,0) - np.min(y_clean,0))*np.random.randn(len(y_clean),y_clean.shape[1])
 
-    if not plot_state_indices:
-        plot_state_indices = np.arange(y_noisy.shape[1])
+	if not plot_state_indices:
+		plot_state_indices = np.arange(y_noisy.shape[1])
 
-    ## Plot clean ODE simulation
-    fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-    if not isinstance(ax_list,np.ndarray):
-        ax_list = [ax_list]
-    for kk in range(len(ax_list)):
-        ax = ax_list[kk]
-        ax.plot(tspan, y_clean[:,plot_state_indices[kk]], label='clean data')
-        ax.scatter(tspan, y_noisy[:,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
-        ax.set_xlabel('time')
-        ax.set_ylabel(sim_model_params['state_names'][plot_state_indices[kk]] +'(t)')
-        # ax.tick_params(axis='y')
-        # ax.set_title('Testing Fit')
-    ax_list[0].legend()
-    fig.suptitle('ODE simulation (clean)')
-    fig.savefig(fname=output_dir+'/ODEsimulation')
-    plt.close(fig)
+	## Plot clean ODE simulation
+	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+	if not isinstance(ax_list,np.ndarray):
+		ax_list = [ax_list]
+	for kk in range(len(ax_list)):
+		ax = ax_list[kk]
+		ax.plot(tspan, y_clean[:,plot_state_indices[kk]], label='clean data')
+		ax.scatter(tspan, y_noisy[:,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+		ax.set_xlabel('time')
+		ax.set_ylabel(sim_model_params['state_names'][plot_state_indices[kk]] +'(t)')
+		# ax.tick_params(axis='y')
+		# ax.set_title('Testing Fit')
+	ax_list[0].legend()
+	fig.suptitle('ODE simulation (clean)')
+	fig.savefig(fname=output_dir+'/ODEsimulation')
+	plt.close(fig)
 
-    # ## 2. Plot ODE
-    # fig, ax1 = plt.subplots()
+	# ## 2. Plot ODE
+	# fig, ax1 = plt.subplots()
 
-    # color = 'tab:red'
-    # ax1.scatter(tspan, y_noisy[:,0], s=10, alpha=0.3, color=color, label='noisy simulation')
-    # ax1.plot(tspan, y_clean, color=color, label='clean simulation')
-    # ax1.set_xlabel('time')
-    # ax1.set_ylabel('y(t)', color=color)
-    # ax1.tick_params(axis='y', labelcolor=color)
+	# color = 'tab:red'
+	# ax1.scatter(tspan, y_noisy[:,0], s=10, alpha=0.3, color=color, label='noisy simulation')
+	# ax1.plot(tspan, y_clean, color=color, label='clean simulation')
+	# ax1.set_xlabel('time')
+	# ax1.set_ylabel('y(t)', color=color)
+	# ax1.tick_params(axis='y', labelcolor=color)
 
-    # if drive_system:
-    #   ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-    #   color = 'tab:blue'
-    #   ax2.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
-    #   ax2.step(x[:,0], x[:,1], ':', where='post', color=color, linestyle='--', label='driver/input data')
-    #   ax2.tick_params(axis='y', labelcolor=color)
+	# if drive_system:
+	#   ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+	#   color = 'tab:blue'
+	#   ax2.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
+	#   ax2.step(x[:,0], x[:,1], ':', where='post', color=color, linestyle='--', label='driver/input data')
+	#   ax2.tick_params(axis='y', labelcolor=color)
 
-    # fig.legend()
-    # fig.suptitle('ODE simulation (clean)')
-    # fig.savefig(fname=output_dir+'/ODEsimulation_clean')
-    # plt.close(fig)
+	# fig.legend()
+	# fig.suptitle('ODE simulation (clean)')
+	# fig.savefig(fname=output_dir+'/ODEsimulation_clean')
+	# plt.close(fig)
 
-    return y_clean, y_noisy, x
+	return y_clean, y_noisy, x
 
 
 def make_RNN_data(model, tspan, sim_model_params, noise_frac=0, output_dir=".", drive_system=True, plot_state_indices=None):
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+	if not os.path.exists(output_dir):
+		os.makedirs(output_dir)
 
-    t0 = time()
+	t0 = time()
 
-    # make denser tspan
-    tspan_dense = np.linspace(tspan[0],tspan[-1],np.ceil((tspan[-1] - tspan[0])/sim_model_params['smaller_delta_t']+1))
+	# make denser tspan
+	tspan_dense = np.linspace(tspan[0],tspan[-1],np.ceil((tspan[-1] - tspan[0])/sim_model_params['smaller_delta_t']+1))
 
-    # intersect tspan_dense with original tspan, then get original indices
-    tspan_solve = np.union1d(tspan_dense, tspan)
+	# intersect tspan_dense with original tspan, then get original indices
+	tspan_solve = np.union1d(tspan_dense, tspan)
 
-    ind_orig_tspan = np.searchsorted(tspan_solve, tspan)
-    if not np.array_equal(tspan_solve[ind_orig_tspan],tspan):
-        raise ValueError('BUG IN THE CODE with subsetting tspan')
+	ind_orig_tspan = np.searchsorted(tspan_solve, tspan)
+	if not np.array_equal(tspan_solve[ind_orig_tspan],tspan):
+		raise ValueError('BUG IN THE CODE with subsetting tspan')
 
-    y_clean_dense, y_noisy_dense, x_dense  = run_ode_model(model, tspan_solve, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
+	y_clean_dense, y_noisy_dense, x_dense  = run_ode_model(model, tspan_solve, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
 
-    # find subset of dense
-    y_clean = y_clean_dense[ind_orig_tspan,:]
-    y_noisy = y_noisy_dense[ind_orig_tspan,:]
-    if x_dense:
-        x = x_dense[ind_orig_tspan,:]
-    else:
-        x = x_dense
+	# find subset of dense
+	y_clean = y_clean_dense[ind_orig_tspan,:]
+	y_noisy = y_noisy_dense[ind_orig_tspan,:]
+	if x_dense:
+		x = x_dense[ind_orig_tspan,:]
+	else:
+		x = x_dense
 
-    print("Took {0} seconds to integrate the ODE.".format(time()-t0))
-    if drive_system:
-        # little section to upsample the random, piecewise constant x(t) function
-        z = np.zeros([len(tspan),2])
-        z[:,0] = tspan
-        c = 0
-        prev = 0
-        for i in range(len(tspan)):
-            if c < len(x) and z[i,0]==x[c,0]:
-                prev = x[c,1]
-                c += 1
-            z[i,1] = prev
-        x0 = z[:,None,1] # add an extra dimension to the ode inputs so that it is a tensor for PyTorch
-        input_data = x0.T
-    else:
-        input_data = None
+	print("Took {0} seconds to integrate the ODE.".format(time()-t0))
+	if drive_system:
+		# little section to upsample the random, piecewise constant x(t) function
+		z = np.zeros([len(tspan),2])
+		z[:,0] = tspan
+		c = 0
+		prev = 0
+		for i in range(len(tspan)):
+			if c < len(x) and z[i,0]==x[c,0]:
+				prev = x[c,1]
+				c += 1
+			z[i,1] = prev
+		x0 = z[:,None,1] # add an extra dimension to the ode inputs so that it is a tensor for PyTorch
+		input_data = x0.T
+	else:
+		input_data = None
 
-    return input_data, y_clean, y_noisy
+	return input_data, y_clean, y_noisy
 
 
 def make_RNN_data2(model, tspan_train, tspan_test, sim_model_params, noise_frac=0, output_dir=".", drive_system=True, plot_state_indices=None, n_test_sets=1, f_get_state_inits=None, continue_trajectory=False):
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+	if not os.path.exists(output_dir):
+		os.makedirs(output_dir)
 
-    t0 = time()
-    try:
-        init_vec = f_get_state_inits(model=model, params=sim_model_params, n=(n_test_sets+1))
-    except:
-        init_vec = f_get_state_inits(n=(n_test_sets+1))
+	t0 = time()
+	try:
+		init_vec = f_get_state_inits(model=model, params=sim_model_params, n=(n_test_sets+1))
+	except:
+		init_vec = f_get_state_inits(n=(n_test_sets+1))
 
-    # first get training set
-    sim_model_params['state_init'] = init_vec[0,:]
-    # y_clean_train, y_noisy_train, x_train  = run_ode_model(model, tspan_train, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
+	# first get training set
+	sim_model_params['state_init'] = init_vec[0,:]
+	# y_clean_train, y_noisy_train, x_train  = run_ode_model(model, tspan_train, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
 
-    # make denser tspan
-    tspan_dense = np.linspace(tspan_train[0],tspan_train[-1],np.ceil((tspan_train[-1] - tspan_train[0])/sim_model_params['smaller_delta_t']+1))
+	# make denser tspan
+	tspan_dense = np.linspace(tspan_train[0],tspan_train[-1],np.ceil((tspan_train[-1] - tspan_train[0])/sim_model_params['smaller_delta_t']+1))
 
-    # intersect tspan_dense with original tspan, then get original indices
-    tspan_solve = np.union1d(tspan_dense, tspan_train)
+	# intersect tspan_dense with original tspan, then get original indices
+	tspan_solve = np.union1d(tspan_dense, tspan_train)
 
-    ind_orig_tspan = np.searchsorted(tspan_solve, tspan_train)
+	ind_orig_tspan = np.searchsorted(tspan_solve, tspan_train)
 
-    if not np.array_equal(tspan_solve[ind_orig_tspan],tspan_train):
-        raise ValueError('BUG IN THE CODE with subsetting tspan')
+	if not np.array_equal(tspan_solve[ind_orig_tspan],tspan_train):
+		raise ValueError('BUG IN THE CODE with subsetting tspan')
 
-    y_clean_train_dense, y_noisy_train_dense, x_train_dense  = run_ode_model(model, tspan_solve, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
+	y_clean_train_dense, y_noisy_train_dense, x_train_dense  = run_ode_model(model, tspan_solve, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
 
-    y_clean_train = y_clean_train_dense[ind_orig_tspan,:]
-    y_noisy_train = y_noisy_train_dense[ind_orig_tspan,:]
-    if x_train_dense:
-        x_train = x_train_dense[ind_orig_tspan,:]
-    else:
-        x_train = x_train_dense
+	y_clean_train = y_clean_train_dense[ind_orig_tspan,:]
+	y_noisy_train = y_noisy_train_dense[ind_orig_tspan,:]
+	if x_train_dense:
+		x_train = x_train_dense[ind_orig_tspan,:]
+	else:
+		x_train = x_train_dense
 
-    # now, get N test sets
-    for n in range(n_test_sets):
-        if continue_trajectory:
-            # increment 1 time step from end of training data
-            y0 = y_clean_train[-1,:]
-            tspan = get_tspan(sim_model_params)
-            # tspan = [0, 0.5*sim_model_params['delta_t'], sim_model_params['delta_t']]
-            y_out = odeint(model, y0, tspan, args=sim_model_params['ode_params'], mxstep=0)
-
-
-            pdb.set_trace()
-            sol = solve_ivp(fun=lambda t, y: model(y, t, *sim_model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=sim_model_params['ode_int_method'], rtol=sim_model_params['ode_int_rtol'], atol=sim_model_params['ode_int_atol'], max_step=sim_model_params['ode_int_max_step'], t_eval=tspan)
-            y_out2 = sol.y.T
+	# now, get N test sets
+	for n in range(n_test_sets):
+		if continue_trajectory:
+			# increment 1 time step from end of training data
+			y0 = y_clean_train[-1,:]
+			tspan = get_tspan(sim_model_params)
+			# tspan = [0, 0.5*sim_model_params['delta_t'], sim_model_params['delta_t']]
+			y_out = odeint(model, y0, tspan, args=sim_model_params['ode_params'], mxstep=0)
 
 
-            init_continued = y_out[-1,:]
-            sim_model_params['state_init'] = init_continued #y_clean_train[-1,:]
-        else:
-            sim_model_params['state_init'] = init_vec[n+1,:]
-        y_clean_test, y_noisy_test, x_test  = run_ode_model(model, tspan_test, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
-        if n==0:
-            y_clean_test_vec = np.zeros((n_test_sets,y_clean_test.shape[0],y_clean_test.shape[1]))
-            y_noisy_test_vec = np.zeros((n_test_sets,y_noisy_test.shape[0],y_noisy_test.shape[1]))
-            if drive_system:
-                x_test_vec = np.zeros((n_test_sets,x_test.shape[0],x_test.shape[1]))
-            else:
-                x_test_vec = None
-        y_clean_test_vec[n,:,:] = y_clean_test
-        y_noisy_test_vec[n,:,:] = y_noisy_test
-        if drive_system:
-            x_test_vec[n,:,:] = x_test
+			pdb.set_trace()
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *sim_model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=sim_model_params['ode_int_method'], rtol=sim_model_params['ode_int_rtol'], atol=sim_model_params['ode_int_atol'], max_step=sim_model_params['ode_int_max_step'], t_eval=tspan)
+			y_out2 = sol.y.T
 
-    # now create multiple training sets
-    print("Took {0} seconds to integrate the ODE.".format(time()-t0))
-    if drive_system:
-        # little section to upsample the random, piecewise constant x(t) function
-        z = np.zeros([len(tspan),2])
-        z[:,0] = tspan
-        c = 0
-        prev = 0
-        for i in range(len(tspan)):
-            if c < len(x) and z[i,0]==x[c,0]:
-                prev = x[c,1]
-                c += 1
-            z[i,1] = prev
-        x0 = z[:,None,1] # add an extra dimension to the ode inputs so that it is a tensor for PyTorch
-        input_data_train = x0.T
-    else:
-        input_data_train = None
 
-    return input_data_train, y_clean_train, y_noisy_train, y_clean_test_vec, y_noisy_test_vec, x_test_vec
+			init_continued = y_out[-1,:]
+			sim_model_params['state_init'] = init_continued #y_clean_train[-1,:]
+		else:
+			sim_model_params['state_init'] = init_vec[n+1,:]
+		y_clean_test, y_noisy_test, x_test  = run_ode_model(model, tspan_test, sim_model_params, noise_frac=noise_frac, output_dir=output_dir, drive_system=drive_system, plot_state_indices=plot_state_indices)
+		if n==0:
+			y_clean_test_vec = np.zeros((n_test_sets,y_clean_test.shape[0],y_clean_test.shape[1]))
+			y_noisy_test_vec = np.zeros((n_test_sets,y_noisy_test.shape[0],y_noisy_test.shape[1]))
+			if drive_system:
+				x_test_vec = np.zeros((n_test_sets,x_test.shape[0],x_test.shape[1]))
+			else:
+				x_test_vec = None
+		y_clean_test_vec[n,:,:] = y_clean_test
+		y_noisy_test_vec[n,:,:] = y_noisy_test
+		if drive_system:
+			x_test_vec[n,:,:] = x_test
+
+	# now create multiple training sets
+	print("Took {0} seconds to integrate the ODE.".format(time()-t0))
+	if drive_system:
+		# little section to upsample the random, piecewise constant x(t) function
+		z = np.zeros([len(tspan),2])
+		z[:,0] = tspan
+		c = 0
+		prev = 0
+		for i in range(len(tspan)):
+			if c < len(x) and z[i,0]==x[c,0]:
+				prev = x[c,1]
+				c += 1
+			z[i,1] = prev
+		x0 = z[:,None,1] # add an extra dimension to the ode inputs so that it is a tensor for PyTorch
+		input_data_train = x0.T
+	else:
+		input_data_train = None
+
+	return input_data_train, y_clean_train, y_noisy_train, y_clean_test_vec, y_noisy_test_vec, x_test_vec
 
 
 
 ### RNN fitting section
 def forward_vanilla(data_input, hidden_state, w1, w2, b, c, v, *args, **kwargs):
-    solver_failed = False
-    hidden_state = torch.relu(b + torch.mm(w2,data_input) + torch.mm(w1,hidden_state))
-    out = c + torch.mm(v,hidden_state)
-    return  (out, hidden_state, solver_failed)
+	solver_failed = False
+	hidden_state = torch.relu(b + torch.mm(w2,data_input) + torch.mm(w1,hidden_state))
+	out = c + torch.mm(v,hidden_state)
+	return  (out, hidden_state, solver_failed)
 
 def forward_chaos_pureML(data_input, hidden_state, A, B, C, a, b, normz_info, model, model_params, model_output=None, solver_failed=False):
-    hidden_state = torch.relu(a + torch.mm(A,hidden_state) + torch.mm(B,data_input))
-    # hidden_state = torch.relu(a + torch.mm(A,hidden_state))
+	hidden_state = torch.relu(a + torch.mm(A,hidden_state) + torch.mm(B,data_input))
+	# hidden_state = torch.relu(a + torch.mm(A,hidden_state))
 
-    y0_normalized = torch.squeeze(data_input).detach()
+	y0_normalized = torch.squeeze(data_input).detach()
 
-    if model_output is None and model_params['learn_residuals_rnn']:
-        # tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
-        tspan = get_tspan(model_params)
-        # driver = xmean + xsd*data_input.detach().numpy()
-        # my_args = model_params + (driver,)
-        #
-        # unnormalize data_input so that it can go through the ODE solver
-        # y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
-        # y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0)
-        # # pdb.set_trace()
+	if model_output is None and model_params['learn_residuals_rnn']:
+		# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+		tspan = get_tspan(model_params)
+		# driver = xmean + xsd*data_input.detach().numpy()
+		# my_args = model_params + (driver,)
+		#
+		# unnormalize data_input so that it can go through the ODE solver
+		# y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
+		# y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0)
+		# # pdb.set_trace()
 
-        # y_pred = y_out[-1,:] #last column
-        # y_pred_normalized = f_normalize_minmax(normz_info, y_pred)
-        y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
+		# y_pred = y_out[-1,:] #last column
+		# y_pred_normalized = f_normalize_minmax(normz_info, y_pred)
+		y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
 
-        # check if y0 is a bad initial condition
-        if (any(abs(y0)>1000)):
-            print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
-            solver_failed = True
+		# check if y0 is a bad initial condition
+		if (any(abs(y0)>1000)):
+			print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
+			solver_failed = True
 
-        if not solver_failed:
-            # y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
-            sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-            y_out = sol.y.T
-            if not sol.success:
-                # solver failed
-                print('ODE solver has failed at y0=',y0)
-                solver_failed = True
+		if not solver_failed:
+			# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+			y_out = sol.y.T
+			if not sol.success:
+				# solver failed
+				print('ODE solver has failed at y0=',y0)
+				solver_failed = True
 
-        if solver_failed:
-            y_pred_normalized = np.copy(y0_normalized.numpy()) # persist previous solution
-        else:
-            # solver is OKAY--use the solution like a good boy!
-            y_pred_normalized = f_normalize_minmax(normz_info, y_out[-1,:])
+		if solver_failed:
+			y_pred_normalized = np.copy(y0_normalized.numpy()) # persist previous solution
+		else:
+			# solver is OKAY--use the solution like a good boy!
+			y_pred_normalized = f_normalize_minmax(normz_info, y_out[-1,:])
 
-        final_pred = torch.FloatTensor(y_pred_normalized[:,None])
-    else:
-        if model_output is None:
-            final_pred = 0
-        else:
-            final_pred = torch.FloatTensor(model_output[:,None])
+		final_pred = torch.FloatTensor(y_pred_normalized[:,None])
+	else:
+		if model_output is None:
+			final_pred = 0
+		else:
+			final_pred = torch.FloatTensor(model_output[:,None])
 
-    out = model_params['learn_residuals_rnn']*final_pred + b + torch.mm(C,hidden_state)
-    return  (out, hidden_state, solver_failed)
+	out = model_params['learn_residuals_rnn']*final_pred + b + torch.mm(C,hidden_state)
+	return  (out, hidden_state, solver_failed)
 
 def forward_chaos_pureML2(data_input, hidden_state, A, B, C, a, b, *args, **kwargs):
-    solver_failed = False
-    hidden_state = torch.tanh(a + torch.mm(A,hidden_state))
-    out = b + torch.mm(C,hidden_state)
-    return  (out, hidden_state, solver_failed)
+	solver_failed = False
+	hidden_state = torch.tanh(a + torch.mm(A,hidden_state))
+	out = b + torch.mm(C,hidden_state)
+	return  (out, hidden_state, solver_failed)
 
 
 def get_tspan(model_params):
-    tspan = np.linspace(0,model_params['delta_t'],np.ceil(model_params['delta_t']/model_params['smaller_delta_t']+1))
-    if tspan[-1] != model_params['delta_t']:
-        raise ValueError('BUG IN THE CODE with computing new tspan')
-    return tspan
+	tspan = np.linspace(0,model_params['delta_t'],int(np.ceil(model_params['delta_t']/model_params['smaller_delta_t']+1)))
+	if tspan[-1] != model_params['delta_t']:
+		raise ValueError('BUG IN THE CODE with computing new tspan')
+	return tspan
 
 
 def forward_chaos_hybrid_full(model_input, hidden_state, A, B, C, a, b, normz_info, model, model_params, model_output=None, solver_failed=False):
-    # unnormalize
-    # ymin = normz_info['Ymin']
-    # ymax = normz_info['Ymax']
-    # ymean = normz_info['Ymean']
-    # ysd = normz_info['Ysd']
-    # xmean = normz_info['Xmean']
-    # xsd = normz_info['Xsd']
+	# unnormalize
+	# ymin = normz_info['Ymin']
+	# ymax = normz_info['Ymax']
+	# ymean = normz_info['Ymean']
+	# ysd = normz_info['Ysd']
+	# xmean = normz_info['Xmean']
+	# xsd = normz_info['Xsd']
 
-    # y0 = ymean + hidden_state[0].detach().numpy()*ysd
-    # y0 = ymin + ( hidden_state[0].detach().numpy()*(ymax - ymin) )
-    y0_normalized = torch.squeeze(model_input).detach()
-    if model_output is None:
-        # tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
-        tspan = get_tspan(model_params)
-        # driver = xmean + xsd*model_input.detach().numpy()
-        # my_args = model_params + (driver,)
-        #
-        # unnormalize model_input so that it can go through the ODE solver
-        # y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
-        # y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0)
-        # # pdb.set_trace()
+	# y0 = ymean + hidden_state[0].detach().numpy()*ysd
+	# y0 = ymin + ( hidden_state[0].detach().numpy()*(ymax - ymin) )
+	y0_normalized = torch.squeeze(model_input).detach()
+	if model_output is None:
+		# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+		tspan = get_tspan(model_params)
+		# driver = xmean + xsd*model_input.detach().numpy()
+		# my_args = model_params + (driver,)
+		#
+		# unnormalize model_input so that it can go through the ODE solver
+		# y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
+		# y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0)
+		# # pdb.set_trace()
 
-        # y_pred = y_out[-1,:] #last column
-        # y_pred_normalized = f_normalize_minmax(normz_info, y_pred)
-        y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
+		# y_pred = y_out[-1,:] #last column
+		# y_pred_normalized = f_normalize_minmax(normz_info, y_pred)
+		y0 = f_unNormalize_minmax(normz_info, y0_normalized.numpy())
 
-        # check if y0 is a bad initial condition
-        if (any(abs(y0)>1000)):
-            print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
-            solver_failed = True
+		# check if y0 is a bad initial condition
+		if (any(abs(y0)>1000)):
+			print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
+			solver_failed = True
 
-        if not solver_failed:
-            # y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
-            sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-            y_out = sol.y.T
-            if not sol.success:
-                # solver failed
-                print('ODE solver has failed at y0=',y0)
-                solver_failed = True
+		if not solver_failed:
+			# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+			y_out = sol.y.T
+			if not sol.success:
+				# solver failed
+				print('ODE solver has failed at y0=',y0)
+				solver_failed = True
 
-        if solver_failed:
-            y_pred_normalized = np.copy(y0_normalized.numpy()) # persist previous solution
-        else:
-            # solver is OKAY--use the solution like a good boy!
-            y_pred_normalized = f_normalize_minmax(normz_info, y_out[-1,:])
-    else:
-        # pdb.set_trace()
-        y_pred_normalized = model_output
+		if solver_failed:
+			y_pred_normalized = np.copy(y0_normalized.numpy()) # persist previous solution
+		else:
+			# solver is OKAY--use the solution like a good boy!
+			y_pred_normalized = f_normalize_minmax(normz_info, y_out[-1,:])
+	else:
+		# pdb.set_trace()
+		y_pred_normalized = model_output
 
-    # renormalize
-    # hidden_state[0] = torch.from_numpy( (y_out[-1] - ymin) / (ymax - ymin) )
-    # hidden_state[0] = torch.from_numpy( (y_out[-1] - ymean) / ysd )
-    stacked_input = torch.FloatTensor(np.hstack( (y_pred_normalized, y0_normalized) )[:,None])
-    hidden_state = torch.relu( a + torch.mm(A,hidden_state) + torch.mm(B,stacked_input) )
-    stacked_output = torch.cat( ( torch.FloatTensor(y_pred_normalized[:,None]), hidden_state ) )
-    out = model_params['learn_residuals_rnn']*torch.FloatTensor(y_pred_normalized[:,None]) + b + torch.mm(C,stacked_output)
-    return  (out, hidden_state, solver_failed)
+	# renormalize
+	# hidden_state[0] = torch.from_numpy( (y_out[-1] - ymin) / (ymax - ymin) )
+	# hidden_state[0] = torch.from_numpy( (y_out[-1] - ymean) / ysd )
+	stacked_input = torch.FloatTensor(np.hstack( (y_pred_normalized, y0_normalized) )[:,None])
+	hidden_state = torch.relu( a + torch.mm(A,hidden_state) + torch.mm(B,stacked_input) )
+	stacked_output = torch.cat( ( torch.FloatTensor(y_pred_normalized[:,None]), hidden_state ) )
+	out = model_params['learn_residuals_rnn']*torch.FloatTensor(y_pred_normalized[:,None]) + b + torch.mm(C,stacked_output)
+	return  (out, hidden_state, solver_failed)
 
 
 def forward_mech(input, hidden_state, w1, w2, b, c, v, normz_info, model, model_params):
-    # unnormalize
-    ymin = normz_info['Ymin']
-    ymax = normz_info['Ymax']
-    # ymean = normz_info['Ymean']
-    # ysd = normz_info['Ysd']
-    xmean = normz_info['Xmean']
-    xsd = normz_info['Xsd']
+	# unnormalize
+	ymin = normz_info['Ymin']
+	ymax = normz_info['Ymax']
+	# ymean = normz_info['Ymean']
+	# ysd = normz_info['Ysd']
+	xmean = normz_info['Xmean']
+	xsd = normz_info['Xsd']
 
-    # y0 = ymean + hidden_state[0].detach().numpy()*ysd
-    y0 = ymin + ( hidden_state[0].detach().numpy()*(ymax - ymin) )
-    tspan = [0,0.5,1]
-    driver = xmean + xsd*input.detach().numpy()
-    my_args = model_params + (driver,)
-    y_out = odeint(model, y0, tspan, args=my_args, mxstep=0)
+	# y0 = ymean + hidden_state[0].detach().numpy()*ysd
+	y0 = ymin + ( hidden_state[0].detach().numpy()*(ymax - ymin) )
+	tspan = [0,0.5,1]
+	driver = xmean + xsd*input.detach().numpy()
+	my_args = model_params + (driver,)
+	y_out = odeint(model, y0, tspan, args=my_args, mxstep=0)
 
-    pdb.set_trace()
-    sol = solve_ivp(fun=lambda t, y: model(y, t, *my_args), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-    y_out2 = sol.y.T
+	pdb.set_trace()
+	sol = solve_ivp(fun=lambda t, y: model(y, t, *my_args), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+	y_out2 = sol.y.T
 
-    # renormalize
-    hidden_state[0] = torch.from_numpy( (y_out[-1] - ymin) / (ymax - ymin) )
-    # hidden_state[0] = torch.from_numpy( (y_out[-1] - ymean) / ysd )
+	# renormalize
+	hidden_state[0] = torch.from_numpy( (y_out[-1] - ymin) / (ymax - ymin) )
+	# hidden_state[0] = torch.from_numpy( (y_out[-1] - ymean) / ysd )
 
-    hidden_state = torch.relu(b + torch.mm(w2,input) + torch.mm(w1,hidden_state))
-    out = c + torch.mm(v,hidden_state)
-    return  (out, hidden_state)
+	hidden_state = torch.relu(b + torch.mm(w2,input) + torch.mm(w1,hidden_state))
+	out = c + torch.mm(v,hidden_state)
+	return  (out, hidden_state)
 
 
 def f_get_derivatives(X, h):
-    # This is a first-order central finite-difference method from
-    # http://hplgit.github.io/pyhpc/doc/pub/._project001.html
-    (nvals, ndim) = X.shape
-    keep_inds = np.arange(nvals)
+	# This is a first-order central finite-difference method from
+	# http://hplgit.github.io/pyhpc/doc/pub/._project001.html
+	(nvals, ndim) = X.shape
+	keep_inds = np.arange(nvals)
 
-    dX = np.zeros(X.shape)
-    for k in range(ndim):
-        # Internal mesh points
-        dX[1:-1,k] = (X[2:,k] - X[:-2,k]) / (2*h)
-        # End points
-        dX[0,k]  = (X[1,k]  - X[0,k]) / h
-        dX[-1,k] = (X[-1,k]  - X[-2,k]) / h
+	dX = np.zeros(X.shape)
+	for k in range(ndim):
+		# Internal mesh points
+		dX[1:-1,k] = (X[2:,k] - X[:-2,k]) / (2*h)
+		# End points
+		dX[0,k]  = (X[1,k]  - X[0,k]) / h
+		dX[-1,k] = (X[-1,k]  - X[-2,k]) / h
 
-    return dX[keep_inds,:], keep_inds
+	return dX[keep_inds,:], keep_inds
 
 
 def invariant_density_plot(test_data, pred_data, plot_inds, state_names, output_fname, kde_func=kde_scipy):
-    # plot KDE of test data vs predictions
-    fig, (ax_list) = plt.subplots(len(plot_inds),1)
-    if not isinstance(ax_list,np.ndarray):
-        ax_list = [ax_list]
+	# plot KDE of test data vs predictions
+	fig, (ax_list) = plt.subplots(len(plot_inds),1)
+	if not isinstance(ax_list,np.ndarray):
+		ax_list = [ax_list]
 
-    for kk in range(len(ax_list)):
-        ax1 = ax_list[kk]
-        pk = plot_inds[kk]
-        try:
-            x_grid = np.linspace(min(test_data[:,pk]), max(test_data[:,pk]), 1000)
-            ax1.plot(x_grid, kde_func(test_data[:,pk], x_grid), label='test data')
-        except:
-            pass
-        try:
-            x_grid = np.linspace(min(pred_data[:,pk]), max(pred_data[:,pk]), 1000)
-            ax1.plot(x_grid, kde_func(pred_data[:,pk], x_grid), label='learned fit')
-        except:
-            pass
-        ax1.set_ylabel('P({0})'.format(state_names[pk]), rotation=0)
+	for kk in range(len(ax_list)):
+		ax1 = ax_list[kk]
+		pk = plot_inds[kk]
+		try:
+			x_grid = np.linspace(min(test_data[:,pk]), max(test_data[:,pk]), 1000)
+			ax1.plot(x_grid, kde_func(test_data[:,pk], x_grid), label='test data')
+		except:
+			pass
+		try:
+			x_grid = np.linspace(min(pred_data[:,pk]), max(pred_data[:,pk]), 1000)
+			ax1.plot(x_grid, kde_func(pred_data[:,pk], x_grid), label='learned fit')
+		except:
+			pass
+		ax1.set_ylabel('P({0})'.format(state_names[pk]), rotation=0)
 
-    ax_list[0].legend()
+	ax_list[0].legend()
 
-    fig.suptitle('Learned Invariant Density')
-    fig.savefig(fname=output_fname)
-    plt.close(fig)
-    return
+	fig.suptitle('Learned Invariant Density')
+	fig.savefig(fname=output_fname)
+	plt.close(fig)
+	return
 
 
 def all_kdes_plot(data, output_fname, plot_inds=None, state_names=None):
 
-    if plot_inds is None:
-        plot_inds = np.arange(data.shape[1])
-    if state_names is None:
-        state_names = [r'$X_{ind}$'.format(ind=k+1) for k in plot_inds]
+	if plot_inds is None:
+		plot_inds = np.arange(data.shape[1])
+	if state_names is None:
+		state_names = [r'$X_{ind}$'.format(ind=k+1) for k in plot_inds]
 
-    fig, ax = plt.subplots(1,1, figsize=[11,11])
-    for i_y in range(len(plot_inds)):
-        yy = plot_inds[i_y]
-        sns.kdeplot(data[:,yy], ax=ax, linewidth=2, label=state_names[yy])
-        ax.set_xlabel(r'$X_k$')
-        ax.set_ylabel('Probability')
-    ax.legend(loc='best', prop={'size': 10})
-    ax.set_title('1-D Invariant Measure KDE')
-    fig.savefig(fname=output_fname, dpi=300)
-    plt.close(fig)
-    return
+	fig, ax = plt.subplots(1,1, figsize=[11,11])
+	for i_y in range(len(plot_inds)):
+		yy = plot_inds[i_y]
+		sns.kdeplot(data[:,yy], ax=ax, linewidth=2, label=state_names[yy])
+		ax.set_xlabel(r'$X_k$')
+		ax.set_ylabel('Probability')
+	ax.legend(loc='best', prop={'size': 10})
+	ax.set_title('1-D Invariant Measure KDE')
+	fig.savefig(fname=output_fname, dpi=300)
+	plt.close(fig)
+	return
 
 def phase_plot(data, output_fname, delta_t=1, state_lims=None, plot_inds=None, state_names=None, wspace=None, hspace=None, mode='traj', n_subsample_kde=1e7):
 
-    # modify output_fname
-    output_fname = fname_append(output_fname, append_str=mode)
+	# modify output_fname
+	output_fname = fname_append(output_fname, append_str=mode)
 
-    if mode=='density':
-        biv_kde_inds = get_inds(N_total=data.shape[0], N_subsample=n_subsample_kde)
+	if mode=='density':
+		biv_kde_inds = get_inds(N_total=data.shape[0], N_subsample=n_subsample_kde)
 
-    if plot_inds is None:
-        plot_inds = np.arange(data.shape[1])
-    if state_names is None:
-        state_names = [r'$X_{ind}$'.format(ind=k+1) for k in plot_inds]
+	if plot_inds is None:
+		plot_inds = np.arange(data.shape[1])
+	if state_names is None:
+		state_names = [r'$X_{ind}$'.format(ind=k+1) for k in plot_inds]
 
-    fig, ax_list = plt.subplots(len(plot_inds),len(plot_inds), figsize=[11,11])
-    for i_y in range(len(plot_inds)):
-        yy = plot_inds[i_y]
-        left_y = True
-        if yy == plot_inds[-1]:
-            bottom_x = True
-        else:
-            bottom_x = False
-        for i_x in range(len(plot_inds)):
-            xx = plot_inds[i_x]
+	fig, ax_list = plt.subplots(len(plot_inds),len(plot_inds), figsize=[11,11])
+	for i_y in range(len(plot_inds)):
+		yy = plot_inds[i_y]
+		left_y = True
+		if yy == plot_inds[-1]:
+			bottom_x = True
+		else:
+			bottom_x = False
+		for i_x in range(len(plot_inds)):
+			xx = plot_inds[i_x]
 
-            ax = ax_list[i_y][i_x]
-            if xx<yy:
-                if mode=='traj':
-                    ax.plot(data[:,xx],data[:,yy])
-                elif mode=='scatter':
-                    ax.plot(data[:,xx],data[:,yy],'o',markersize=2)
-                elif mode=='density':
-                    sns.kdeplot(data=data[biv_kde_inds,xx],data2=data[biv_kde_inds,yy], ax=ax)
-            elif xx==yy:
-                if mode=='traj':
-                    ax.plot(delta_t*np.arange(data.shape[0]), data[:,xx])
-                elif mode=='scatter' or mode=='density':
-                    sns.kdeplot(data[:,xx], ax=ax, linewidth=2)
-            else:
-                ax.axis('off')
-            if bottom_x:
-                ax.set_xlabel(state_names[xx])
-            if left_y:
-                ax.set_ylabel(state_names[yy])
-                left_y = False
-    fig.suptitle('ODE simulation')
-    fig.subplots_adjust(wspace=wspace, hspace=hspace)
-    fig.savefig(fname=output_fname, dpi=300)
-    plt.close(fig)
-    return
+			ax = ax_list[i_y][i_x]
+			if xx<yy:
+				if mode=='traj':
+					ax.plot(data[:,xx],data[:,yy])
+				elif mode=='scatter':
+					ax.plot(data[:,xx],data[:,yy],'o',markersize=2)
+				elif mode=='density':
+					sns.kdeplot(data=data[biv_kde_inds,xx],data2=data[biv_kde_inds,yy], ax=ax)
+			elif xx==yy:
+				if mode=='traj':
+					ax.plot(delta_t*np.arange(data.shape[0]), data[:,xx])
+				elif mode=='scatter' or mode=='density':
+					sns.kdeplot(data[:,xx], ax=ax, linewidth=2)
+			else:
+				ax.axis('off')
+			if bottom_x:
+				ax.set_xlabel(state_names[xx])
+			if left_y:
+				ax.set_ylabel(state_names[yy])
+				left_y = False
+	fig.suptitle('ODE simulation')
+	fig.subplots_adjust(wspace=wspace, hspace=hspace)
+	fig.savefig(fname=output_fname, dpi=300)
+	plt.close(fig)
+	return
 
 def gp_marginal_plot(xdata, ydata, xnames, ynames, xplot_inds, yplot_inds, output_fname, xmin=None, xmax=None):
 
-    if xmax is not None and xmin is not None:
-        my_inds = np.where((xdata>=xmin).all(axis=1) & (xdata<=xmax).all(axis=1))[0]
-        xdata = xdata[my_inds,:]
-        ydata = ydata[my_inds,:]
+	if xmax is not None and xmin is not None:
+		my_inds = np.where((xdata>=xmin).all(axis=1) & (xdata<=xmax).all(axis=1))[0]
+		xdata = xdata[my_inds,:]
+		ydata = ydata[my_inds,:]
 
-    if len(yplot_inds)==1:
-        fig, ax_list = plt.subplots(len(yplot_inds),len(xplot_inds), figsize=[11,5], sharey=True)
-        ax_list = [ax_list]
-    else:
-        fig, ax_list = plt.subplots(len(yplot_inds),len(xplot_inds), figsize=[11,11])
+	if len(yplot_inds)==1:
+		fig, ax_list = plt.subplots(len(yplot_inds),len(xplot_inds), figsize=[11,5], sharey=True)
+		ax_list = [ax_list]
+	else:
+		fig, ax_list = plt.subplots(len(yplot_inds),len(xplot_inds), figsize=[11,11])
 
-    for i_y in range(len(yplot_inds)):
-        yy = yplot_inds[i_y]
-        left_y = True
-        if yy == yplot_inds[-1]:
-            bottom_x = True
-        else:
-            bottom_x = False
-        for i_x in range(len(xplot_inds)):
-            ax = ax_list[i_y][i_x]
-            xx = xplot_inds[i_x]
-            ax.scatter(xdata[:,xx],ydata[:,yy],s=10,alpha=0.5)
-            if xx==yy and len(yplot_inds)>1:
-                yminfoo, ymaxfoo = ax.get_ylim()
-                xminfoo, xmaxfoo = ax.get_xlim()
-                if (0 > 0.8*yminfoo) and (0 < 1.2*ymaxfoo):
-                    ax.hlines(y=0, xmin=xminfoo, xmax=xmaxfoo, colors='k')
-                if (0 > 0.8*xminfoo) and (0 < 1.2*xmaxfoo):
-                    ax.vlines(x=0, ymin=yminfoo, ymax=ymaxfoo, colors='k')
+	for i_y in range(len(yplot_inds)):
+		yy = yplot_inds[i_y]
+		left_y = True
+		if yy == yplot_inds[-1]:
+			bottom_x = True
+		else:
+			bottom_x = False
+		for i_x in range(len(xplot_inds)):
+			ax = ax_list[i_y][i_x]
+			xx = xplot_inds[i_x]
+			ax.scatter(xdata[:,xx],ydata[:,yy],s=10,alpha=0.5)
+			if xx==yy and len(yplot_inds)>1:
+				yminfoo, ymaxfoo = ax.get_ylim()
+				xminfoo, xmaxfoo = ax.get_xlim()
+				if (0 > 0.8*yminfoo) and (0 < 1.2*ymaxfoo):
+					ax.hlines(y=0, xmin=xminfoo, xmax=xmaxfoo, colors='k')
+				if (0 > 0.8*xminfoo) and (0 < 1.2*xmaxfoo):
+					ax.vlines(x=0, ymin=yminfoo, ymax=ymaxfoo, colors='k')
 
-            if bottom_x:
-                ax.set_xlabel(xnames[xx])
-            if left_y:
-                ax.set_ylabel(ynames[yy])
-                left_y = False
-    fig.suptitle('GP input response')
-    fig.savefig(fname=output_fname)
-    plt.close(fig)
-    return
+			if bottom_x:
+				ax.set_xlabel(xnames[xx])
+			if left_y:
+				ax.set_ylabel(ynames[yy])
+				left_y = False
+	fig.suptitle('GP input response')
+	fig.savefig(fname=output_fname)
+	plt.close(fig)
+	return
 
 def scatter_Ybar(Ybar_true, Ybar_inferred, output_fname):
-    K = Ybar_true.shape[1]
-    fig, ax_list = plt.subplots(1, K, figsize=[11,5], sharey=True, sharex=True)
-    for k in range(K):
-        ax_list[k].scatter(Ybar_true[:,k], Ybar_inferred[:,k])
-        ax_list[k].set_xlabel(r'True $\bar{Y}_%d$' % k)
-        ax_list[k].set_ylabel(r'Inferred $\bar{Y}_%d$' % k)
-    fig.suptitle(r'Compare True vs Inferred $\bar{Y}_k$')
-    fig.savefig(fname=output_fname)
-    plt.close(fig)
-    return
+	K = Ybar_true.shape[1]
+	fig, ax_list = plt.subplots(1, K, figsize=[11,5], sharey=True, sharex=True)
+	for k in range(K):
+		ax_list[k].scatter(Ybar_true[:,k], Ybar_inferred[:,k])
+		ax_list[k].set_xlabel(r'True $\bar{Y}_%d$' % k)
+		ax_list[k].set_ylabel(r'Inferred $\bar{Y}_%d$' % k)
+	fig.suptitle(r'Compare True vs Inferred $\bar{Y}_k$')
+	fig.savefig(fname=output_fname)
+	plt.close(fig)
+	return
 
 def scatter_Ybar_X(X, Ybar_inferred, output_fname):
-    K = X.shape[1]
-    fig, ax_list = plt.subplots(1, K, figsize=[11,5], sharey=True, sharex=True)
-    for k in range(K):
-        ax_list[k].scatter(X[:,k], Ybar_inferred[:,k])
-        ax_list[k].set_xlabel(r'$X_%d$' % k)
-        ax_list[k].set_ylabel(r'Inferred $\bar{Y}_%d$' % k)
-    fig.suptitle(r'Compare $X_k$ vs Inferred $\bar{Y}_k$')
-    fig.savefig(fname=output_fname)
-    plt.close(fig)
-    return
+	K = X.shape[1]
+	fig, ax_list = plt.subplots(1, K, figsize=[11,5], sharey=True, sharex=True)
+	for k in range(K):
+		ax_list[k].scatter(X[:,k], Ybar_inferred[:,k])
+		ax_list[k].set_xlabel(r'$X_%d$' % k)
+		ax_list[k].set_ylabel(r'Inferred $\bar{Y}_%d$' % k)
+	fig.suptitle(r'Compare $X_k$ vs Inferred $\bar{Y}_k$')
+	fig.savefig(fname=output_fname)
+	plt.close(fig)
+	return
 
 def timeseries_Ybar_plots(Ybar_true, Ybar_inferred, output_fname, delta_t):
-    timeseries_Ybar_k_error(Ybar_true, Ybar_inferred, output_fname+'kspecific', delta_t)
-    timeseries_Ybar_normed_error(Ybar_true, Ybar_inferred, output_fname+'normed', delta_t)
-    return
+	timeseries_Ybar_k_error(Ybar_true, Ybar_inferred, output_fname+'kspecific', delta_t)
+	timeseries_Ybar_normed_error(Ybar_true, Ybar_inferred, output_fname+'normed', delta_t)
+	return
 
 def timeseries_Ybar_k_error(Ybar_true, Ybar_inferred, output_fname, delta_t):
-    K = Ybar_true.shape[1]
-    fig, ax_list = plt.subplots(K, 1, figsize=[11,11], sharey=True, sharex=True)
-    for k in range(K):
-        k_err = np.linalg.norm(Ybar_true[:,k,None] - Ybar_inferred[:,k,None], axis=1)
-        ax_list[k].plot(delta_t*np.arange(Ybar_true.shape[0]), k_err)
-        ax_list[k].set_ylabel('Error')
-        ax_list[k].set_title('k={0}'.format(k))
-    ax_list[k].set_xlabel('Time')
-    fig.suptitle(r'$||$ True $\bar{Y}_k$ - Inferred $\bar{Y}_k ||$')
-    fig.savefig(fname=output_fname)
+	K = Ybar_true.shape[1]
+	fig, ax_list = plt.subplots(K, 1, figsize=[11,11], sharey=True, sharex=True)
+	for k in range(K):
+		k_err = np.linalg.norm(Ybar_true[:,k,None] - Ybar_inferred[:,k,None], axis=1)
+		ax_list[k].plot(delta_t*np.arange(Ybar_true.shape[0]), k_err)
+		ax_list[k].set_ylabel('Error')
+		ax_list[k].set_title('k={0}'.format(k))
+	ax_list[k].set_xlabel('Time')
+	fig.suptitle(r'$||$ True $\bar{Y}_k$ - Inferred $\bar{Y}_k ||$')
+	fig.savefig(fname=output_fname)
 
-    for k in range(K):
-        ax_list[k].set_yscale('log')
-    fig.savefig(fname=output_fname+'_log')
+	for k in range(K):
+		ax_list[k].set_yscale('log')
+	fig.savefig(fname=output_fname+'_log')
 
-    plt.close(fig)
+	plt.close(fig)
 
 def timeseries_Ybar_normed_error(Ybar_true, Ybar_inferred, output_fname, delta_t):
-    K = Ybar_true.shape[1]
-    fig, ax = plt.subplots(1, 1, figsize=[11,11], sharey=True, sharex=True)
-    k_err = np.linalg.norm(Ybar_true - Ybar_inferred, axis=1)
-    ax.plot(delta_t*np.arange(Ybar_true.shape[0]), k_err)
-    ax.set_ylabel('Error')
-    ax.set_xlabel('Time')
-    ax.set_title(r'$||$ True $\bar{Y}^{(t)}$ - Inferred $\bar{Y}^{(t)} ||$')
-    fig.savefig(fname=output_fname)
+	K = Ybar_true.shape[1]
+	fig, ax = plt.subplots(1, 1, figsize=[11,11], sharey=True, sharex=True)
+	k_err = np.linalg.norm(Ybar_true - Ybar_inferred, axis=1)
+	ax.plot(delta_t*np.arange(Ybar_true.shape[0]), k_err)
+	ax.set_ylabel('Error')
+	ax.set_xlabel('Time')
+	ax.set_title(r'$||$ True $\bar{Y}^{(t)}$ - Inferred $\bar{Y}^{(t)} ||$')
+	fig.savefig(fname=output_fname)
 
-    ax.set_yscale('log')
-    fig.savefig(fname=output_fname+'_log')
+	ax.set_yscale('log')
+	fig.savefig(fname=output_fname+'_log')
 
-    plt.close(fig)
+	plt.close(fig)
 
 
 def run_ode_test(y_clean_test, y_noisy_test,
-                y_clean_testSynch, y_noisy_testSynch,
-                model,f_unNormalize_Y,
-                model_pred,
-                train_seq_length,
-                test_seq_length,
-                output_size,
-                avg_output_test,
-                avg_output_clean_test,
-                normz_info, model_params, model_params_TRUE, random_attractor_points,
-                plot_state_indices,
-                output_dir,
-                n_plttrain,
-                n_plttest,
-                n_test_sets,
-                err_thresh,
-                y_fast_test=None,
-                y_fast_train=None,
-                ODE=None,
-                use_ode_test_data=False):
+				y_clean_testSynch, y_noisy_testSynch,
+				model,f_unNormalize_Y,
+				model_pred,
+				train_seq_length,
+				test_seq_length,
+				output_size,
+				avg_output_test,
+				avg_output_clean_test,
+				normz_info, model_params, model_params_TRUE, random_attractor_points,
+				plot_state_indices,
+				output_dir,
+				n_plttrain,
+				n_plttest,
+				n_test_sets,
+				err_thresh,
+				y_fast_test=None,
+				y_fast_train=None,
+				ODE=None,
+				use_ode_test_data=False):
 
-    gp_nm = ''
+	gp_nm = ''
 
-    loss_vec_test = np.zeros((1,n_test_sets))
-    loss_vec_clean_test = np.zeros((1,n_test_sets))
-    pred_validity_vec_test = np.zeros((1,n_test_sets))
-    pred_validity_vec_clean_test = np.zeros((1,n_test_sets))
+	loss_vec_test = np.zeros((1,n_test_sets))
+	loss_vec_clean_test = np.zeros((1,n_test_sets))
+	pred_validity_vec_test = np.zeros((1,n_test_sets))
+	pred_validity_vec_clean_test = np.zeros((1,n_test_sets))
 
-    # loop over test sets
-    ALLy_clean_test_raw = []
-    ALLgpr_test_predictions_raw = []
-    ALLgpr_test_predictions_onestep_raw = []
-    tspan = get_tspan(model_params)
-    for kkt in range(n_test_sets):
-        # now compute test loss
-        total_loss_test = 0
-        total_loss_clean_test = 0
-        pred = y_noisy_testSynch[kkt,-1,None].squeeze()
-        # pred = np.squeeze(y_noisy_testSynch[-1,:,None].T)
-        pw_loss_test = np.zeros(test_seq_length)
-        pw_loss_clean_test = np.zeros(test_seq_length)
-        gpr_test_predictions = np.zeros([test_seq_length, output_size])
-        gpr_test_predictions_onestep = np.zeros([test_seq_length, output_size])
-        solver_failed = False
-        for j in range(test_seq_length):
-            target = y_noisy_test[kkt,j,:]
-            target_clean = y_clean_test[kkt,j,:]
-            if j>0:
-                test_val_prev = y_clean_test[kkt,j-1,:].squeeze()
-            else:
-                test_val_prev = y_clean_testSynch[kkt,-1,:].squeeze()
+	# loop over test sets
+	ALLy_clean_test_raw = []
+	ALLgpr_test_predictions_raw = []
+	ALLgpr_test_predictions_onestep_raw = []
+	tspan = get_tspan(model_params)
+	for kkt in range(n_test_sets):
+		# now compute test loss
+		total_loss_test = 0
+		total_loss_clean_test = 0
+		pred = y_noisy_testSynch[kkt,-1,None].squeeze()
+		# pred = np.squeeze(y_noisy_testSynch[-1,:,None].T)
+		pw_loss_test = np.zeros(test_seq_length)
+		pw_loss_clean_test = np.zeros(test_seq_length)
+		gpr_test_predictions = np.zeros([test_seq_length, output_size])
+		gpr_test_predictions_onestep = np.zeros([test_seq_length, output_size])
+		solver_failed = False
+		for j in range(test_seq_length):
+			target = y_noisy_test[kkt,j,:]
+			target_clean = y_clean_test[kkt,j,:]
+			if j>0:
+				test_val_prev = y_clean_test[kkt,j-1,:].squeeze()
+			else:
+				test_val_prev = y_clean_testSynch[kkt,-1,:].squeeze()
 
-            if use_ode_test_data:
-                # ONLY do this to test our ability to infer Ybark from true slow data
-                pred = target_clean
-                pred_one_step = target_clean
-            else:
-                # generate next-step ODE model prediction
-                # tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
-                # unnormalize model_input so that it can go through the ODE solver
-                y0 = f_unNormalize_minmax(normz_info, pred)
+			if use_ode_test_data:
+				# ONLY do this to test our ability to infer Ybark from true slow data
+				pred = target_clean
+				pred_one_step = target_clean
+			else:
+				# generate next-step ODE model prediction
+				# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+				# unnormalize model_input so that it can go through the ODE solver
+				y0 = f_unNormalize_minmax(normz_info, pred)
 
-                # compute prediction using PURE ODE MODEL
-                if not solver_failed:
-                    sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-                    y_out = sol.y.T
-                    if not sol.success:
-                        # solver failed
-                        print('ODE solver has failed at y0=',y0)
-                        solver_failed = True
-                if solver_failed:
-                    my_model_pred = np.copy(pred) # persist previous normalized solution
-                else:
-                    # solver is OKAY--use the solution like a good boy!
-                    my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+				# compute prediction using PURE ODE MODEL
+				if not solver_failed:
+					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+					y_out = sol.y.T
+					if not sol.success:
+						# solver failed
+						print('ODE solver has failed at y0=',y0)
+						solver_failed = True
+				if solver_failed:
+					my_model_pred = np.copy(pred) # persist previous normalized solution
+				else:
+					# solver is OKAY--use the solution like a good boy!
+					my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
 
-                pred = my_model_pred
+				pred = my_model_pred
 
-                # now do one-step-ahead prediction using testing data (only for inferYbar plots)
-                y0 = f_unNormalize_minmax(normz_info, test_val_prev)
-                sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-                y_out = sol.y.T
-                pred_one_step = f_normalize_minmax(normz_info, y_out[-1,:])
+				# now do one-step-ahead prediction using testing data (only for inferYbar plots)
+				y0 = f_unNormalize_minmax(normz_info, test_val_prev)
+				sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+				y_out = sol.y.T
+				pred_one_step = f_normalize_minmax(normz_info, y_out[-1,:])
 
-            # compute losses
-            j_loss = sum((pred - target)**2)
-            j_loss_clean = sum((pred - target_clean)**2)
-            total_loss_test += j_loss
-            total_loss_clean_test += j_loss_clean
-            pw_loss_test[j] = j_loss**0.5 / avg_output_test
-            pw_loss_clean_test[j] = j_loss_clean**0.5 / avg_output_clean_test
-            gpr_test_predictions[j,:] = pred
-            gpr_test_predictions_onestep[j,:] = pred_one_step
+			# compute losses
+			j_loss = sum((pred - target)**2)
+			j_loss_clean = sum((pred - target_clean)**2)
+			total_loss_test += j_loss
+			total_loss_clean_test += j_loss_clean
+			pw_loss_test[j] = j_loss**0.5 / avg_output_test
+			pw_loss_clean_test[j] = j_loss_clean**0.5 / avg_output_clean_test
+			gpr_test_predictions[j,:] = pred
+			gpr_test_predictions_onestep[j,:] = pred_one_step
 
-        total_loss_test = total_loss_test / test_seq_length
-        total_loss_clean_test = total_loss_clean_test / test_seq_length
+		total_loss_test = total_loss_test / test_seq_length
+		total_loss_clean_test = total_loss_clean_test / test_seq_length
 
-        #store losses
-        loss_vec_test[0,kkt] = total_loss_test
-        loss_vec_clean_test[0,kkt] = total_loss_clean_test
-        pred_validity_vec_test[0,kkt] = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
-        pred_validity_vec_clean_test[0,kkt] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
+		#store losses
+		loss_vec_test[0,kkt] = total_loss_test
+		loss_vec_clean_test[0,kkt] = total_loss_clean_test
+		pred_validity_vec_test[0,kkt] = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
+		pred_validity_vec_clean_test[0,kkt] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
 
-        # protect against case where the model is perfect!
-        if pred_validity_vec_test[0,kkt]==0 and pw_loss_test[0]==0:
-            pred_validity_vec_test[0,kkt] = (1+len(pw_loss_test))*model_params['delta_t']
+		# protect against case where the model is perfect!
+		if pred_validity_vec_test[0,kkt]==0 and pw_loss_test[0]==0:
+			pred_validity_vec_test[0,kkt] = (1+len(pw_loss_test))*model_params['delta_t']
 
-        if pred_validity_vec_clean_test[0,kkt]==0 and pw_loss_clean_test[0]==0:
-            pred_validity_vec_clean_test[0,kkt] = (1+len(pw_loss_clean_test))*model_params['delta_t']
+		if pred_validity_vec_clean_test[0,kkt]==0 and pw_loss_clean_test[0]==0:
+			pred_validity_vec_clean_test[0,kkt] = (1+len(pw_loss_clean_test))*model_params['delta_t']
 
-        # plot forecast over test set
-        y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
-        gpr_test_predictions_raw = f_unNormalize_Y(normz_info,gpr_test_predictions)
-        gpr_test_predictions_onestep_raw = f_unNormalize_Y(normz_info,gpr_test_predictions_onestep)
+		# plot forecast over test set
+		y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
+		gpr_test_predictions_raw = f_unNormalize_Y(normz_info,gpr_test_predictions)
+		gpr_test_predictions_onestep_raw = f_unNormalize_Y(normz_info,gpr_test_predictions_onestep)
 
-        fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-        if not isinstance(ax_list,np.ndarray):
-            ax_list = [ax_list]
+		fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+		if not isinstance(ax_list,np.ndarray):
+			ax_list = [ax_list]
 
-        # NOW, show testing fit
-        for kk in range(len(ax_list)):
-            ax3 = ax_list[kk]
-            t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
-            # ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-            ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
-            ax3.plot(t_plot, gpr_test_predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='Available ODE fit')
-            ax3.set_xlabel('time')
-            ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
-            ax3.tick_params(axis='y', labelcolor='red')
+		# NOW, show testing fit
+		for kk in range(len(ax_list)):
+			ax3 = ax_list[kk]
+			t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+			# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
+			ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
+			ax3.plot(t_plot, gpr_test_predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='Available ODE fit')
+			ax3.set_xlabel('time')
+			ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
+			ax3.tick_params(axis='y', labelcolor='red')
 
-        ax_list[0].legend()
+		ax_list[0].legend()
 
-        fig.suptitle('Pure ODE Testing fit')
-        fig.savefig(fname=output_dir+'/fit_ode_TEST_{0}'.format(kkt))
-        plt.close(fig)
+		fig.suptitle('Pure ODE Testing fit')
+		fig.savefig(fname=output_dir+'/fit_ode_TEST_{0}'.format(kkt))
+		plt.close(fig)
 
-        ## Plot phase plot
-        # phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt), delta_t=model_params['delta_t'])
-        phase_plot(data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_AvailableODE_TEST_{0}'.format(kkt), delta_t=model_params['delta_t'])
+		## Plot phase plot
+		# phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt), delta_t=model_params['delta_t'])
+		phase_plot(data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_AvailableODE_TEST_{0}'.format(kkt), delta_t=model_params['delta_t'])
 
-        # plot KDE of test data vs predictions
-        invdens_plotname = output_dir+'/invariant_density_TEST_{0}'.format(kkt)
-        invariant_density_plot(test_data=y_clean_test_raw, pred_data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
+		# plot KDE of test data vs predictions
+		invdens_plotname = output_dir+'/invariant_density_TEST_{0}'.format(kkt)
+		invariant_density_plot(test_data=y_clean_test_raw, pred_data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
 
-        # plot inferred Ybar vs true Ybar
-        # if y_fast_test is not None:
-        #     X_in = y_clean_test_raw[:-1,:]
-        #     X_out = gpr_test_predictions_onestep_raw[1:,:]
-        #     Ybar_model_implied = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
-        #     Ybar_true = y_fast_test[kkt,:-1,:].reshape( (y_fast_test.shape[1]-1, ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
-        #     timeseries_Ybar_plots(delta_t=model_params['delta_t'], Ybar_true=Ybar_true, Ybar_inferred=Ybar_model_implied, output_fname=output_dir+'/infer_Ybar_timeseries_TEST_{0}'.format(kkt))
-        #     scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_model_implied, output_fname=output_dir+'/infer_Ybar_TEST_{0}.png'.format(kkt))
-        #     n_short = int(1.5/model_params['delta_t'])
-        #     scatter_Ybar(Ybar_true=Ybar_true[:n_short,:], Ybar_inferred=Ybar_model_implied[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}.png'.format(kkt,n_short*model_params['delta_t']))
-        #     scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_model_implied, output_fname=output_dir+'/YbarModelImplied_vs_X_TEST_{0}.png'.format(kkt))
+		# plot inferred Ybar vs true Ybar
+		# if y_fast_test is not None:
+		#     X_in = y_clean_test_raw[:-1,:]
+		#     X_out = gpr_test_predictions_onestep_raw[1:,:]
+		#     Ybar_model_implied = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
+		#     Ybar_true = y_fast_test[kkt,:-1,:].reshape( (y_fast_test.shape[1]-1, ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
+		#     timeseries_Ybar_plots(delta_t=model_params['delta_t'], Ybar_true=Ybar_true, Ybar_inferred=Ybar_model_implied, output_fname=output_dir+'/infer_Ybar_timeseries_TEST_{0}'.format(kkt))
+		#     scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_model_implied, output_fname=output_dir+'/infer_Ybar_TEST_{0}.png'.format(kkt))
+		#     n_short = int(1.5/model_params['delta_t'])
+		#     scatter_Ybar(Ybar_true=Ybar_true[:n_short,:], Ybar_inferred=Ybar_model_implied[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}.png'.format(kkt,n_short*model_params['delta_t']))
+		#     scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_model_implied, output_fname=output_dir+'/YbarModelImplied_vs_X_TEST_{0}.png'.format(kkt))
 
-            # generate slow-data-inferred Ybar [THIS IS THE IMPORTANT ONE]
-            # X_out = y_clean_test_raw[1:,:]
-            # Ybar_data_inferred = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
-            # scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'/YbarSlowDataInferred_vs_X_TEST_{0}.png'.format(kkt))
-            # scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'/YbarSlowDataInferred_vs_YbarTrue_{0}.png'.format(kkt))
-
-
-        ALLy_clean_test_raw.append(y_clean_test_raw)
-        ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
-        ALLgpr_test_predictions_onestep_raw.append(gpr_test_predictions_onestep_raw)
-
-    ALLy_clean_test_raw = np.array(ALLy_clean_test_raw)
-    ALLgpr_test_predictions_raw = np.array(ALLgpr_test_predictions_raw)
-    ALLgpr_test_predictions_onestep_raw = np.array(ALLgpr_test_predictions_onestep_raw)
-    ALLy_clean_test_raw = np.reshape(ALLy_clean_test_raw,(ALLy_clean_test_raw.shape[0]*ALLy_clean_test_raw.shape[1],ALLy_clean_test_raw.shape[2]))
-    ALLgpr_test_predictions_raw = np.reshape(ALLgpr_test_predictions_raw,(ALLgpr_test_predictions_raw.shape[0]*ALLgpr_test_predictions_raw.shape[1],ALLgpr_test_predictions_raw.shape[2]))
-    ALLgpr_test_predictions_onestep_raw = np.reshape(ALLgpr_test_predictions_onestep_raw,(ALLgpr_test_predictions_onestep_raw.shape[0]*ALLgpr_test_predictions_onestep_raw.shape[1],ALLgpr_test_predictions_onestep_raw.shape[2]))
-    # plot KDE of ALL test sets vs ALL prediction
-    invdens_plotname = output_dir+'/invariant_density_TEST_ALL'
-    invariant_density_plot(test_data=ALLy_clean_test_raw, pred_data=ALLgpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
+			# generate slow-data-inferred Ybar [THIS IS THE IMPORTANT ONE]
+			# X_out = y_clean_test_raw[1:,:]
+			# Ybar_data_inferred = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
+			# scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'/YbarSlowDataInferred_vs_X_TEST_{0}.png'.format(kkt))
+			# scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'/YbarSlowDataInferred_vs_YbarTrue_{0}.png'.format(kkt))
 
 
-    np.savetxt(output_dir+'/loss_vec_test.txt',loss_vec_test)
-    np.savetxt(output_dir+'/loss_vec_clean_test.txt',loss_vec_clean_test)
-    np.savetxt(output_dir+'/prediction_validity_time_test.txt',pred_validity_vec_test)
-    np.savetxt(output_dir+'/prediction_validity_time_clean_test.txt',pred_validity_vec_clean_test)
-    return
+		ALLy_clean_test_raw.append(y_clean_test_raw)
+		ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
+		ALLgpr_test_predictions_onestep_raw.append(gpr_test_predictions_onestep_raw)
+
+	ALLy_clean_test_raw = np.array(ALLy_clean_test_raw)
+	ALLgpr_test_predictions_raw = np.array(ALLgpr_test_predictions_raw)
+	ALLgpr_test_predictions_onestep_raw = np.array(ALLgpr_test_predictions_onestep_raw)
+	ALLy_clean_test_raw = np.reshape(ALLy_clean_test_raw,(ALLy_clean_test_raw.shape[0]*ALLy_clean_test_raw.shape[1],ALLy_clean_test_raw.shape[2]))
+	ALLgpr_test_predictions_raw = np.reshape(ALLgpr_test_predictions_raw,(ALLgpr_test_predictions_raw.shape[0]*ALLgpr_test_predictions_raw.shape[1],ALLgpr_test_predictions_raw.shape[2]))
+	ALLgpr_test_predictions_onestep_raw = np.reshape(ALLgpr_test_predictions_onestep_raw,(ALLgpr_test_predictions_onestep_raw.shape[0]*ALLgpr_test_predictions_onestep_raw.shape[1],ALLgpr_test_predictions_onestep_raw.shape[2]))
+	# plot KDE of ALL test sets vs ALL prediction
+	invdens_plotname = output_dir+'/invariant_density_TEST_ALL'
+	invariant_density_plot(test_data=ALLy_clean_test_raw, pred_data=ALLgpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
+
+
+	np.savetxt(output_dir+'/loss_vec_test.txt',loss_vec_test)
+	np.savetxt(output_dir+'/loss_vec_clean_test.txt',loss_vec_clean_test)
+	np.savetxt(output_dir+'/prediction_validity_time_test.txt',pred_validity_vec_test)
+	np.savetxt(output_dir+'/prediction_validity_time_clean_test.txt',pred_validity_vec_clean_test)
+	return
 
 
 def run_GP(y_clean_train, y_noisy_train,
-            y_clean_test, y_noisy_test,
-            y_clean_testSynch, y_noisy_testSynch,
-            model,f_unNormalize_Y,
-            model_pred,
-            train_seq_length,
-            test_seq_length,
-            output_size,
-            avg_output_test,
-            avg_output_clean_test,
-            normz_info, model_params, model_params_TRUE, random_attractor_points,
-            plot_state_indices,
-            output_dir,
-            n_plttrain,
-            n_plttest,
-            n_test_sets,
-            err_thresh, gp_style=1, gp_only=False,
-            GP_grid = False,
-            alpha=1e-10,
-            do_resid=True,
-            learn_flow=True,
-            y_fast_test=None,
-            y_fast_train=None,
-            ODE=None,
-            gp_space_map='fulltofull',
-            n_subsample=int(1e4),
-            do_onestepahead=False,
-            save_gp_object=True):
-
-    y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
-    y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
-
-    if gp_only:
-        gp_nm = ''
-    else:
-        gp_nm = 'GPR{0}_residual{1}_learnflow{2}'.format(gp_style, do_resid, learn_flow)
-
-
-    if learn_flow:
-        # approximate derivatives of trajectory
-        dy_noisy_train_raw, dy_inds = f_get_derivatives(y_noisy_train_raw, model_params['delta_t'])
-        dy_model_pred_raw = np.array([model(y, 0, *model_params['ode_params']) for y in y_noisy_train_raw[dy_inds]])
-        if gp_style==1:
-            X = y_noisy_train[dy_inds]
-        elif gp_style==2:
-            X = np.concatenate((y_noisy_train[dy_inds],dy_model_pred_raw),axis=1)
-        elif gp_style==3:
-            X = dy_model_pred_raw
-        elif gp_style==4:
-            do_resid = 0
-            X = y_noisy_train[dy_inds]
-
-        if do_resid:
-            y = dy_noisy_train_raw - dy_model_pred_raw
-        else:
-            y = dy_noisy_train_raw
-    else:
-        if gp_style==1:
-            X = y_noisy_train[:-1]
-        elif gp_style==2:
-            X = np.concatenate((y_noisy_train[:-1],model_pred),axis=1)
-        elif gp_style==3:
-            X = model_pred
-        elif gp_style==4:
-            do_resid = 0
-            X = y_noisy_train[:-1]
-
-        if do_resid:
-            y=y_noisy_train[1:]-model_pred
-        else:
-            y=y_noisy_train[1:]
-
-
-    nXDim = X.shape[1]
-    nYDim = y.shape[1]
-
-    def get_inds(N_total, N_subsample=n_subsample):
-        if N_total > N_subsample:
-            my_inds = np.random.choice(np.arange(N_total), N_subsample, replace=False)
-        else:
-            my_inds = np.arange(N_total)
-        return my_inds
-
-    # NEW. learn residuals with GP
-    if gp_space_map=='fulltofull':
-        my_inds = get_inds(X.shape[0])
-        gp = GaussianProcessRegressor(alpha=alpha).fit(X=X[my_inds,:],y=y[my_inds,:])
-        gpr_list = [gp]
-        print('GP Training Score =',gp.score(X=X[my_inds,:],y=y[my_inds,:]))
-    elif gp_space_map=='RtoReach':
-        my_inds = get_inds(X.shape[0])
-        gpr_list = []
-        for k in range(X.shape[1]):
-            gp = GaussianProcessRegressor(alpha=alpha).fit(X=X[my_inds,k].reshape(-1, 1),y=y[my_inds,k].reshape(-1, 1))
-            gpr_list.append(gp)
-            print('GP Training Score =',gp.score(X=X[my_inds,k].reshape(-1, 1),y=y[my_inds,k].reshape(-1, 1)))
-    elif gp_space_map=='RtoRshare':
-        Xtrain = X.reshape(-1, 1)
-        ytrain = y.reshape(-1, 1)
-        my_inds = get_inds(Xtrain.shape[0])
-        gp = GaussianProcessRegressor(alpha=alpha).fit(X=Xtrain[my_inds],y=ytrain[my_inds]) #stack everything together
-        gpr_list = [gp for _ in range(X.shape[1])] # replicate gp regressor for each dimension
-        print('GP Training Score =',gp.score(X=Xtrain[my_inds],y=ytrain[my_inds]))
-    else:
-        print('ERROR: gp_space_map name `{0}` not recognized', gp_space_map)
-        return
-
-    # save trained list of GPRs to a pickle object
-    if save_gp_object:
-        with open( os.path.join(output_dir,'gpr_list.p'), 'wb' ) as fpick:
-            pickle.dump( gpr_list, fpick)
-            print('GPRs dumped into a possibly very sour pickle jar.')
-
-    def gp_pred(X, gp_list=gpr_list):
-
-        # initialize output prediction Y
-        Y = np.zeros(X.shape)
-
-        # if single input element (possibly multi-dim), reshape this way
-        if X.shape[0]==1:
-            X = X.reshape(1,-1)
-
-        # if doing full2full, use this (we have 1 )
-        if len(gp_list)==1:
-            Y = gp_list[0].predict(X)
-        else:
-            for k in range(len(gp_list)):
-                Y[:,k] = gp_list[k].predict(X[:,k].reshape(-1,1), return_std=False).squeeze()
-
-        return Y
-
-    def corrected_model(y, t, params=None, do_resid=do_resid, gp_style=gp_style):
-        # pdb.set_trace()
-        f0 = np.array(model(y, t, *params))
-        if gp_style==1:
-            x = y
-        elif gp_style==2:
-            x = np.concatenate((y,f0))
-        elif gp_style==3:
-            x = f0
-        # f_corrected = do_resid*f0 + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
-        f_corrected = do_resid*f0 + gp_pred(x.reshape(1, -1)).squeeze()
-        return f_corrected
-
-    # gpr = GaussianProcessRegressor().fit(X=output_train[:-1],y=output_train[1:]-model_pred)
-
-    # gpr.score(model_pred, y_noisy_train[1:])
-
-    gpr_train_predictions_rerun = np.zeros([train_seq_length-1, output_size])
-    if learn_flow:
-        gpr_train_predictions_orig = np.zeros([train_seq_length-1, output_size])
-    else:
-        # gpr_train_predictions_orig = do_resid*model_pred + gpr.predict(X).squeeze()
-        gpr_train_predictions_orig = do_resid*model_pred + gp_pred(X).squeeze()
-
-
-    pred = y_noisy_train[0,:,None].squeeze()
-    # tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
-    tspan = get_tspan(model_params)
-    # pdb.set_trace()
-    solver_failed = False
-    for j in range(train_seq_length-1):
-        # target = output_test[j,None]
-        # target_clean = output_clean_train[j,None]
-
-        # generate next-step ODE model prediction
-        # unnormalize model_input so that it can go through the ODE solver
-        if learn_flow or do_resid or (gp_style in [2,3]):
-            y0 = f_unNormalize_minmax(normz_info, pred)
-            if (any(abs(y0)>1000)):
-                print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
-                solver_failed = True
-
-            if not solver_failed:
-                # y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
-
-                if learn_flow:
-                    sol = solve_ivp(fun=lambda t, y: corrected_model(y, t, model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-                else:
-                    sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-                y_out = sol.y.T
-
-                if not sol.success:
-                    # solver failed
-                    print('ODE solver has failed at y0=',y0)
-                    solver_failed = True
-            if solver_failed:
-                my_model_pred = np.copy(pred) # persist previous solution
-            else:
-                # solver is OKAY--use the solution like a good boy!
-                my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
-        else:
-            # don't need it anyway, so just make it 0
-            my_model_pred = 0
-
-        if learn_flow:
-            pred = my_model_pred
-        else:
-            if gp_style==1:
-                x = pred
-            elif gp_style==2:
-                x = np.concatenate((pred, my_model_pred))
-            elif gp_style==3:
-                x = my_model_pred
-            elif gp_style==4:
-                x = pred
-            # pred = do_resid*my_model_pred + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
-            pred = do_resid*my_model_pred + gp_pred(x[None,:]).squeeze()
-
-        # compute losses
-        # total_loss_test += (pred - target.squeeze()).pow(2).sum()/2
-        # total_loss_clean_test += (pred - target_clean.squeeze()).pow(2).sum()/2
-        # pw_loss_test[j] = total_loss_test / avg_output_test
-        # pw_loss_clean_test[j] = total_loss_clean_test / avg_output_clean_test
-        gpr_train_predictions_rerun[j,:] = pred
-    # pdb.set_trace()
-    # plot training fits
-    gpr_train_predictions_orig_raw = f_unNormalize_Y(normz_info,gpr_train_predictions_orig)
-    gpr_train_predictions_rerun_raw = f_unNormalize_Y(normz_info,gpr_train_predictions_rerun)
-
-    fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-    if not isinstance(ax_list,np.ndarray):
-        ax_list = [ax_list]
-
-    for kk in range(len(ax_list)):
-        ax1 = ax_list[kk]
-        t_plot = np.arange(0,round(len(y_noisy_train[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
-        ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
-        ax1.plot(t_plot, y_clean_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', label='clean data')
-        ax1.plot(t_plot[1:], gpr_train_predictions_orig_raw[:n_plttrain-1,plot_state_indices[kk]], color='black', label='GP orig')
-        ax1.plot(t_plot[1:], gpr_train_predictions_rerun_raw[:n_plttrain-1,plot_state_indices[kk]], color='blue', label='GP re-run')
-        ax1.set_xlabel('time')
-        ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)', color='red')
-        ax1.tick_params(axis='y', labelcolor='red')
-
-    ax_list[0].legend()
-
-    fig.suptitle('{0} Training Fit'.format(gp_nm.rstrip('_')))
-    fig.savefig(fname=output_dir+'/{0}train_fit_ode'.format(gp_nm))
-    plt.close(fig)
-
-
-
-    # initialize Test outputs
-    loss_vec_test = np.zeros((1,n_test_sets))
-    loss_vec_clean_test = np.zeros((1,n_test_sets))
-    pred_validity_vec_test = np.zeros((1,n_test_sets))
-    pred_validity_vec_clean_test = np.zeros((1,n_test_sets))
-
-    # loop over test sets
-    tspan = get_tspan(model_params)
-    ALLy_clean_test_raw = []
-    ALLgpr_test_predictions_raw = []
-    ALLgpr_inputs = []
-    ALLgpr_outputs = []
-    # tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
-    # pdb.set_trace()
-    for kkt in range(n_test_sets):
-        # now compute test loss
-        total_loss_test = 0
-        total_loss_clean_test = 0
-        pred = y_noisy_testSynch[kkt,-1,None].squeeze()
-        # pred = np.squeeze(y_noisy_testSynch[-1,:,None].T)
-        pw_loss_test = np.zeros(test_seq_length)
-        pw_loss_clean_test = np.zeros(test_seq_length)
-        gpr_test_predictions = np.zeros([test_seq_length, output_size])
-        gpr_test_predictions_onestep = np.zeros([test_seq_length, output_size])
-        gp_input = np.zeros([test_seq_length, output_size*(1+(gp_style==2))])
-        gp_output = np.zeros([test_seq_length, output_size])
-        solver_failed = False
-        for j in range(test_seq_length):
-            target = y_noisy_test[kkt,j,:]
-            target_clean = y_clean_test[kkt,j,:]
-
-            if j>0:
-                test_val_prev = y_clean_test[kkt,j-1,:].squeeze()
-            else:
-                test_val_prev = y_clean_testSynch[kkt,-1,:].squeeze()
-
-
-            # generate next-step ODE model prediction
-            # tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
-            # unnormalize model_input so that it can go through the ODE solver
-            if learn_flow or do_resid or (gp_style in [2,3]):
-                y0 = f_unNormalize_minmax(normz_info, pred)
-                if (any(abs(y0)>1000)):
-                    print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
-                    solver_failed = True
-
-                if not solver_failed:
-                    # y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
-                    if learn_flow:
-                        sol = solve_ivp(fun=lambda t, y: corrected_model(y, t, model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-                    else:
-                        sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-                    y_out = sol.y.T
-
-                    if not sol.success:
-                        # solver failed
-                        print('ODE solver has failed at y0=',y0)
-                        solver_failed = True
-                        # pdb.set_trace()
-                if solver_failed:
-                    my_model_pred = np.copy(pred) # persist previous normalized solution
-                    # pdb.set_trace()
-                else:
-                    # solver is OKAY--use the solution like a good boy!
-                    my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
-
-                # NOW i'm going to compute my one-step-ahead-based model prediction, which always uses the previous test data point (only for Ybark_inferrence)
-                if do_onestepahead:
-                    y0 = f_unNormalize_minmax(normz_info, test_val_prev)
-                    if (any(abs(y0)>1000)):
-                        print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
-                        solver_failed = True
-
-                    if learn_flow:
-                        sol = solve_ivp(fun=lambda t, y: corrected_model(y, t, model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-                    else:
-                        sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-                    y_out = sol.y.T
-                    my_model_pred_onestep = f_normalize_minmax(normz_info, y_out[-1,:])
-                else:
-                    my_model_pred_onestep = 0
-            else:
-                # don't need it anyway, so just make it 0
-                my_model_pred = 0
-                my_model_pred_onestep = 0
-
-            if learn_flow:
-                pred = my_model_pred
-            else:
-                if gp_style==1:
-                    x = pred
-                    x_onestep = test_val_prev
-                elif gp_style==2:
-                    x = np.concatenate((pred, my_model_pred))
-                    x_onestep = np.concatenate((test_val_prev, my_model_pred_onestep))
-                elif gp_style==3:
-                    x = my_model_pred
-                    x_onestep = my_model_pred_onestep
-                elif gp_style==4:
-                    x = pred
-                    x_onestep = test_val_prev
-
-                if gp_style==2:
-                    gp_input_onestep = np.concatenate((f_unNormalize_Y(normz_info, test_val_prev), f_unNormalize_Y(normz_info, my_model_pred_onestep)))
-                    gp_input[j,:] = np.concatenate((f_unNormalize_Y(normz_info, pred), f_unNormalize_Y(normz_info, my_model_pred)))
-                else:
-                    gp_input_onestep = f_unNormalize_Y(normz_info, x_onestep)
-                    gp_input[j,:] = f_unNormalize_Y(normz_info, x)
-
-                # gpr_pred_val = gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
-                gpr_pred_val = gp_pred(x[None,:]).squeeze()
-                pred = do_resid*my_model_pred + gpr_pred_val
-
-                gp_output[j,:] = f_unNormalize_Y(normz_info, pred) - do_resid*f_unNormalize_Y(normz_info, my_model_pred)
-
-                # gpr_pred_val_onestep = gpr.predict(x_onestep.reshape(1, -1) , return_std=False).squeeze()
-                if do_onestepahead:
-                    gpr_pred_val_onestep = gp_pred(x_onestep[None,:]).squeeze()
-                    pred_onestep = do_resid*my_model_pred_onestep + gpr_pred_val_onestep
-                    gpr_test_predictions_onestep[j,:] = pred_onestep
-
-
-            # compute losses
-            j_loss = sum((pred - target)**2)
-            j_loss_clean = sum((pred - target_clean)**2)
-            total_loss_test += j_loss
-            total_loss_clean_test += j_loss_clean
-            pw_loss_test[j] = j_loss**0.5 / avg_output_test
-            pw_loss_clean_test[j] = j_loss_clean**0.5 / avg_output_clean_test
-            gpr_test_predictions[j,:] = pred
-
-        total_loss_test = total_loss_test / test_seq_length
-        total_loss_clean_test = total_loss_clean_test / test_seq_length
-
-        #store losses
-        loss_vec_test[0,kkt] = total_loss_test
-        loss_vec_clean_test[0,kkt] = total_loss_clean_test
-        pred_validity_vec_test[0,kkt] = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
-        pred_validity_vec_clean_test[0,kkt] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
-
-        # Protect against the case where the model is perfect
-        if pred_validity_vec_test[0,kkt]==0 and pw_loss_test[0]==0:
-            pred_validity_vec_test[0,kkt] = (1+len(pw_loss_clean_test))*model_params['delta_t']
-
-        if pred_validity_vec_clean_test[0,kkt]==0 and pw_loss_clean_test[0]==0:
-            pred_validity_vec_clean_test[0,kkt] = (1+len(pw_loss_clean_test))*model_params['delta_t']
-
-
-        # plot forecast over test set
-        y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
-        gpr_test_predictions_raw = f_unNormalize_Y(normz_info,gpr_test_predictions)
-        gpr_test_predictions_onestep_raw = f_unNormalize_Y(normz_info,gpr_test_predictions_onestep)
-
-        fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-        if not isinstance(ax_list,np.ndarray):
-            ax_list = [ax_list]
-
-        # NOW, show testing fit
-        for kk in range(len(ax_list)):
-            ax3 = ax_list[kk]
-            t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
-            # ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-            ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
-            ax3.plot(t_plot, gpr_test_predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
-            ax3.set_xlabel('time')
-            ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
-            ax3.tick_params(axis='y', labelcolor='red')
-
-        ax_list[0].legend()
-
-        fig.suptitle('{0} Testing fit'.format(gp_nm.rstrip('_')))
-        fig.savefig(fname=output_dir+'/{0}fit_ode_TEST_{1}'.format(gp_nm,kkt))
-        plt.close(fig)
-
-        # phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt), delta_t=model_params['delta_t'])
-        phase_plot(data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_GPpredicted_TEST_{0}'.format(kkt), delta_t=model_params['delta_t'])
-
-        # plot KDE of test data vs predictions
-        invdens_plotname = output_dir+'/invariant_density_TEST_{0}'.format(kkt)
-        invariant_density_plot(test_data=y_clean_test_raw, pred_data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
-
-        # plot inferred Ybar vs true Ybar
-        # if y_fast_test is not None:
-        #     X_in = y_clean_test_raw[:-1,:]
-        #     X_out = gpr_test_predictions_onestep_raw[1:,:]
-        #     Ybar_model_implied = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
-        #     Ybar_true = y_fast_test[kkt,:-1,:].reshape( (y_fast_test.shape[1]-1, ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
-        #     timeseries_Ybar_plots(delta_t=model_params['delta_t'], Ybar_true=Ybar_true, Ybar_inferred=Ybar_model_implied, output_fname=output_dir+'/infer_Ybar_timeseries_TEST_{0}'.format(kkt))
-        #     scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_model_implied, output_fname=output_dir+'/infer_Ybar_TEST_{0}.png'.format(kkt))
-        #     n_short = int(0.2/model_params['delta_t'])
-        #     scatter_Ybar(Ybar_true=Ybar_true[:n_short,:], Ybar_inferred=Ybar_model_implied[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}.png'.format(kkt,n_short*model_params['delta_t']))
-        #     scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_model_implied, output_fname=output_dir+'/YbarModelImplied_vs_X_TEST_{0}.png'.format(kkt))
-
-            # generate slow-data-inferred Ybar [THIS IS THE IMPORTANT ONE]
-            # X_out = y_clean_test_raw[1:,:]
-            # Ybar_data_inferred = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
-            # scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'/YbarSlowDataInferred_vs_X_TEST_{0}.png'.format(kkt))
-            # scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'/YbarSlowDataInferred_vs_YbarTrue_{0}.png'.format(kkt))
-
-        ALLy_clean_test_raw.append(y_clean_test_raw)
-        ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
-        ALLgpr_inputs.append(gp_input)
-        ALLgpr_outputs.append(gp_output)
-
-    ALLgpr_inputs = np.array(ALLgpr_inputs)
-    ALLgpr_outputs = np.array(ALLgpr_outputs)
-    ALLy_clean_test_raw = np.array(ALLy_clean_test_raw)
-    ALLgpr_test_predictions_raw = np.array(ALLgpr_test_predictions_raw)
-    ALLgpr_outputs = np.reshape(ALLgpr_outputs,(ALLgpr_outputs.shape[0]*ALLgpr_outputs.shape[1],ALLgpr_outputs.shape[2]))
-    ALLgpr_inputs = np.reshape(ALLgpr_inputs,(ALLgpr_inputs.shape[0]*ALLgpr_inputs.shape[1],ALLgpr_inputs.shape[2]))
-    ALLy_clean_test_raw = np.reshape(ALLy_clean_test_raw,(ALLy_clean_test_raw.shape[0]*ALLy_clean_test_raw.shape[1],ALLy_clean_test_raw.shape[2]))
-    ALLgpr_test_predictions_raw = np.reshape(ALLgpr_test_predictions_raw,(ALLgpr_test_predictions_raw.shape[0]*ALLgpr_test_predictions_raw.shape[1],ALLgpr_test_predictions_raw.shape[2]))
-
-    # plot GPR inputs vs outputs---empirical marginals using scatter plot
-    yplot_inds = plot_state_indices[:]
-    xplot_inds = plot_state_indices[:]
-    xnames = [foo + ' j-state' for foo in model_params['state_names']]
-    if gp_style==2:
-        xnames += [foo + ' j+1 ODE-pred' for foo in model_params['state_names']]
-        xplot_inds += [foo + len(plot_state_indices) for foo in plot_state_indices]
-
-    # GP input vs GP output
-    # in cases where input size has doubled (e.g. GPR2), be sure to also double the axis limits
-    boo_xmax = normz_info['Ymax']
-    boo_xmin = normz_info['Ymin']
-    if ALLgpr_inputs.shape[1]==2*boo_xmax.shape[0]:
-        boo_xmax = np.concatenate((boo_xmax,boo_xmax))
-        boo_xmin = np.concatenate((boo_xmin,boo_xmin))
-
-    gpinout_fname = output_dir+'/GP_input_vs_output'
-    ynames = [foo + ' j+1 GP-output' for foo in model_params['state_names']]
-    # insert Xlim based on normz_info
-    gp_marginal_plot(xdata=ALLgpr_inputs, xmin=boo_xmin, xmax=boo_xmax, ydata=ALLgpr_outputs, xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
-
-    # GP input vs GP-corrected prediction
-    gpinout_fname = output_dir+'/GP_input_vs_prediction'
-    ynames = [foo + ' j+1 full-pred' for foo in model_params['state_names']]
-    # insert Xlim based on normz_info
-    gp_marginal_plot(xdata=ALLgpr_inputs, xmin=boo_xmin, xmax=boo_xmax, ydata=ALLgpr_test_predictions_raw, xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
-
-    # GP input vs norm of GP output
-    gpinout_fname = output_dir+'/GP_input_vs_outputNorm'
-    ynames = ['||u||_2']
-    yplot_inds = [0]
-    ydata = np.linalg.norm(ALLgpr_outputs, axis=1)
-    # insert Xlim based on normz_info
-    gp_marginal_plot(xdata=ALLgpr_inputs, xmin=boo_xmin, xmax=boo_xmax, ydata=ydata[:,None], xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
-
-    with open(output_dir+'/output_norm_mean.txt', 'w') as fh:
-        fh.writelines(str(np.mean(ydata)))
-    with open(output_dir+'/output_norm_std.txt', 'w') as fh:
-        fh.writelines(str(np.std(ydata)))
-
-    # plot KDE of ALL test sets vs ALL prediction
-    invdens_plotname = output_dir+'/invariant_density_TEST_ALL'
-    invariant_density_plot(test_data=ALLy_clean_test_raw, pred_data=ALLgpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
-
-    # pdb.set_trace()
-    # write pw losses to file
-    # gpr_pred_validity_vec_test = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
-    # gpr_pred_validity_vec_clean_test = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
-    # with open(output_dir+'/{0}prediction_validity_time_test.txt'.format(gp_nm), "w") as f:
-    #   f.write(str(gpr_pred_validity_vec_test))
-    # with open(output_dir+'/{0}prediction_validity_time_clean_test.txt'.format(gp_nm), "w") as f:
-    #   f.write(str(gpr_pred_validity_vec_clean_test))
-    # with open(output_dir+'/{0}loss_test.txt'.format(gp_nm), "w") as f:
-    #   f.write(str(total_loss_test))
-    # with open(output_dir+'/{0}clean_loss_test.txt'.format(gp_nm), "w") as f:
-    #   f.write(str(total_loss_clean_test))
-    np.savetxt(output_dir+'/{0}loss_vec_test.txt'.format(gp_nm),loss_vec_test)
-    np.savetxt(output_dir+'/{0}loss_vec_clean_test.txt'.format(gp_nm),loss_vec_clean_test)
-    np.savetxt(output_dir+'/{0}prediction_validity_time_test.txt'.format(gp_nm),pred_validity_vec_test)
-    np.savetxt(output_dir+'/{0}prediction_validity_time_clean_test.txt'.format(gp_nm),pred_validity_vec_clean_test)
-
-    # if plot_empirical_GP_mean:
-    #   # GP_box_settings = {'x': np.linspace(-10,10,10),
-    #   #                   'y': np.linspace(-20,30,10),
-    #   #                   'z': np.linspace(10,40,10)
-    #   #                   }
-    #  #    keys, values = zip(*GP_box_settings.items())
-    #  #    list_of_vals = [dict(zip(keys, v)) for v in itertools.product(*values)]
-    #   for hh in range(n_gp_grid):
-    #       # y0 = [val[key] for key in model_params['state_names']]
-    #       ya = f_normalize_minmax(normz_info, f_get_state_inits(n=1))
-    #       if gp_style==2:
-    #           yb = f_normalize_minmax(normz_info, f_get_state_inits(n=1))
-    #           y0_normalized = np.concatenate((ya, yb))
-    #       else:
-    #           y0_normalized = ya
-
-
-
-
-    if GP_grid:
-        ## Evaluate GP vs actual residuals on a BOX
-        t0grid = time()
-        n_residuals = 5000
-        GP_error_grid = np.zeros((n_residuals,n_residuals,n_residuals))
-        GP_total_error = 0
-        # bigX = np.zeros((len(xvals)*len(yvals)*len(zvals),nXDim))
-        # bigY = np.zeros((len(xvals)*len(yvals)*len(zvals),nYDim))
-        tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
-
-        # FIRST, find the attractor and have something to sample from
-        # initialize at FIXED starting point for TRUE model to get the attractor!!!
-        # bigTspan = np.arange(0, 2*n_residuals, 0.1)
-        # run_again = True
-        # while run_again:
-        #   y_out_ATT, info_dict = odeint(model, np.squeeze(get_lorenz_inits(n=1)), bigTspan, args=model_params['ode_params'], mxstep=0, full_output=True)
-        #   if info_dict['message'] == 'Integration successful.':
-        #       run_again = False
-
-        # y_out_ATT = y_out_ATT[int(y_out_ATT.shape[0]/3):,]
-
-        # random_attractor_points
-
-        bigX = np.zeros((n_residuals,nXDim))
-        bigY = np.zeros((n_residuals,nYDim))
-
-        my_inds = np.random.randint(low=0, high=random_attractor_points.shape[0]-1, size=n_residuals)
-        for n in range(len(my_inds)):
-            y0 = random_attractor_points[my_inds[n],:]
-            y0_normalized = f_normalize_minmax(normz_info, y0)
-
-            y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
-            bad_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
-
-            if gp_style==1:
-                x_input = y0_normalized
-            elif gp_style==2:
-                x_input = np.concatenate((y0_normalized, bad_model_pred))
-            elif gp_style==3:
-                x_input = bad_model_pred
-            elif gp_style==4:
-                x_input = y0_normalized
-
-            # gp_forecast = do_resid*bad_model_pred + gpr.predict(x_input.reshape(1, -1) , return_std=False).squeeze()
-            gp_forecast = do_resid*bad_model_pred + gp_pred(x_input[None,:]).squeeze()
-
-            y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=0, full_output=True)
-
-            pdb.set_trace()
-            sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params_TRUE['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params_TRUE['ode_int_method'], rtol=model_params_TRUE['ode_int_rtol'], atol=model_params_TRUE['ode_int_atol'], max_step=model_params_TRUE['ode_int_max_step'], t_eval=tspan)
-            y_out_TRUE2 = sol.y.T
-
-            true_model_pred = f_normalize_minmax(normz_info, y_out_TRUE[-1,:])
-
-            bigX[n,:] = x_input
-            bigY[n,:] = (true_model_pred - do_resid*bad_model_pred)
-
-            # try:
-            #   my_score = gpr.score(X=x_input, y = (true_model_pred - do_resid*bad_model_pred))
-            # except:
-            my_score = np.linalg.norm(gp_forecast - true_model_pred)
-            # GP_error_grid[ix,iy,iz] = my_score
-            GP_total_error += my_score
-
-        print('ATTRACTOR sampling took',str(timedelta(seconds=time()-t0grid)))
-        # plot 1-d marginal errors
-        print('Total {0} ATTRACTOR error = {1}'.format(gp_nm,GP_total_error))
-        # print('{0} ATTRACTOR score = {1}'.format(gp_nm,gpr.score(X=bigX,y=bigY)))
-
-        # np.savez(output_dir+'/{0}GP_error_grid'.format(gp_nm), GP_error_grid=GP_error_grid, xvals=xvals, yvals=yvals, zvals=zvals, GP_total_error=GP_total_error)
-
-
-
-        ## Evaluate GP vs actual residuals on a BOX
-        xvals = np.linspace(-10,10,10)
-        yvals = np.linspace(-20,30,10)
-        zvals = np.linspace(10,40,10)
-
-        t0grid = time()
-        ix = 0
-        iy = 0
-        iz = 0
-        GP_error_grid = np.zeros((len(xvals),len(yvals),len(zvals)))
-        GP_total_error = 0
-        bigX = np.zeros((len(xvals)*len(yvals)*len(zvals),nXDim))
-        bigY = np.zeros((len(xvals)*len(yvals)*len(zvals),nYDim))
-        tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
-        n = -1
-        for ix in range(len(xvals)):
-            x = xvals[ix]
-            for iy in range(len(yvals)):
-                y = yvals[iy]
-                for iz in range(len(zvals)):
-                    n += 1
-                    z = zvals[iz]
-
-                    # FIRST, find the attractor (idk, run for >10 lyapunov times...)
-                    y_out_INIT, info_dict = odeint(model, np.array([x,y,z]), [0, 5, 10], args=model_params['ode_params'], mxstep=0, full_output=True)
-
-                    pdb.set_trace()
-                    sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(0, 10), y0=np.array([x,y,z]).T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=[0, 5, 10])
-                    y_out_INIT2 = sol.y.T
-
-
-                    y0 = y_out_INIT[-1,:]
-                    y0_normalized = f_normalize_minmax(normz_info, y0)
-                    # now, we assume that y0 is on the attractor
-
-                    y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
-
-                    pdb.set_trace()
-                    sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-                    y_out2 = sol.y.T
-
-
-
-                    bad_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
-                    if gp_style==1:
-                        x_input = y0_normalized
-                    elif gp_style==2:
-                        x_input = np.concatenate((y0_normalized, bad_model_pred))
-                    elif gp_style==3:
-                        x_input = bad_model_pred
-                    elif gp_style==4:
-                        x_input = y0_normalized
-
-                    # gp_forecast = do_resid*bad_model_pred + gpr.predict(x_input.reshape(1, -1) , return_std=False).squeeze()
-                    gp_forecast = do_resid*bad_model_pred + gp_pred(x_input[None,:]).squeeze()
-
-                    y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=0, full_output=True)
-
-                    pdb.set_trace()
-                    sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params_TRUE['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params_TRUE['ode_int_method'], rtol=model_params_TRUE['ode_int_rtol'], atol=model_params_TRUE['ode_int_atol'], max_step=model_params_TRUE['ode_int_max_step'], t_eval=tspan)
-                    y_out_TRUE2 = sol.y.T
-
-                    true_model_pred = f_normalize_minmax(normz_info, y_out_TRUE[-1,:])
-
-                    bigX[n,:] = x_input
-                    bigY[n,:] = (true_model_pred - do_resid*bad_model_pred)
-
-                    # try:
-                    #   my_score = gpr.score(X=x_input, y = (true_model_pred - do_resid*bad_model_pred))
-                    # except:
-                    my_score = np.linalg.norm(gp_forecast - true_model_pred)
-                    GP_error_grid[ix,iy,iz] = my_score
-                    GP_total_error += my_score
-
-        print('Grid took',str(timedelta(seconds=time()-t0grid)))
-        # plot 1-d marginal errors
-        print('Total {0} grid error = {1}'.format(gp_nm,GP_total_error))
-        # print('{0} grid score = {1}'.format(gp_nm,gpr.score(X=bigX,y=bigY)))
-
-        np.savez(output_dir+'/{0}GP_error_grid'.format(gp_nm), GP_error_grid=GP_error_grid, xvals=xvals, yvals=yvals, zvals=zvals, GP_total_error=GP_total_error)
+			y_clean_test, y_noisy_test,
+			y_clean_testSynch, y_noisy_testSynch,
+			model,f_unNormalize_Y,
+			model_pred,
+			train_seq_length,
+			test_seq_length,
+			output_size,
+			avg_output_test,
+			avg_output_clean_test,
+			normz_info, model_params, model_params_TRUE, random_attractor_points,
+			plot_state_indices,
+			output_dir,
+			n_plttrain,
+			n_plttest,
+			n_test_sets,
+			err_thresh, gp_style=1, gp_only=False,
+			GP_grid = False,
+			alpha=1e-10,
+			do_resid=True,
+			learn_flow=True,
+			y_fast_test=None,
+			y_fast_train=None,
+			ODE=None,
+			gp_space_map='fulltofull',
+			n_subsample=int(1e4),
+			do_onestepahead=False,
+			save_gp_object=True):
+
+	y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
+	y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
+
+	if gp_only:
+		gp_nm = ''
+	else:
+		gp_nm = 'GPR{0}_residual{1}_learnflow{2}'.format(gp_style, do_resid, learn_flow)
+
+
+	if learn_flow:
+		# approximate derivatives of trajectory
+		dy_noisy_train_raw, dy_inds = f_get_derivatives(y_noisy_train_raw, model_params['delta_t'])
+		dy_model_pred_raw = np.array([model(y, 0, *model_params['ode_params']) for y in y_noisy_train_raw[dy_inds]])
+		if gp_style==1:
+			X = y_noisy_train[dy_inds]
+		elif gp_style==2:
+			X = np.concatenate((y_noisy_train[dy_inds],dy_model_pred_raw),axis=1)
+		elif gp_style==3:
+			X = dy_model_pred_raw
+		elif gp_style==4:
+			do_resid = 0
+			X = y_noisy_train[dy_inds]
+
+		if do_resid:
+			y = dy_noisy_train_raw - dy_model_pred_raw
+		else:
+			y = dy_noisy_train_raw
+	else:
+		if gp_style==1:
+			X = y_noisy_train[:-1]
+		elif gp_style==2:
+			X = np.concatenate((y_noisy_train[:-1],model_pred),axis=1)
+		elif gp_style==3:
+			X = model_pred
+		elif gp_style==4:
+			do_resid = 0
+			X = y_noisy_train[:-1]
+
+		if do_resid:
+			y=y_noisy_train[1:]-model_pred
+		else:
+			y=y_noisy_train[1:]
+
+
+	nXDim = X.shape[1]
+	nYDim = y.shape[1]
+
+	def get_inds(N_total, N_subsample=n_subsample):
+		if N_total > N_subsample:
+			my_inds = np.random.choice(np.arange(N_total), N_subsample, replace=False)
+		else:
+			my_inds = np.arange(N_total)
+		return my_inds
+
+	# NEW. learn residuals with GP
+	if gp_space_map=='fulltofull':
+		my_inds = get_inds(X.shape[0])
+		gp = GaussianProcessRegressor(alpha=alpha).fit(X=X[my_inds,:],y=y[my_inds,:])
+		gpr_list = [gp]
+		print('GP Training Score =',gp.score(X=X[my_inds,:],y=y[my_inds,:]))
+	elif gp_space_map=='RtoReach':
+		my_inds = get_inds(X.shape[0])
+		gpr_list = []
+		for k in range(X.shape[1]):
+			gp = GaussianProcessRegressor(alpha=alpha).fit(X=X[my_inds,k].reshape(-1, 1),y=y[my_inds,k].reshape(-1, 1))
+			gpr_list.append(gp)
+			print('GP Training Score =',gp.score(X=X[my_inds,k].reshape(-1, 1),y=y[my_inds,k].reshape(-1, 1)))
+	elif gp_space_map=='RtoRshare':
+		Xtrain = X.reshape(-1, 1)
+		ytrain = y.reshape(-1, 1)
+		my_inds = get_inds(Xtrain.shape[0])
+		gp = GaussianProcessRegressor(alpha=alpha).fit(X=Xtrain[my_inds],y=ytrain[my_inds]) #stack everything together
+		gpr_list = [gp for _ in range(X.shape[1])] # replicate gp regressor for each dimension
+		print('GP Training Score =',gp.score(X=Xtrain[my_inds],y=ytrain[my_inds]))
+	else:
+		print('ERROR: gp_space_map name `{0}` not recognized', gp_space_map)
+		return
+
+	# save trained list of GPRs to a pickle object
+	if save_gp_object:
+		with open( os.path.join(output_dir,'gpr_list.p'), 'wb' ) as fpick:
+			pickle.dump( gpr_list, fpick)
+			print('GPRs dumped into a possibly very sour pickle jar.')
+
+	def gp_pred(X, gp_list=gpr_list):
+
+		# initialize output prediction Y
+		Y = np.zeros(X.shape)
+
+		# if single input element (possibly multi-dim), reshape this way
+		if X.shape[0]==1:
+			X = X.reshape(1,-1)
+
+		# if doing full2full, use this (we have 1 )
+		if len(gp_list)==1:
+			Y = gp_list[0].predict(X)
+		else:
+			for k in range(len(gp_list)):
+				Y[:,k] = gp_list[k].predict(X[:,k].reshape(-1,1), return_std=False).squeeze()
+
+		return Y
+
+	def corrected_model(y, t, params=None, do_resid=do_resid, gp_style=gp_style):
+		# pdb.set_trace()
+		f0 = np.array(model(y, t, *params))
+		if gp_style==1:
+			x = y
+		elif gp_style==2:
+			x = np.concatenate((y,f0))
+		elif gp_style==3:
+			x = f0
+		# f_corrected = do_resid*f0 + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
+		f_corrected = do_resid*f0 + gp_pred(x.reshape(1, -1)).squeeze()
+		return f_corrected
+
+	# gpr = GaussianProcessRegressor().fit(X=output_train[:-1],y=output_train[1:]-model_pred)
+
+	# gpr.score(model_pred, y_noisy_train[1:])
+
+	gpr_train_predictions_rerun = np.zeros([train_seq_length-1, output_size])
+	if learn_flow:
+		gpr_train_predictions_orig = np.zeros([train_seq_length-1, output_size])
+	else:
+		# gpr_train_predictions_orig = do_resid*model_pred + gpr.predict(X).squeeze()
+		gpr_train_predictions_orig = do_resid*model_pred + gp_pred(X).squeeze()
+
+
+	pred = y_noisy_train[0,:,None].squeeze()
+	# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+	tspan = get_tspan(model_params)
+	# pdb.set_trace()
+	solver_failed = False
+	for j in range(train_seq_length-1):
+		# target = output_test[j,None]
+		# target_clean = output_clean_train[j,None]
+
+		# generate next-step ODE model prediction
+		# unnormalize model_input so that it can go through the ODE solver
+		if learn_flow or do_resid or (gp_style in [2,3]):
+			y0 = f_unNormalize_minmax(normz_info, pred)
+			if (any(abs(y0)>1000)):
+				print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
+				solver_failed = True
+
+			if not solver_failed:
+				# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
+
+				if learn_flow:
+					sol = solve_ivp(fun=lambda t, y: corrected_model(y, t, model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+				else:
+					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+				y_out = sol.y.T
+
+				if not sol.success:
+					# solver failed
+					print('ODE solver has failed at y0=',y0)
+					solver_failed = True
+			if solver_failed:
+				my_model_pred = np.copy(pred) # persist previous solution
+			else:
+				# solver is OKAY--use the solution like a good boy!
+				my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+		else:
+			# don't need it anyway, so just make it 0
+			my_model_pred = 0
+
+		if learn_flow:
+			pred = my_model_pred
+		else:
+			if gp_style==1:
+				x = pred
+			elif gp_style==2:
+				x = np.concatenate((pred, my_model_pred))
+			elif gp_style==3:
+				x = my_model_pred
+			elif gp_style==4:
+				x = pred
+			# pred = do_resid*my_model_pred + gpr.predict(x.reshape(1, -1), return_std=False).squeeze()
+			pred = do_resid*my_model_pred + gp_pred(x[None,:]).squeeze()
+
+		# compute losses
+		# total_loss_test += (pred - target.squeeze()).pow(2).sum()/2
+		# total_loss_clean_test += (pred - target_clean.squeeze()).pow(2).sum()/2
+		# pw_loss_test[j] = total_loss_test / avg_output_test
+		# pw_loss_clean_test[j] = total_loss_clean_test / avg_output_clean_test
+		gpr_train_predictions_rerun[j,:] = pred
+	# pdb.set_trace()
+	# plot training fits
+	gpr_train_predictions_orig_raw = f_unNormalize_Y(normz_info,gpr_train_predictions_orig)
+	gpr_train_predictions_rerun_raw = f_unNormalize_Y(normz_info,gpr_train_predictions_rerun)
+
+	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+	if not isinstance(ax_list,np.ndarray):
+		ax_list = [ax_list]
+
+	for kk in range(len(ax_list)):
+		ax1 = ax_list[kk]
+		t_plot = np.arange(0,round(len(y_noisy_train[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+		ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+		ax1.plot(t_plot, y_clean_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', label='clean data')
+		ax1.plot(t_plot[1:], gpr_train_predictions_orig_raw[:n_plttrain-1,plot_state_indices[kk]], color='black', label='GP orig')
+		ax1.plot(t_plot[1:], gpr_train_predictions_rerun_raw[:n_plttrain-1,plot_state_indices[kk]], color='blue', label='GP re-run')
+		ax1.set_xlabel('time')
+		ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)', color='red')
+		ax1.tick_params(axis='y', labelcolor='red')
+
+	ax_list[0].legend()
+
+	fig.suptitle('{0} Training Fit'.format(gp_nm.rstrip('_')))
+	fig.savefig(fname=output_dir+'/{0}train_fit_ode'.format(gp_nm))
+	plt.close(fig)
+
+
+
+	# initialize Test outputs
+	loss_vec_test = np.zeros((1,n_test_sets))
+	loss_vec_clean_test = np.zeros((1,n_test_sets))
+	pred_validity_vec_test = np.zeros((1,n_test_sets))
+	pred_validity_vec_clean_test = np.zeros((1,n_test_sets))
+
+	# loop over test sets
+	tspan = get_tspan(model_params)
+	ALLy_clean_test_raw = []
+	ALLgpr_test_predictions_raw = []
+	ALLgpr_inputs = []
+	ALLgpr_outputs = []
+	# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+	# pdb.set_trace()
+	for kkt in range(n_test_sets):
+		# now compute test loss
+		total_loss_test = 0
+		total_loss_clean_test = 0
+		pred = y_noisy_testSynch[kkt,-1,None].squeeze()
+		# pred = np.squeeze(y_noisy_testSynch[-1,:,None].T)
+		pw_loss_test = np.zeros(test_seq_length)
+		pw_loss_clean_test = np.zeros(test_seq_length)
+		gpr_test_predictions = np.zeros([test_seq_length, output_size])
+		gpr_test_predictions_onestep = np.zeros([test_seq_length, output_size])
+		gp_input = np.zeros([test_seq_length, output_size*(1+(gp_style==2))])
+		gp_output = np.zeros([test_seq_length, output_size])
+		solver_failed = False
+		for j in range(test_seq_length):
+			target = y_noisy_test[kkt,j,:]
+			target_clean = y_clean_test[kkt,j,:]
+
+			if j>0:
+				test_val_prev = y_clean_test[kkt,j-1,:].squeeze()
+			else:
+				test_val_prev = y_clean_testSynch[kkt,-1,:].squeeze()
+
+
+			# generate next-step ODE model prediction
+			# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+			# unnormalize model_input so that it can go through the ODE solver
+			if learn_flow or do_resid or (gp_style in [2,3]):
+				y0 = f_unNormalize_minmax(normz_info, pred)
+				if (any(abs(y0)>1000)):
+					print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
+					solver_failed = True
+
+				if not solver_failed:
+					# y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
+					if learn_flow:
+						sol = solve_ivp(fun=lambda t, y: corrected_model(y, t, model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+					else:
+						sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+					y_out = sol.y.T
+
+					if not sol.success:
+						# solver failed
+						print('ODE solver has failed at y0=',y0)
+						solver_failed = True
+						# pdb.set_trace()
+				if solver_failed:
+					my_model_pred = np.copy(pred) # persist previous normalized solution
+					# pdb.set_trace()
+				else:
+					# solver is OKAY--use the solution like a good boy!
+					my_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+
+				# NOW i'm going to compute my one-step-ahead-based model prediction, which always uses the previous test data point (only for Ybark_inferrence)
+				if do_onestepahead:
+					y0 = f_unNormalize_minmax(normz_info, test_val_prev)
+					if (any(abs(y0)>1000)):
+						print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
+						solver_failed = True
+
+					if learn_flow:
+						sol = solve_ivp(fun=lambda t, y: corrected_model(y, t, model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+					else:
+						sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+					y_out = sol.y.T
+					my_model_pred_onestep = f_normalize_minmax(normz_info, y_out[-1,:])
+				else:
+					my_model_pred_onestep = 0
+			else:
+				# don't need it anyway, so just make it 0
+				my_model_pred = 0
+				my_model_pred_onestep = 0
+
+			if learn_flow:
+				pred = my_model_pred
+			else:
+				if gp_style==1:
+					x = pred
+					x_onestep = test_val_prev
+				elif gp_style==2:
+					x = np.concatenate((pred, my_model_pred))
+					x_onestep = np.concatenate((test_val_prev, my_model_pred_onestep))
+				elif gp_style==3:
+					x = my_model_pred
+					x_onestep = my_model_pred_onestep
+				elif gp_style==4:
+					x = pred
+					x_onestep = test_val_prev
+
+				if gp_style==2:
+					gp_input_onestep = np.concatenate((f_unNormalize_Y(normz_info, test_val_prev), f_unNormalize_Y(normz_info, my_model_pred_onestep)))
+					gp_input[j,:] = np.concatenate((f_unNormalize_Y(normz_info, pred), f_unNormalize_Y(normz_info, my_model_pred)))
+				else:
+					gp_input_onestep = f_unNormalize_Y(normz_info, x_onestep)
+					gp_input[j,:] = f_unNormalize_Y(normz_info, x)
+
+				# gpr_pred_val = gpr.predict(x.reshape(1, -1) , return_std=False).squeeze()
+				gpr_pred_val = gp_pred(x[None,:]).squeeze()
+				pred = do_resid*my_model_pred + gpr_pred_val
+
+				gp_output[j,:] = f_unNormalize_Y(normz_info, pred) - do_resid*f_unNormalize_Y(normz_info, my_model_pred)
+
+				# gpr_pred_val_onestep = gpr.predict(x_onestep.reshape(1, -1) , return_std=False).squeeze()
+				if do_onestepahead:
+					gpr_pred_val_onestep = gp_pred(x_onestep[None,:]).squeeze()
+					pred_onestep = do_resid*my_model_pred_onestep + gpr_pred_val_onestep
+					gpr_test_predictions_onestep[j,:] = pred_onestep
+
+
+			# compute losses
+			j_loss = sum((pred - target)**2)
+			j_loss_clean = sum((pred - target_clean)**2)
+			total_loss_test += j_loss
+			total_loss_clean_test += j_loss_clean
+			pw_loss_test[j] = j_loss**0.5 / avg_output_test
+			pw_loss_clean_test[j] = j_loss_clean**0.5 / avg_output_clean_test
+			gpr_test_predictions[j,:] = pred
+
+		total_loss_test = total_loss_test / test_seq_length
+		total_loss_clean_test = total_loss_clean_test / test_seq_length
+
+		#store losses
+		loss_vec_test[0,kkt] = total_loss_test
+		loss_vec_clean_test[0,kkt] = total_loss_clean_test
+		pred_validity_vec_test[0,kkt] = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
+		pred_validity_vec_clean_test[0,kkt] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
+
+		# Protect against the case where the model is perfect
+		if pred_validity_vec_test[0,kkt]==0 and pw_loss_test[0]==0:
+			pred_validity_vec_test[0,kkt] = (1+len(pw_loss_clean_test))*model_params['delta_t']
+
+		if pred_validity_vec_clean_test[0,kkt]==0 and pw_loss_clean_test[0]==0:
+			pred_validity_vec_clean_test[0,kkt] = (1+len(pw_loss_clean_test))*model_params['delta_t']
+
+
+		# plot forecast over test set
+		y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
+		gpr_test_predictions_raw = f_unNormalize_Y(normz_info,gpr_test_predictions)
+		gpr_test_predictions_onestep_raw = f_unNormalize_Y(normz_info,gpr_test_predictions_onestep)
+
+		fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+		if not isinstance(ax_list,np.ndarray):
+			ax_list = [ax_list]
+
+		# NOW, show testing fit
+		for kk in range(len(ax_list)):
+			ax3 = ax_list[kk]
+			t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+			# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
+			ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
+			ax3.plot(t_plot, gpr_test_predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
+			ax3.set_xlabel('time')
+			ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
+			ax3.tick_params(axis='y', labelcolor='red')
+
+		ax_list[0].legend()
+
+		fig.suptitle('{0} Testing fit'.format(gp_nm.rstrip('_')))
+		fig.savefig(fname=output_dir+'/{0}fit_ode_TEST_{1}'.format(gp_nm,kkt))
+		plt.close(fig)
+
+		# phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt), delta_t=model_params['delta_t'])
+		phase_plot(data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_GPpredicted_TEST_{0}'.format(kkt), delta_t=model_params['delta_t'])
+
+		# plot KDE of test data vs predictions
+		invdens_plotname = output_dir+'/invariant_density_TEST_{0}'.format(kkt)
+		invariant_density_plot(test_data=y_clean_test_raw, pred_data=gpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
+
+		# plot inferred Ybar vs true Ybar
+		# if y_fast_test is not None:
+		#     X_in = y_clean_test_raw[:-1,:]
+		#     X_out = gpr_test_predictions_onestep_raw[1:,:]
+		#     Ybar_model_implied = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
+		#     Ybar_true = y_fast_test[kkt,:-1,:].reshape( (y_fast_test.shape[1]-1, ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
+		#     timeseries_Ybar_plots(delta_t=model_params['delta_t'], Ybar_true=Ybar_true, Ybar_inferred=Ybar_model_implied, output_fname=output_dir+'/infer_Ybar_timeseries_TEST_{0}'.format(kkt))
+		#     scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_model_implied, output_fname=output_dir+'/infer_Ybar_TEST_{0}.png'.format(kkt))
+		#     n_short = int(0.2/model_params['delta_t'])
+		#     scatter_Ybar(Ybar_true=Ybar_true[:n_short,:], Ybar_inferred=Ybar_model_implied[:n_short,:], output_fname=output_dir+'/infer_Ybar_T{1}_TEST_{0}.png'.format(kkt,n_short*model_params['delta_t']))
+		#     scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_model_implied, output_fname=output_dir+'/YbarModelImplied_vs_X_TEST_{0}.png'.format(kkt))
+
+			# generate slow-data-inferred Ybar [THIS IS THE IMPORTANT ONE]
+			# X_out = y_clean_test_raw[1:,:]
+			# Ybar_data_inferred = ODE.implied_Ybar(X_in=X_in, X_out=X_out, delta_t=model_params['delta_t'])
+			# scatter_Ybar_X(X=X_in, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'/YbarSlowDataInferred_vs_X_TEST_{0}.png'.format(kkt))
+			# scatter_Ybar(Ybar_true=Ybar_true, Ybar_inferred=Ybar_data_inferred, output_fname=output_dir+'/YbarSlowDataInferred_vs_YbarTrue_{0}.png'.format(kkt))
+
+		ALLy_clean_test_raw.append(y_clean_test_raw)
+		ALLgpr_test_predictions_raw.append(gpr_test_predictions_raw)
+		ALLgpr_inputs.append(gp_input)
+		ALLgpr_outputs.append(gp_output)
+
+	ALLgpr_inputs = np.array(ALLgpr_inputs)
+	ALLgpr_outputs = np.array(ALLgpr_outputs)
+	ALLy_clean_test_raw = np.array(ALLy_clean_test_raw)
+	ALLgpr_test_predictions_raw = np.array(ALLgpr_test_predictions_raw)
+	ALLgpr_outputs = np.reshape(ALLgpr_outputs,(ALLgpr_outputs.shape[0]*ALLgpr_outputs.shape[1],ALLgpr_outputs.shape[2]))
+	ALLgpr_inputs = np.reshape(ALLgpr_inputs,(ALLgpr_inputs.shape[0]*ALLgpr_inputs.shape[1],ALLgpr_inputs.shape[2]))
+	ALLy_clean_test_raw = np.reshape(ALLy_clean_test_raw,(ALLy_clean_test_raw.shape[0]*ALLy_clean_test_raw.shape[1],ALLy_clean_test_raw.shape[2]))
+	ALLgpr_test_predictions_raw = np.reshape(ALLgpr_test_predictions_raw,(ALLgpr_test_predictions_raw.shape[0]*ALLgpr_test_predictions_raw.shape[1],ALLgpr_test_predictions_raw.shape[2]))
+
+	# plot GPR inputs vs outputs---empirical marginals using scatter plot
+	yplot_inds = plot_state_indices[:]
+	xplot_inds = plot_state_indices[:]
+	xnames = [foo + ' j-state' for foo in model_params['state_names']]
+	if gp_style==2:
+		xnames += [foo + ' j+1 ODE-pred' for foo in model_params['state_names']]
+		xplot_inds += [foo + len(plot_state_indices) for foo in plot_state_indices]
+
+	# GP input vs GP output
+	# in cases where input size has doubled (e.g. GPR2), be sure to also double the axis limits
+	boo_xmax = normz_info['Ymax']
+	boo_xmin = normz_info['Ymin']
+	if ALLgpr_inputs.shape[1]==2*boo_xmax.shape[0]:
+		boo_xmax = np.concatenate((boo_xmax,boo_xmax))
+		boo_xmin = np.concatenate((boo_xmin,boo_xmin))
+
+	gpinout_fname = output_dir+'/GP_input_vs_output'
+	ynames = [foo + ' j+1 GP-output' for foo in model_params['state_names']]
+	# insert Xlim based on normz_info
+	gp_marginal_plot(xdata=ALLgpr_inputs, xmin=boo_xmin, xmax=boo_xmax, ydata=ALLgpr_outputs, xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
+
+	# GP input vs GP-corrected prediction
+	gpinout_fname = output_dir+'/GP_input_vs_prediction'
+	ynames = [foo + ' j+1 full-pred' for foo in model_params['state_names']]
+	# insert Xlim based on normz_info
+	gp_marginal_plot(xdata=ALLgpr_inputs, xmin=boo_xmin, xmax=boo_xmax, ydata=ALLgpr_test_predictions_raw, xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
+
+	# GP input vs norm of GP output
+	gpinout_fname = output_dir+'/GP_input_vs_outputNorm'
+	ynames = ['||u||_2']
+	yplot_inds = [0]
+	ydata = np.linalg.norm(ALLgpr_outputs, axis=1)
+	# insert Xlim based on normz_info
+	gp_marginal_plot(xdata=ALLgpr_inputs, xmin=boo_xmin, xmax=boo_xmax, ydata=ydata[:,None], xnames=xnames, ynames=ynames, xplot_inds=xplot_inds, yplot_inds=yplot_inds, output_fname=gpinout_fname)
+
+	with open(output_dir+'/output_norm_mean.txt', 'w') as fh:
+		fh.writelines(str(np.mean(ydata)))
+	with open(output_dir+'/output_norm_std.txt', 'w') as fh:
+		fh.writelines(str(np.std(ydata)))
+
+	# plot KDE of ALL test sets vs ALL prediction
+	invdens_plotname = output_dir+'/invariant_density_TEST_ALL'
+	invariant_density_plot(test_data=ALLy_clean_test_raw, pred_data=ALLgpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
+
+	# pdb.set_trace()
+	# write pw losses to file
+	# gpr_pred_validity_vec_test = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
+	# gpr_pred_validity_vec_clean_test = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
+	# with open(output_dir+'/{0}prediction_validity_time_test.txt'.format(gp_nm), "w") as f:
+	#   f.write(str(gpr_pred_validity_vec_test))
+	# with open(output_dir+'/{0}prediction_validity_time_clean_test.txt'.format(gp_nm), "w") as f:
+	#   f.write(str(gpr_pred_validity_vec_clean_test))
+	# with open(output_dir+'/{0}loss_test.txt'.format(gp_nm), "w") as f:
+	#   f.write(str(total_loss_test))
+	# with open(output_dir+'/{0}clean_loss_test.txt'.format(gp_nm), "w") as f:
+	#   f.write(str(total_loss_clean_test))
+	np.savetxt(output_dir+'/{0}loss_vec_test.txt'.format(gp_nm),loss_vec_test)
+	np.savetxt(output_dir+'/{0}loss_vec_clean_test.txt'.format(gp_nm),loss_vec_clean_test)
+	np.savetxt(output_dir+'/{0}prediction_validity_time_test.txt'.format(gp_nm),pred_validity_vec_test)
+	np.savetxt(output_dir+'/{0}prediction_validity_time_clean_test.txt'.format(gp_nm),pred_validity_vec_clean_test)
+
+	# if plot_empirical_GP_mean:
+	#   # GP_box_settings = {'x': np.linspace(-10,10,10),
+	#   #                   'y': np.linspace(-20,30,10),
+	#   #                   'z': np.linspace(10,40,10)
+	#   #                   }
+	#  #    keys, values = zip(*GP_box_settings.items())
+	#  #    list_of_vals = [dict(zip(keys, v)) for v in itertools.product(*values)]
+	#   for hh in range(n_gp_grid):
+	#       # y0 = [val[key] for key in model_params['state_names']]
+	#       ya = f_normalize_minmax(normz_info, f_get_state_inits(n=1))
+	#       if gp_style==2:
+	#           yb = f_normalize_minmax(normz_info, f_get_state_inits(n=1))
+	#           y0_normalized = np.concatenate((ya, yb))
+	#       else:
+	#           y0_normalized = ya
+
+
+
+
+	if GP_grid:
+		## Evaluate GP vs actual residuals on a BOX
+		t0grid = time()
+		n_residuals = 5000
+		GP_error_grid = np.zeros((n_residuals,n_residuals,n_residuals))
+		GP_total_error = 0
+		# bigX = np.zeros((len(xvals)*len(yvals)*len(zvals),nXDim))
+		# bigY = np.zeros((len(xvals)*len(yvals)*len(zvals),nYDim))
+		tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+
+		# FIRST, find the attractor and have something to sample from
+		# initialize at FIXED starting point for TRUE model to get the attractor!!!
+		# bigTspan = np.arange(0, 2*n_residuals, 0.1)
+		# run_again = True
+		# while run_again:
+		#   y_out_ATT, info_dict = odeint(model, np.squeeze(get_lorenz_inits(n=1)), bigTspan, args=model_params['ode_params'], mxstep=0, full_output=True)
+		#   if info_dict['message'] == 'Integration successful.':
+		#       run_again = False
+
+		# y_out_ATT = y_out_ATT[int(y_out_ATT.shape[0]/3):,]
+
+		# random_attractor_points
+
+		bigX = np.zeros((n_residuals,nXDim))
+		bigY = np.zeros((n_residuals,nYDim))
+
+		my_inds = np.random.randint(low=0, high=random_attractor_points.shape[0]-1, size=n_residuals)
+		for n in range(len(my_inds)):
+			y0 = random_attractor_points[my_inds[n],:]
+			y0_normalized = f_normalize_minmax(normz_info, y0)
+
+			y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
+			bad_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+
+			if gp_style==1:
+				x_input = y0_normalized
+			elif gp_style==2:
+				x_input = np.concatenate((y0_normalized, bad_model_pred))
+			elif gp_style==3:
+				x_input = bad_model_pred
+			elif gp_style==4:
+				x_input = y0_normalized
+
+			# gp_forecast = do_resid*bad_model_pred + gpr.predict(x_input.reshape(1, -1) , return_std=False).squeeze()
+			gp_forecast = do_resid*bad_model_pred + gp_pred(x_input[None,:]).squeeze()
+
+			y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=0, full_output=True)
+
+			pdb.set_trace()
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params_TRUE['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params_TRUE['ode_int_method'], rtol=model_params_TRUE['ode_int_rtol'], atol=model_params_TRUE['ode_int_atol'], max_step=model_params_TRUE['ode_int_max_step'], t_eval=tspan)
+			y_out_TRUE2 = sol.y.T
+
+			true_model_pred = f_normalize_minmax(normz_info, y_out_TRUE[-1,:])
+
+			bigX[n,:] = x_input
+			bigY[n,:] = (true_model_pred - do_resid*bad_model_pred)
+
+			# try:
+			#   my_score = gpr.score(X=x_input, y = (true_model_pred - do_resid*bad_model_pred))
+			# except:
+			my_score = np.linalg.norm(gp_forecast - true_model_pred)
+			# GP_error_grid[ix,iy,iz] = my_score
+			GP_total_error += my_score
+
+		print('ATTRACTOR sampling took',str(timedelta(seconds=time()-t0grid)))
+		# plot 1-d marginal errors
+		print('Total {0} ATTRACTOR error = {1}'.format(gp_nm,GP_total_error))
+		# print('{0} ATTRACTOR score = {1}'.format(gp_nm,gpr.score(X=bigX,y=bigY)))
+
+		# np.savez(output_dir+'/{0}GP_error_grid'.format(gp_nm), GP_error_grid=GP_error_grid, xvals=xvals, yvals=yvals, zvals=zvals, GP_total_error=GP_total_error)
+
+
+
+		## Evaluate GP vs actual residuals on a BOX
+		xvals = np.linspace(-10,10,10)
+		yvals = np.linspace(-20,30,10)
+		zvals = np.linspace(10,40,10)
+
+		t0grid = time()
+		ix = 0
+		iy = 0
+		iz = 0
+		GP_error_grid = np.zeros((len(xvals),len(yvals),len(zvals)))
+		GP_total_error = 0
+		bigX = np.zeros((len(xvals)*len(yvals)*len(zvals),nXDim))
+		bigY = np.zeros((len(xvals)*len(yvals)*len(zvals),nYDim))
+		tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+		n = -1
+		for ix in range(len(xvals)):
+			x = xvals[ix]
+			for iy in range(len(yvals)):
+				y = yvals[iy]
+				for iz in range(len(zvals)):
+					n += 1
+					z = zvals[iz]
+
+					# FIRST, find the attractor (idk, run for >10 lyapunov times...)
+					y_out_INIT, info_dict = odeint(model, np.array([x,y,z]), [0, 5, 10], args=model_params['ode_params'], mxstep=0, full_output=True)
+
+					pdb.set_trace()
+					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(0, 10), y0=np.array([x,y,z]).T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=[0, 5, 10])
+					y_out_INIT2 = sol.y.T
+
+
+					y0 = y_out_INIT[-1,:]
+					y0_normalized = f_normalize_minmax(normz_info, y0)
+					# now, we assume that y0 is on the attractor
+
+					y_out, info_dict = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0, full_output=True)
+
+					pdb.set_trace()
+					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+					y_out2 = sol.y.T
+
+
+
+					bad_model_pred = f_normalize_minmax(normz_info, y_out[-1,:])
+					if gp_style==1:
+						x_input = y0_normalized
+					elif gp_style==2:
+						x_input = np.concatenate((y0_normalized, bad_model_pred))
+					elif gp_style==3:
+						x_input = bad_model_pred
+					elif gp_style==4:
+						x_input = y0_normalized
+
+					# gp_forecast = do_resid*bad_model_pred + gpr.predict(x_input.reshape(1, -1) , return_std=False).squeeze()
+					gp_forecast = do_resid*bad_model_pred + gp_pred(x_input[None,:]).squeeze()
+
+					y_out_TRUE, info_dict = odeint(model, y0, tspan, args=model_params_TRUE['ode_params'], mxstep=0, full_output=True)
+
+					pdb.set_trace()
+					sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params_TRUE['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params_TRUE['ode_int_method'], rtol=model_params_TRUE['ode_int_rtol'], atol=model_params_TRUE['ode_int_atol'], max_step=model_params_TRUE['ode_int_max_step'], t_eval=tspan)
+					y_out_TRUE2 = sol.y.T
+
+					true_model_pred = f_normalize_minmax(normz_info, y_out_TRUE[-1,:])
+
+					bigX[n,:] = x_input
+					bigY[n,:] = (true_model_pred - do_resid*bad_model_pred)
+
+					# try:
+					#   my_score = gpr.score(X=x_input, y = (true_model_pred - do_resid*bad_model_pred))
+					# except:
+					my_score = np.linalg.norm(gp_forecast - true_model_pred)
+					GP_error_grid[ix,iy,iz] = my_score
+					GP_total_error += my_score
+
+		print('Grid took',str(timedelta(seconds=time()-t0grid)))
+		# plot 1-d marginal errors
+		print('Total {0} grid error = {1}'.format(gp_nm,GP_total_error))
+		# print('{0} grid score = {1}'.format(gp_nm,gpr.score(X=bigX,y=bigY)))
+
+		np.savez(output_dir+'/{0}GP_error_grid'.format(gp_nm), GP_error_grid=GP_error_grid, xvals=xvals, yvals=yvals, zvals=zvals, GP_total_error=GP_total_error)
 
 
 def compare_GPs(output_dir,style_list):
 
-    # 1d-marginals
-    fig, (ax1, ax2, ax3) = plt.subplots(1,3, sharey=True)
-    for gp_style in style_list:
-        gp_nm = 'GPR{0}_'.format(gp_style)
-        npzfile = np.load(output_dir+'/{0}GP_error_grid.npz'.format(gp_nm))
+	# 1d-marginals
+	fig, (ax1, ax2, ax3) = plt.subplots(1,3, sharey=True)
+	for gp_style in style_list:
+		gp_nm = 'GPR{0}_'.format(gp_style)
+		npzfile = np.load(output_dir+'/{0}GP_error_grid.npz'.format(gp_nm))
 
-        ax1.plot(npzfile['xvals'], np.mean(npzfile['GP_error_grid'], axis=(1,2)), label=gp_nm)
-        ax2.plot(npzfile['yvals'], np.mean(npzfile['GP_error_grid'], axis=(0,2)), label=gp_nm)
-        ax3.plot(npzfile['zvals'], np.mean(npzfile['GP_error_grid'], axis=(0,1)), label=gp_nm)
+		ax1.plot(npzfile['xvals'], np.mean(npzfile['GP_error_grid'], axis=(1,2)), label=gp_nm)
+		ax2.plot(npzfile['yvals'], np.mean(npzfile['GP_error_grid'], axis=(0,2)), label=gp_nm)
+		ax3.plot(npzfile['zvals'], np.mean(npzfile['GP_error_grid'], axis=(0,1)), label=gp_nm)
 
-    ax1.set_xlabel('x')
-    ax2.set_xlabel('y')
-    ax3.set_xlabel('z')
+	ax1.set_xlabel('x')
+	ax2.set_xlabel('y')
+	ax3.set_xlabel('z')
 
-    ax1.set_ylabel('MSE')
-    ax2.set_ylabel('MSE')
-    ax3.set_ylabel('MSE')
+	ax1.set_ylabel('MSE')
+	ax2.set_ylabel('MSE')
+	ax3.set_ylabel('MSE')
 
-    ax3.legend()
+	ax3.legend()
 
-    fig.suptitle('1-d Marginalized Squared Error of GP-approximated residuals')
-    fig.savefig(fname=output_dir+'/1d_Maringal_GP_errors')
+	fig.suptitle('1-d Marginalized Squared Error of GP-approximated residuals')
+	fig.savefig(fname=output_dir+'/1d_Maringal_GP_errors')
 
-    ax1.set_yscale('log')
-    ax2.set_yscale('log')
-    ax3.set_yscale('log')
+	ax1.set_yscale('log')
+	ax2.set_yscale('log')
+	ax3.set_yscale('log')
 
-    fig.savefig(fname=output_dir+'/1d_Maringal_GP_errors_log')
+	fig.savefig(fname=output_dir+'/1d_Maringal_GP_errors_log')
 
-    plt.close(fig)
-
-
-    # 2d-marginals
-    for gp_style in style_list:
-        fig, (ax_XY, ax_XZ, ax_YZ) = plt.subplots(1,3)
-        gp_nm = 'GPR{0}_'.format(gp_style)
-        npzfile = np.load(output_dir+'/{0}GP_error_grid.npz'.format(gp_nm))
-
-        ax_XY.imshow(np.mean(npzfile['GP_error_grid'], axis=2), label=gp_nm)
-        ax_XZ.imshow(np.mean(npzfile['GP_error_grid'], axis=1), label=gp_nm)
-        ax_YZ.imshow(np.mean(npzfile['GP_error_grid'], axis=0), label=gp_nm)
-
-        ax_XY.set_xlabel('X')
-        ax_XY.set_ylabel('Y')
-
-        ax_XZ.set_xlabel('X')
-        ax_XZ.set_ylabel('Z')
-
-        ax_YZ.set_xlabel('Y')
-        ax_YZ.set_ylabel('Z')
+	plt.close(fig)
 
 
-        fig.suptitle('2-d Marginalized Squared Error of GP-approximated residuals')
-        fig.savefig(fname=output_dir+'/2d_Maringal_GP_errors_{0}'.format(gp_nm))
-        plt.close(fig)
+	# 2d-marginals
+	for gp_style in style_list:
+		fig, (ax_XY, ax_XZ, ax_YZ) = plt.subplots(1,3)
+		gp_nm = 'GPR{0}_'.format(gp_style)
+		npzfile = np.load(output_dir+'/{0}GP_error_grid.npz'.format(gp_nm))
+
+		ax_XY.imshow(np.mean(npzfile['GP_error_grid'], axis=2), label=gp_nm)
+		ax_XZ.imshow(np.mean(npzfile['GP_error_grid'], axis=1), label=gp_nm)
+		ax_YZ.imshow(np.mean(npzfile['GP_error_grid'], axis=0), label=gp_nm)
+
+		ax_XY.set_xlabel('X')
+		ax_XY.set_ylabel('Y')
+
+		ax_XZ.set_xlabel('X')
+		ax_XZ.set_ylabel('Z')
+
+		ax_YZ.set_xlabel('Y')
+		ax_YZ.set_ylabel('Z')
+
+
+		fig.suptitle('2-d Marginalized Squared Error of GP-approximated residuals')
+		fig.savefig(fname=output_dir+'/2d_Maringal_GP_errors_{0}'.format(gp_nm))
+		plt.close(fig)
 
 
 def train_chaosRNN(forward,
-            y_clean_train, y_noisy_train,
-            y_clean_test, y_noisy_test,
-            y_clean_testSynch, y_noisy_testSynch,
-            model_params, hidden_size=6, n_epochs=100, lr=0.05,
-            output_dir='.', normz_info=None, model=None,
-            trivial_init=False, perturb_trivial_init=True, sd_perturb = 0.001,
-            stack_hidden=True, stack_output=True,
-            x_train=None, x_test=None,
-            f_normalize_Y=f_normalize_minmax,
-            f_unNormalize_Y=f_unNormalize_minmax,
-            f_normalize_X = f_normalize_ztrans,
-            f_unNormalize_X = f_unNormalize_ztrans,
-            max_plot=None, n_param_saves=None,
-            err_thresh=0.4, plot_state_indices=None,
-            precompute_model=True, kde_func=kde_scipy,
-            compute_kl=False, gp_only=False, gp_style=2, learn_residuals=False,
-            learn_flow = False,
-            save_iterEpochs=True,
-            model_params_TRUE=None,
-            GP_grid = False,
-            alpha_list = [1e-10],
-            ode_only=False,
-            y_fast_train=None,
-            y_fast_test=None,
-            ODE=None,
-            use_ode_test_data=False,
-            gp_space_map='fulltofull'):
-
-    model_params['smaller_delta_t'] = model_params['delta_t'] # later, need to remove smaller_delta_t as field
-
-    t0 = time()
-
-    if torch.cuda.is_available():
-        print('Using CUDA FloatTensor')
-        dtype = torch.cuda.FloatTensor
-    else:
-        print('Using regular torch.FloatTensor')
-        dtype = torch.FloatTensor
-
-    if max_plot is None:
-        max_plot = int(np.floor(30./model_params['delta_t']))
-
-    n_plttrain = min(max_plot,y_clean_train.shape[0])
-    n_plttest = min(max_plot,y_clean_test.shape[1])
-
-    if not plot_state_indices:
-        plot_state_indices = np.arange(y_clean_test.shape[2]).tolist()
-
-    if not model_params_TRUE:
-        model_params_TRUE = model_params.copy()
-        model_params_TRUE['ode_params'] = LORENZ_DEFAULT_PARAMS
-
-    model_params['learn_residuals_rnn'] = learn_residuals
-
-
-    # keep_param_history = np.log10( n_epochs * y_clean_train.shape[0] * (hidden_size**2) ) < mem_thresh_order
-    # if not keep_param_history:
-    #   print('NOT saving parameter history...would take too much memory!')
-
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    print('Starting training for: ', output_dir)
-
-    output_train = torch.FloatTensor(y_noisy_train).type(dtype)
-    output_clean_train = torch.FloatTensor(y_clean_train).type(dtype)
-    output_test = torch.FloatTensor(y_noisy_test).type(dtype)
-    output_clean_test = torch.FloatTensor(y_clean_test).type(dtype)
-    test_synch_clean = y_clean_testSynch
-    test_synch_noisy = torch.FloatTensor(y_noisy_testSynch).type(dtype)
-
-    try:
-        avg_output_test = model_params['time_avg_norm']
-    except:
-        avg_output_test = torch.mean(output_test**2).detach().numpy()**0.5
-    # avg_output_test = torch.mean(output_test**2,dim=(0,1)).detach().numpy()**0.5
-    try:
-        avg_output_clean_test = model_params['time_avg_norm']
-    except:
-        avg_output_clean_test = torch.mean(output_clean_test**2).detach().numpy()**0.5
-    # avg_output_clean_test = torch.mean(output_clean_test**2,dim=(0,1)).detach().numpy()**0.5
-
-    output_size = output_train.shape[1]
-    train_seq_length = output_train.size(0)
-    test_seq_length = output_test.size(1)
-    n_test_sets = output_test.size(0)
-    synch_length = test_synch_noisy.size(1)
-
-    # compute one-step-ahead model-based prediction for each point in the training set
-    if precompute_model:
-        model_pred = np.zeros((train_seq_length-1,output_size))
-        for j in range(train_seq_length-1):
-            tspan = get_tspan(model_params)
-            # tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
-            # unnormalize model_input so that it can go through the ODE solver
-            y0 = f_unNormalize_minmax(normz_info, output_train[j,:].numpy())
-            sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-
-            # y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0)
-            # model_pred[j,:] = f_normalize_minmax(normz_info, y_out[-1,:])
-            model_pred[j,:] = f_normalize_minmax(normz_info, sol.y[:,-1])
-    else:
-        model_pred = [None for j in range(train_seq_length-1)]
-
-    # pdb.set_trace()
-    # identify Attractor points for GP grid eval
-    get_attractor = False
-    random_attractor_points = None
-    if get_attractor:
-        n_points = 1000
-        bigTspan = np.arange(0, 10*n_points, 0.1)
-        run_again = True
-        while run_again:
-            y_out_ATT, info_dict = odeint(model, np.squeeze(get_lorenz_inits(n=1)), bigTspan, args=model_params['ode_params'], mxstep=0, full_output=True)
-            if info_dict['message'] == 'Integration successful.':
-                run_again = False
-
-        # do a one 1/10 burn-in, then randomly downsample.
-        my_inds = np.random.randint(low=n_points, high=(10*n_points)-1, size=n_points)
-        random_attractor_points = y_out_ATT[my_inds,]
-
-    if ode_only:
-        run_ode_test(y_clean_test, y_noisy_test,
-                    y_clean_testSynch, y_noisy_testSynch,
-                    model,f_unNormalize_Y,
-                    model_pred,
-                    train_seq_length,
-                    test_seq_length,
-                    output_size,
-                    avg_output_test,
-                    avg_output_clean_test,
-                    normz_info, model_params, model_params_TRUE, random_attractor_points,
-                    plot_state_indices,
-                    output_dir,
-                    n_plttrain,
-                    n_plttest,
-                    n_test_sets,
-                    err_thresh,
-                    y_fast_test=y_fast_test,
-                    y_fast_train=y_fast_train,
-                    ODE=ODE,
-                    use_ode_test_data=use_ode_test_data)
-
-        return
-
-
-    if gp_only:
-        for alpha in alpha_list:
-            print('Running GPR',gp_style,'for alpha=',alpha)
-            run_GP(y_clean_train, y_noisy_train,
-                    y_clean_test, y_noisy_test,
-                    y_clean_testSynch, y_noisy_testSynch,
-                    model,f_unNormalize_Y,
-                    model_pred,
-                    train_seq_length,
-                    test_seq_length,
-                    output_size,
-                    avg_output_test,
-                    avg_output_clean_test,
-                    normz_info, model_params, model_params_TRUE, random_attractor_points,
-                    plot_state_indices,
-                    output_dir,
-                    n_plttrain,
-                    n_plttest,
-                    n_test_sets,
-                    err_thresh,
-                    gp_style=gp_style,
-                    gp_only=gp_only,
-                    GP_grid = GP_grid,
-                    alpha = alpha,
-                    do_resid = learn_residuals,
-                    learn_flow = learn_flow,
-                    y_fast_test=y_fast_test,
-                    y_fast_train=y_fast_train,
-                    ODE=ODE,
-                    gp_space_map=gp_space_map)
-        # plot GP comparisons
-        if GP_grid:
-            style_list = [1,2,3]
-            compare_GPs(output_dir,style_list)
-        return
-
-
-    # first, SHOW that a simple mechRNN can fit the data perfectly (if we are running a mechRNN)
-    if stack_hidden or stack_output:
-        # now, TRAIN to fit the output from the previous model
-        # w2 = torch.zeros(hidden_size, input_size).type(dtype)
-        A = torch.zeros(hidden_size, hidden_size).type(dtype)
-        B = torch.zeros(hidden_size, (1+stack_hidden)*output_size).type(dtype)
-        a = torch.zeros(hidden_size, 1).type(dtype)
-        C = torch.zeros(output_size, hidden_size + (stack_output*output_size) ).type(dtype)
-        b = torch.zeros(output_size, 1).type(dtype)
-
-        if not model_params['learn_residuals_rnn']:
-            for jj in range(output_size):
-                C[jj,jj] = 1
-
-
-        perfect_loss_vec_test = np.zeros((1,n_test_sets))
-        perfect_loss_vec_clean_test = np.zeros((1,n_test_sets))
-        perfect_pred_validity_vec_test = np.zeros((1,n_test_sets))
-        perfect_pred_validity_vec_clean_test = np.zeros((1,n_test_sets))
-
-
-        perfect_test_loss = []
-        perfect_t_valid = []
-        for kkt in range(n_test_sets):
-            # first, synchronize the hidden state
-            hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
-            solver_failed = False
-            for i in range(synch_length-1):
-                (pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
-
-            # hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
-            predictions = np.zeros([test_seq_length, output_size])
-            # yb_normalized = (yb - YMIN)/(YMAX - YMIN)
-            # initializing y0 of hidden state to the true initial condition from the clean signal
-            # hidden_state[0] = float(y_clean_test[0])
-            # pred = output_train[-1,:,None]
-            pred = test_synch_noisy[kkt,-1,:,None]
-            perf_total_loss_test = 0
-            perf_total_loss_clean_test = 0
-            # running_epoch_loss_test = np.zeros(test_seq_length)
-            perf_pw_loss_test = np.zeros(test_seq_length)
-            perf_pw_loss_clean_test = np.zeros(test_seq_length)
-            solver_failed = False
-            for i in range(test_seq_length):
-                (pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
-                # hidden_state = hidden_state
-                predictions[i,:] = pred.data.numpy().ravel()
-                i_loss = (pred.detach().squeeze() - output_test[kkt,i,None].squeeze()).pow(2).sum()
-                i_loss_clean = (pred.detach().squeeze() - output_clean_test[kkt,i,None].squeeze()).pow(2).sum()
-                perf_total_loss_test += i_loss
-                perf_total_loss_clean_test += i_loss_clean
-                # running_epoch_loss_test[j] = total_loss_test/(j+1)
-                perf_pw_loss_test[i] = i_loss.pow(0.5).numpy() / avg_output_test
-                perf_pw_loss_clean_test[i] = i_loss_clean.pow(0.5).numpy() / avg_output_clean_test
-
-            # get error metrics
-            perfect_loss_vec_test[0,kkt] = perf_total_loss_test.numpy() / test_seq_length
-            perfect_loss_vec_clean_test[0,kkt] = perf_total_loss_clean_test.numpy() / test_seq_length
-            perfect_pred_validity_vec_test[0,kkt] = np.argmax(perf_pw_loss_test > err_thresh)*model_params['delta_t']
-            perfect_pred_validity_vec_clean_test[0,kkt] = np.argmax(perf_pw_loss_clean_test > err_thresh)*model_params['delta_t']
-
-            # protect against case where the model is perfect!
-            if perfect_pred_validity_vec_test[0,kkt]==0 and perf_pw_loss_test[0]==0:
-                perfect_pred_validity_vec_test[0,kkt] = (1+len(perf_pw_loss_test))*model_params['delta_t']
-
-            if perfect_pred_validity_vec_clean_test[0,kkt]==0 and perf_pw_loss_clean_test[0]==0:
-                perfect_pred_validity_vec_clean_test[0,kkt] = (1+len(perf_pw_loss_clean_test))*model_params['delta_t']
-
-
-            # plot predictions vs truth
-            fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-            if not isinstance(ax_list,np.ndarray):
-                ax_list = [ax_list]
-
-            for kk in range(len(ax_list)):
-                ax1 = ax_list[kk]
-                ax1.scatter(np.arange(len(y_noisy_test[kkt,:n_plttest,plot_state_indices[kk]])), y_noisy_test[kkt,:n_plttest,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
-                ax1.plot(y_clean_test[kkt,:n_plttest,kk], color='red', label='true model')
-                ax1.plot(predictions[:n_plttest,kk], ':' ,color='red', label='perturbed model')
-                ax1.set_xlabel('time')
-                ax1.set_ylabel(model_params['state_names'][kk] + '(t)', color='red')
-                ax1.tick_params(axis='y', labelcolor='red')
-
-            ax_list[0].legend()
-            fig.suptitle('RNN w/ just mechanism fit to ODE simulation TEST SET')
-            fig.savefig(fname=output_dir+'/PERFECT_MechRnn_fit_TestODE_'+str(kkt))
-            plt.close(fig)
-
-        # output perfect fits
-        np.savetxt(output_dir+'/perfectModel_loss_vec_test.txt',perfect_loss_vec_test)
-        np.savetxt(output_dir+'/perfectModel_loss_vec_clean_test.txt',perfect_loss_vec_clean_test)
-        np.savetxt(output_dir+'/perfectModel_prediction_validity_time_test.txt',perfect_pred_validity_vec_test)
-        np.savetxt(output_dir+'/perfectModel_prediction_validity_time_clean_test.txt',perfect_pred_validity_vec_clean_test)
-
-
-    # Initilize parameters for training
-    A = torch.zeros(hidden_size, hidden_size).type(dtype)
-    B = torch.zeros(hidden_size, (1+stack_hidden)*output_size).type(dtype)
-    a = torch.zeros(hidden_size, 1).type(dtype)
-    C = torch.zeros(output_size, hidden_size + (stack_output*output_size) ).type(dtype)
-    b = torch.zeros(output_size, 1).type(dtype)
-
-    # pdb.set_trace()
-    # trivial_init trains the mechRNN starting from parameters (specified above)
-    # that trivialize the RNN to the forward ODE model
-    # now, TRAIN to fit the output from the previous model
-    if trivial_init:
-        init.zeros_(A)
-        init.zeros_(B)
-        init.zeros_(C)
-        init.zeros_(a)
-        init.zeros_(b)
-        for jj in range(output_size):
-            C[jj,jj] = 1
-        if perturb_trivial_init:
-            init.normal_(A, 0.0, sd_perturb)
-            init.normal_(B, 0.0, sd_perturb)
-            init.normal_(a, 0.0, sd_perturb)
-            init.normal_(b, 0.0, sd_perturb)
-            C = C + torch.FloatTensor(sd_perturb*np.random.randn(C.shape[0], C.shape[1]))
-    else:
-        init.normal_(A, 0.0, 0.1)
-        init.normal_(B, 0.0, 0.1)
-        init.normal_(C, 0.0, 0.1)
-        init.normal_(a, 0.0, 0.1)
-        init.normal_(b, 0.0, 0.1)
-
-    # additional perturbation for trivial init case
-
-
-    A = Variable(A, requires_grad=True)
-    B =  Variable(B, requires_grad=True)
-    C =  Variable(C, requires_grad=True)
-    a =  Variable(a, requires_grad=True)
-    b =  Variable(b, requires_grad=True)
-
-    if not n_param_saves:
-        n_param_saves = int(n_epochs*(train_seq_length-1))
-        save_interval = 1
-    else:
-        n_param_saves = min(n_param_saves, int(n_epochs*(train_seq_length-1)))
-        save_interval = int(math.ceil((n_epochs*(train_seq_length-1)/n_param_saves) / 100.0)) * 100
-
-    # if keep_param_history:
-    # A_history = np.zeros((n_param_saves, A.shape[0], A.shape[1]))
-    # B_history = np.zeros((n_param_saves, B.shape[0], B.shape[1]))
-    # C_history = np.zeros((n_param_saves, C.shape[0], C.shape[1]))
-    # a_history = np.zeros((n_param_saves, a.shape[0], a.shape[1]))
-    # b_history = np.zeros((n_param_saves, b.shape[0], b.shape[1]))
-    A_history = np.zeros((n_param_saves,1))
-    B_history = np.zeros((n_param_saves,1))
-    C_history = np.zeros((n_param_saves,1))
-    a_history = np.zeros((n_param_saves,1))
-    b_history = np.zeros((n_param_saves,1))
-    # A_history_running = np.zeros((n_param_saves,1))
-    # B_history_running = np.zeros((n_param_saves,1))
-    # C_history_running = np.zeros((n_param_saves,1))
-    # a_history_running = np.zeros((n_param_saves,1))
-    # b_history_running = np.zeros((n_param_saves,1))
-
-    loss_vec_train = np.zeros(n_epochs)
-    loss_vec_clean_train = np.zeros(n_epochs)
-    loss_vec_test = np.zeros((n_epochs,n_test_sets))
-    loss_vec_clean_test = np.zeros((n_epochs,n_test_sets))
-    pred_validity_vec_test = np.zeros((n_epochs,n_test_sets))
-    pred_validity_vec_clean_test = np.zeros((n_epochs,n_test_sets))
-    kl_vec_inv_test = np.zeros((n_epochs,n_test_sets, output_size))
-    kl_vec_inv_clean_test = np.zeros((n_epochs,n_test_sets, output_size))
-
-    cc = -1 # iteration counter for saving weight updates
-    cc_inc = -1
-    for i_epoch in range(n_epochs):
-        total_loss_train = 0
-        total_loss_clean_train = 0
-        #init.normal_(hidden_state, 0.0, 1)
-        #hidden_state = Variable(hidden_state, requires_grad=True)
-        pred = output_train[0,:,None]
-        hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=True)
-        init.normal_(hidden_state,0.0,0.1)
-        running_epoch_loss_train = np.zeros(train_seq_length)
-        running_epoch_loss_clean_train = np.zeros(train_seq_length)
-        solver_failed = False
-        for j in range(train_seq_length-1):
-            cc += 1
-            target = output_train[j+1,None]
-            target_clean = output_clean_train[j+1,None]
-            # pdb.set_trace()
-            (pred, hidden_state, solver_failed) = forward(output_train[j,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[j], solver_failed=solver_failed)
-            # (pred, hidden_state) = forward(pred.detach(), hidden_state, A,B,C,a,b, normz_info, model, model_params)
-            loss = (pred.squeeze() - target.squeeze()).pow(2).sum()
-            total_loss_train += loss
-            total_loss_clean_train += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()
-            running_epoch_loss_train[j] = total_loss_train/(j+1)
-            running_epoch_loss_clean_train[j] = total_loss_clean_train/(j+1)
-            loss.backward()
-
-            A.data -= lr * A.grad.data
-            B.data -= lr * B.grad.data
-            C.data -= lr * C.grad.data
-            a.data -= lr * a.grad.data
-            b.data -= lr * b.grad.data
-
-            # print('|grad_A| = {}'.format(np.linalg.norm(A.grad.data)))
-            # print('|grad_B| = {}'.format(np.linalg.norm(B.grad.data)))
-            # print('|grad_C| = {}'.format(np.linalg.norm(C.grad.data)))
-            # print('|grad_a| = {}'.format(np.linalg.norm(a.grad.data)))
-            # print('|grad_b| = {}'.format(np.linalg.norm(b.grad.data)))
-            # print("A:",A)
-            # print("C:",C)
-            # print("a:",a)
-            # print("b:",b)
-
-            A.grad.data.zero_()
-            B.grad.data.zero_()
-            C.grad.data.zero_()
-            a.grad.data.zero_()
-            b.grad.data.zero_()
-
-            hidden_state = hidden_state.detach()
-            # print updates every 2 iterations or in 5% incrememnts
-            if (n_epochs==1) and (cc % int( max(2, np.ceil(train_seq_length/20)) ) == 0):
-                print("Iteration: {}\nRunning Training Loss = {}\n".format(
-                            cc,
-                            running_epoch_loss_train[j]))
-            # save updated parameters
-            if cc % save_interval == 0:
-                cc_inc += 1
-                A_history[cc_inc,:] = np.linalg.norm(A.detach().numpy())
-                B_history[cc_inc,:] = np.linalg.norm(B.detach().numpy())
-                C_history[cc_inc,:] = np.linalg.norm(C.detach().numpy())
-                a_history[cc_inc,:] = np.linalg.norm(a.detach().numpy())
-                b_history[cc_inc,:] = np.linalg.norm(b.detach().numpy())
-
-                # cumulative means
-                # A_history_running[cc_inc,:] = np.mean(A_history[:cc_inc,:])
-                # B_history_running[cc_inc,:] = np.mean(B_history[:cc_inc,:])
-                # C_history_running[cc_inc,:] = np.mean(C_history[:cc_inc,:])
-                # a_history_running[cc_inc,:] = np.mean(a_history[:cc_inc,:])
-                # b_history_running[cc_inc,:] = np.mean(b_history[:cc_inc,:])
-        #normalize losses
-        total_loss_train = total_loss_train / train_seq_length
-        total_loss_clean_train = total_loss_clean_train / train_seq_length
-        #store losses
-        loss_vec_train[i_epoch] = total_loss_train
-        loss_vec_clean_train[i_epoch] = total_loss_clean_train
-
-        # now evaluate test loss
-        for kkt in range(n_test_sets):
-            if synch_length > 1:
-                # first, synchronize the hidden state
-                hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
-                solver_failed = False
-                for i in range(synch_length-1):
-                    (pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
-                pred = test_synch_noisy[kkt,-1,:,None]
-            else:
-                pred = output_train[-1,:,None]
-
-            total_loss_test = 0
-            total_loss_clean_test = 0
-            running_epoch_loss_test = np.zeros(test_seq_length)
-            running_epoch_loss_clean_test = np.zeros(test_seq_length)
-            # hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-            pw_loss_test = np.zeros(test_seq_length)
-            pw_loss_clean_test = np.zeros(test_seq_length)
-            long_predictions = np.zeros([test_seq_length, output_size])
-            solver_failed = False
-            for j in range(test_seq_length):
-                target = output_test[kkt,j,None]
-                target_clean = output_clean_test[kkt,j,None]
-                (pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed)
-                j_loss = (pred.detach().squeeze() - target.squeeze()).pow(2).sum()
-                j_loss_clean = (pred.detach().squeeze() - target_clean.squeeze()).pow(2).sum()
-                total_loss_test += j_loss
-                total_loss_clean_test += j_loss_clean
-                running_epoch_loss_clean_test[j] = total_loss_clean_test/(j+1)
-                running_epoch_loss_test[j] = total_loss_test/(j+1)
-                pw_loss_test[j] = j_loss.pow(0.5).numpy() / avg_output_test
-                pw_loss_clean_test[j] = j_loss_clean.pow(0.5).numpy() / avg_output_clean_test
-                pred = pred.detach()
-                long_predictions[j,:] = pred.data.numpy().ravel()
-                hidden_state = hidden_state.detach()
-            #normalize losses
-            total_loss_test = total_loss_test / test_seq_length
-            total_loss_clean_test = total_loss_clean_test / test_seq_length
-            #store losses
-            loss_vec_test[i_epoch,kkt] = total_loss_test
-            loss_vec_clean_test[i_epoch,kkt] = total_loss_clean_test
-            pred_validity_vec_test[i_epoch,kkt] = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
-            pred_validity_vec_clean_test[i_epoch,kkt] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
-
-            # protect against case where the model is perfect!
-            if pred_validity_vec_test[i_epoch,kkt]==0 and pw_loss_test[0]==0:
-                pred_validity_vec_test[i_epoch,kkt] = (1+len(pw_loss_test))*model_params['delta_t']
-
-            if pred_validity_vec_clean_test[i_epoch,kkt]==0 and pw_loss_clean_test[0]==0:
-                pred_validity_vec_clean_test[i_epoch,kkt] = (1+len(pw_loss_clean_test))*model_params['delta_t']
-
-
-            # compute KL divergence between long predictions and whole test set:
-            if compute_kl:
-                kl_vec_inv_test[i_epoch,kkt,:] = kl4dummies(
-                                f_unNormalize_Y(normz_info, y_noisy_test),
-                                f_unNormalize_Y(normz_info, long_predictions))
-                kl_vec_inv_clean_test[i_epoch,kkt,:] = kl4dummies(
-                                f_unNormalize_Y(normz_info, y_clean_test),
-                                f_unNormalize_Y(normz_info, long_predictions))
-
-        # print updates every 10 iterations or in 10% incrememnts
-        if  i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0:
-            print("Epoch {0}\nTotal run-time = {1}\nTraining Loss = {2}\nTesting Loss = {3}".format(
-                        i_epoch,
-                        str(timedelta(seconds=time()-t0)),
-                        total_loss_train.data.item(),
-                        np.mean(loss_vec_test[i_epoch,:])))
-
-        if  (i_epoch==(n_epochs-1)) or (save_iterEpochs and (i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0)):
-             # plot predictions vs truth
-            # fig, (ax1, ax3) = plt.subplots(1, 2)
-            # first run and plot training fits
-            hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
-            # init.normal_(hidden_state,0.0,0.1)
-            predictions = np.zeros([train_seq_length, output_size])
-            pred = output_train[0,:,None]
-            predictions[0,:] = np.squeeze(output_train[0,:,None])
-            saved_hidden_states = np.zeros([train_seq_length, hidden_size])
-            saved_hidden_states[0,:] = hidden_state.data.numpy().ravel()
-            solver_failed = False
-            for i in range(train_seq_length-1):
-                (pred, hidden_state, solver_failed) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i], solver_failed=solver_failed)
-                # (pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
-                # hidden_state = hidden_state
-                saved_hidden_states[i+1,:] = hidden_state.data.numpy().ravel()
-                predictions[i+1,:] = pred.data.numpy().ravel()
-
-            y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
-            y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
-            predictions_raw = f_unNormalize_Y(normz_info,predictions)
-            # y_clean_test_raw = y_clean_test
-            # y_noisy_train_raw = y_noisy_train
-            # y_clean_train_raw = y_clean_train
-            # predictions_raw = predictions
-
-            ## Plot first part of training
-            fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-            if not isinstance(ax_list,np.ndarray):
-                ax_list = [ax_list]
-            for kk in range(len(ax_list)):
-                ax1 = ax_list[kk]
-                t_plot = np.arange(0,round(len(y_noisy_train[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
-                # ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
-                ax1.plot(t_plot, y_clean_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', label='clean data')
-                ax1.plot(t_plot, predictions_raw[:n_plttrain,plot_state_indices[kk]], color='black', label='NN fit')
-                ax1.set_xlabel('time')
-                ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)', color='red')
-                ax1.tick_params(axis='y', labelcolor='red')
-            ax_list[0].legend()
-            fig.suptitle('Training Fit')
-            fig.savefig(fname=output_dir+'/rnn_train_fit_START_ode_iterEpochs'+str(i_epoch))
-            plt.close(fig)
-
-            ## Plot end part of training
-            fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-            if not isinstance(ax_list,np.ndarray):
-                ax_list = [ax_list]
-            for kk in range(len(ax_list)):
-                ax1 = ax_list[kk]
-                t_plot = np.arange(0,round(len(y_noisy_train[-n_plttrain:,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
-                # ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
-                ax1.plot(t_plot, y_clean_train_raw[-n_plttrain:,plot_state_indices[kk]], color='red', label='clean data')
-                ax1.plot(t_plot, predictions_raw[-n_plttrain:,plot_state_indices[kk]], color='black', label='NN fit')
-                ax1.set_xlabel('time')
-                ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)', color='red')
-                ax1.tick_params(axis='y', labelcolor='red')
-            ax_list[0].legend()
-            fig.suptitle('Training Fit')
-            fig.savefig(fname=output_dir+'/rnn_train_fit_END_ode_iterEpochs'+str(i_epoch))
-            plt.close(fig)
-
-
-
-            # plot dynamics of hidden state over training set
-            n_hidden_plots = min(10, hidden_size)
-            fig, (ax_list) = plt.subplots(n_hidden_plots,1)
-            if not isinstance(ax_list,np.ndarray):
-                ax_list = [ax_list]
-            for kk in range(len(ax_list)):
-                ax1 = ax_list[kk]
-                t_plot = np.arange(0,round(len(saved_hidden_states[:n_plttrain,kk])*model_params['delta_t'],8),model_params['delta_t'])
-                ax1.plot(t_plot, saved_hidden_states[:n_plttrain,kk], color='red', label='clean data')
-                ax1.set_xlabel('time')
-                ax1.set_ylabel('h_{}'.format(kk), color='red')
-                ax1.tick_params(axis='y', labelcolor='red')
-
-            ax_list[0].legend()
-
-            fig.suptitle('Hidden State Dynamics')
-            fig.savefig(fname=output_dir+'/rnn_train_hidden_states_iterEpochs'+str(i_epoch))
-            plt.close(fig)
-
-
-            # now, loop over testing trajectories
-            ALLy_clean_test_raw = []
-            ALLgpr_test_predictions_raw = []
-            for kkt in range(n_test_sets):
-                y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
-                test_synch_clean_raw = f_unNormalize_Y(normz_info,test_synch_clean[kkt,:,:])
-                figsynch, (ax_list_synch) = plt.subplots(len(plot_state_indices),1)
-                fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-                if not isinstance(ax_list,np.ndarray):
-                    ax_list = [ax_list]
-
-                # NOW, show testing fit
-                if synch_length > 1:
-                    # first, synchronize the hidden state
-                    hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
-                    solver_failed = False
-                    synch_predictions = np.zeros([synch_length, output_size])
-                    for i in range(synch_length-1):
-                        (pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
-                        synch_predictions[i+1,:] = pred.data.numpy().ravel()
-                    synch_predictions_raw = f_unNormalize_Y(normz_info,synch_predictions)
-                    for kk in range(len(ax_list_synch)):
-                        ax3 = ax_list_synch[kk]
-                        t_plot = np.arange(0,len(test_synch_clean[kkt,:,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
-                        # ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-                        ax3.plot(t_plot, test_synch_clean_raw[:,plot_state_indices[kk]], color='red', label='clean synch data')
-                        ax3.plot(t_plot, synch_predictions_raw[:,plot_state_indices[kk]], color='black', label='NN fit')
-                        ax3.set_xlabel('time')
-                        ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
-                        ax3.tick_params(axis='y', labelcolor='red')
-
-                    # set prediction
-                    pred = test_synch_noisy[kkt,-1,:,None]
-                else:
-                    pred = output_train[-1,:,None]
-
-                # hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-                predictions = np.zeros([test_seq_length, output_size])
-                # pred = output_train[-1,:,None]
-                saved_hidden_states = np.zeros([test_seq_length, hidden_size])
-                solver_failed = False
-                for i in range(test_seq_length):
-                    (pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed)
-                    # hidden_state = hidden_state
-                    predictions[i,:] = pred.data.numpy().ravel()
-                    saved_hidden_states[i,:] = hidden_state.data.numpy().ravel()
-
-                predictions_raw = f_unNormalize_Y(normz_info,predictions)
-                for kk in range(len(ax_list)):
-                    ax3 = ax_list[kk]
-                    t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
-                    # ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-                    ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
-                    ax3.plot(t_plot, predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
-                    ax3.set_xlabel('time')
-                    ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
-                    ax3.tick_params(axis='y', labelcolor='red')
-
-                ax_list[0].legend()
-
-                fig.suptitle('RNN TEST fit to ODE simulation--' + str(i_epoch) + 'training epochs')
-                fig.savefig(fname=output_dir+'/rnn_test_fit_ode_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
-                plt.close(fig)
-
-                ax_list_synch[0].legend()
-
-                figsynch.suptitle('RNN Synch fit to ODE simulation--' + str(i_epoch) + 'training epochs')
-                figsynch.savefig(fname=output_dir+'/rnn_synch_fit_ode_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
-                plt.close(figsynch)
-
-                ## Plot phase plots
-                # phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt), delta_t=model_params['delta_t'])
-                phase_plot(data=predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_RNNpredicted_iterEpochs{0}_test{1}'.format(i_epoch,kkt), delta_t=model_params['delta_t'])
-
-
-                # plot dynamics of hidden state over TESTING set
-                n_hidden_plots = min(10, hidden_size)
-                fig, (ax_list) = plt.subplots(n_hidden_plots,1)
-                if not isinstance(ax_list,np.ndarray):
-                    ax_list = [ax_list]
-                for kk in range(len(ax_list)):
-                    ax1 = ax_list[kk]
-                    t_plot = np.arange(0,round(len(saved_hidden_states[:n_plttest,kk])*model_params['delta_t'],8),model_params['delta_t'])
-                    ax1.plot(t_plot, saved_hidden_states[:n_plttest,kk], color='red', label='clean data')
-                    ax1.set_xlabel('time')
-                    ax1.set_ylabel('h_{}'.format(kk), color='red')
-                    ax1.tick_params(axis='y', labelcolor='red')
-
-                ax_list[0].legend()
-
-                fig.suptitle('Hidden State Dynamics')
-                fig.savefig(fname=output_dir+'/rnn_test_hidden_states_ode_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
-                plt.close(fig)
-
-                # plot KDE of test data vs predictions
-                invdens_plotname = output_dir+'/rnn_test_invDensity_iterEpochs{0}_test{1}'.format(i_epoch,kkt)
-                invariant_density_plot(test_data=y_clean_test_raw, pred_data=predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
-
-                ALLy_clean_test_raw.append(y_clean_test_raw)
-                ALLgpr_test_predictions_raw.append(predictions_raw)
-
-            ALLy_clean_test_raw = np.array(ALLy_clean_test_raw)
-            ALLgpr_test_predictions_raw = np.array(ALLgpr_test_predictions_raw)
-            ALLy_clean_test_raw = np.reshape(ALLy_clean_test_raw,(ALLy_clean_test_raw.shape[0]*ALLy_clean_test_raw.shape[1],ALLy_clean_test_raw.shape[2]))
-            ALLgpr_test_predictions_raw = np.reshape(ALLgpr_test_predictions_raw,(ALLgpr_test_predictions_raw.shape[0]*ALLgpr_test_predictions_raw.shape[1],ALLgpr_test_predictions_raw.shape[2]))
-            # plot KDE of ALL test sets vs ALL prediction
-            invdens_plotname = output_dir+'/rnn_test_invDensity_iterEpochs{0}_test_ALL'.format(i_epoch)
-            invariant_density_plot(test_data=ALLy_clean_test_raw, pred_data=ALLgpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
-
-
-    ## save loss_vec
-    if n_epochs == 1:
-        np.savetxt(output_dir+'/loss_vec_train.txt',running_epoch_loss_train)
-        np.savetxt(output_dir+'/loss_vec_clean_train.txt',running_epoch_loss_clean_train)
-        np.savetxt(output_dir+'/loss_vec_test.txt',running_epoch_loss_test)
-        np.savetxt(output_dir+'/loss_vec_clean_test.txt',running_epoch_loss_clean_test)
-    else:
-        np.savetxt(output_dir+'/loss_vec_train.txt',loss_vec_train)
-        np.savetxt(output_dir+'/loss_vec_clean_train.txt',loss_vec_clean_train)
-        np.savetxt(output_dir+'/loss_vec_test.txt',loss_vec_test)
-        np.savetxt(output_dir+'/loss_vec_clean_test.txt',loss_vec_clean_test)
-        np.savetxt(output_dir+'/prediction_validity_time_test.txt',pred_validity_vec_test)
-        np.savetxt(output_dir+'/prediction_validity_time_clean_test.txt',pred_validity_vec_clean_test)
-        # np.savetxt(output_dir+'/kl_vec_inv_test.txt',kl_vec_inv_test)
-        # np.savetxt(output_dir+'/kl_vec_inv_clean_test.txt',kl_vec_inv_clean_test)
-        np.save(output_dir+'/kl_vec_inv_test.npy',kl_vec_inv_test)
-        np.save(output_dir+'/kl_vec_inv_clean_test.npy',kl_vec_inv_clean_test)
-
-    np.savetxt(output_dir+'/A_mat.txt',A.detach().numpy())
-    np.savetxt(output_dir+'/B_mat.txt',B.detach().numpy())
-    np.savetxt(output_dir+'/C_mat.txt',C.detach().numpy())
-    np.savetxt(output_dir+'/a_vec.txt',a.detach().numpy())
-    np.savetxt(output_dir+'/b_vec.txt',b.detach().numpy())
-    # print("W1:",w1)
-    # print("W2:",w2)
-    # print("b:",b)
-    # print("c:",c)
-    # print("v:",v)
-
-    # plot parameter convergence
-    # if keep_param_history:
-    fig, my_axes = plt.subplots(2, 3, sharex=True, figsize=[8,6])
-
-    x_vals = np.linspace(0,n_epochs,len(A_history))
-    my_axes[0,0].plot(x_vals, A_history)
-    # my_axes[0,0].plot(x_vals, A_history_running)
-    # my_axes[0,0].plot(x_vals, np.linalg.norm(A.detach().numpy() - A_history, ord='fro', axis=(1,2)))
-    my_axes[0,0].set_title('A')
-    my_axes[0,0].set_xlabel('Epochs')
-
-    # my_axes[0,1].plot(x_vals, np.linalg.norm(B.detach().numpy() - B_history, ord='fro', axis=(1,2)))
-    my_axes[0,1].plot(x_vals, B_history)
-    # my_axes[0,1].plot(x_vals, B_history_running)
-    my_axes[0,1].set_title('B')
-    my_axes[0,1].set_xlabel('Epochs')
-
-    # my_axes[1,0].plot(x_vals, np.linalg.norm(C.detach().numpy() - C_history, ord='fro', axis=(1,2)))
-    my_axes[1,0].plot(x_vals, C_history)
-    # my_axes[1,0].plot(x_vals, C_history_running)
-    my_axes[1,0].set_title('C')
-    my_axes[1,0].set_xlabel('Epochs')
-
-    # my_axes[1,1].plot(x_vals, np.linalg.norm(a.detach().numpy() - a_history, ord='fro', axis=(1,2)))
-    my_axes[1,1].plot(x_vals, a_history)
-    # my_axes[1,1].plot(x_vals, a_history_running)
-    my_axes[1,1].set_title('a')
-    my_axes[1,1].set_xlabel('Epochs')
-
-    # my_axes[1,2].plot(x_vals, np.linalg.norm(b.detach().numpy() - b_history, ord='fro', axis=(1,2)))
-    my_axes[1,2].plot(x_vals, b_history)
-    # my_axes[1,2].plot(x_vals, b_history_running)
-    my_axes[1,2].set_title('b')
-    my_axes[1,2].set_xlabel('Epochs')
-
-    fig.suptitle("Parameter convergence")
-    fig.savefig(fname=output_dir+'/rnn_parameter_convergence')
-    plt.close(fig)
-
-    ## now, inspect the quality of the learned model
-    # plot predictions vs truth
-    # fig, (ax1, ax3) = plt.subplots(1, 2)
-    fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-    if not isinstance(ax_list,np.ndarray):
-        ax_list = [ax_list]
-
-    # first run and plot training fits
-    hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
-    init.normal_(hidden_state,0.0,0.1)
-    predictions = np.zeros([train_seq_length, output_size])
-    pred = output_train[0,:,None]
-    predictions[0,:] = np.squeeze(output_train[0,:,None])
-    solver_failed = False
-    for i in range(train_seq_length-1):
-        (pred, hidden_state, solver_failed) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i], solver_failed=solver_failed)
-        # (pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
-        # hidden_state = hidden_state
-        predictions[i+1,:] = pred.data.numpy().ravel()
-
-    predictions_raw = f_unNormalize_Y(normz_info,predictions)
-    for kk in range(len(ax_list)):
-        ax1 = ax_list[kk]
-        t_plot = np.arange(0,round(len(y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
-        # ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
-        ax1.plot(t_plot, y_clean_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', label='clean data')
-        ax1.plot(t_plot, predictions_raw[:n_plttrain,plot_state_indices[kk]], color='black', label='NN fit')
-        ax1.set_xlabel('time')
-        ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
-        ax1.tick_params(axis='y', labelcolor='red')
-        # ax1.set_title('Training Fit')
-
-    ax_list[0].legend()
-    fig.suptitle('RNN TRAIN fit to ODE simulation')
-    fig.savefig(fname=output_dir+'/rnn_fit_ode_TRAIN')
-    plt.close(fig)
-
-
-    # NOW, show final testing fit
-    ALLy_clean_test_raw = []
-    ALLgpr_test_predictions_raw = []
-    for kkt in range(n_test_sets):
-        y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
-        fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-        if not isinstance(ax_list,np.ndarray):
-            ax_list = [ax_list]
-
-        # NOW, show testing fit
-        if synch_length > 1:
-            # first, synchronize the hidden state
-            hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
-            solver_failed = False
-            for i in range(synch_length-1):
-                (pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
-            pred = test_synch_noisy[kkt,-1,:,None]
-        else:
-            pred = output_train[-1,:,None]
-
-        # hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-        predictions = np.zeros([test_seq_length, output_size])
-        # pred = output_train[-1,:,None]
-        saved_hidden_states = np.zeros([test_seq_length, hidden_size])
-        solver_failed = False
-        for i in range(test_seq_length):
-            (pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed)
-            # hidden_state = hidden_state
-            predictions[i,:] = pred.data.numpy().ravel()
-            saved_hidden_states[i,:] = hidden_state.data.numpy().ravel()
-
-        predictions_raw = f_unNormalize_Y(normz_info,predictions)
-        for kk in range(len(ax_list)):
-            ax3 = ax_list[kk]
-            t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
-            # ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-            ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
-            ax3.plot(t_plot, predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
-            ax3.set_xlabel('time')
-            ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
-            ax3.tick_params(axis='y', labelcolor='red')
-
-        ax_list[0].legend()
-
-        fig.suptitle('RNN TEST fit to ODE simulation')
-        fig.savefig(fname=output_dir+'/rnn_fit_ode_TEST_{0}'.format(kkt))
-        plt.close(fig)
-
-        ## plot phase plots
-        # phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt), delta_t=model_params['delta_t'])
-        phase_plot(data=predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_finalRNNpredicted_TEST_{0}'.format(kkt), delta_t=model_params['delta_t'])
-
-
-        # plot KDE of test data vs predictions
-        invdens_plotname = output_dir+'/rnn_invDensity_TEST_{0}'.format(kkt)
-        invariant_density_plot(test_data=y_clean_test_raw, pred_data=predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
-
-        ALLy_clean_test_raw.append(y_clean_test_raw)
-        ALLgpr_test_predictions_raw.append(predictions_raw)
-
-    ALLy_clean_test_raw = np.array(ALLy_clean_test_raw)
-    ALLgpr_test_predictions_raw = np.array(ALLgpr_test_predictions_raw)
-    ALLy_clean_test_raw = np.reshape(ALLy_clean_test_raw,(ALLy_clean_test_raw.shape[0]*ALLy_clean_test_raw.shape[1],ALLy_clean_test_raw.shape[2]))
-    ALLgpr_test_predictions_raw = np.reshape(ALLgpr_test_predictions_raw,(ALLgpr_test_predictions_raw.shape[0]*ALLgpr_test_predictions_raw.shape[1],ALLgpr_test_predictions_raw.shape[2]))
-    # plot KDE of ALL test sets vs ALL prediction
-    invdens_plotname = output_dir+'/rnn_invDensity_TEST_ALL'
-    invariant_density_plot(test_data=ALLy_clean_test_raw, pred_data=ALLgpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
-
-
-
-    # plot Train/Test curve
-    x_test = pd.DataFrame(np.loadtxt(output_dir+"/loss_vec_clean_test.txt"))
-    n_vals = n_epochs
-    epoch_vec = np.arange(0,n_vals)
-    max_exp = int(np.floor(np.log10(n_vals)))
-    win_list = [1] + list(10**np.arange(1,max_exp))
-    for win in win_list:
-        fig, ax_vec = plt.subplots(nrows=2, ncols=2,
-            figsize = [10, 10],
-            sharey=False, sharex=False)
-
-        ax1 = ax_vec[0,0]
-        ax2 = ax_vec[0,1]
-        ax3 = ax_vec[1,0]
-        ax4 = ax_vec[1,1]
-
-        x_train = pd.DataFrame(np.loadtxt(output_dir+'/loss_vec_train.txt'))
-        x_test = pd.DataFrame(np.loadtxt(output_dir+"/loss_vec_clean_test.txt"))
-
-        if n_epochs > 1:
-            x_valid_test = pd.DataFrame(np.loadtxt(output_dir+"/prediction_validity_time_clean_test.txt"))
-            x_kl_test = np.load(output_dir+"/kl_vec_inv_clean_test.npy")
-
-        ax1.plot(x_train.rolling(win).mean())
-        ax2.errorbar(x=epoch_vec,y=x_test.median(axis=1).rolling(win).mean(), yerr=x_test.std(axis=1), label='RNN')
-        if n_epochs > 1:
-            ax3.errorbar(x=epoch_vec,y=x_valid_test.median(axis=1).rolling(win).mean(), yerr=x_valid_test.std(axis=1), label='RNN')
-            for kk in plot_state_indices:
-                ax4.errorbar(x=epoch_vec,y=pd.DataFrame(np.median(x_kl_test[:,:,kk],axis=1)).rolling(win).mean().loc[:,0], yerr=np.std(x_kl_test[:,:,kk],axis=1), label='RNN')
-
-        # for learn_flow in learn_flow_list:
-        #   for do_resid in gp_resid_list:
-        #       for gp_style in style_list:
-        #           gp_nm = 'GPR {0} {1} {2}'.format(gp_style,do_resid*'residuals',learn_flow*' flow')
-        #           gpr_valid_test = np.loadtxt(output_dir+'/GPR{0}_residual{1}_learnflow{2}prediction_validity_time_clean_test.txt'.format(gp_style, do_resid,learn_flow))
-        #           gpr_test = np.loadtxt(output_dir+'/GPR{0}_residual{1}_learnflow{2}loss_vec_clean_test.txt'.format(gp_style, do_resid,learn_flow))
-        #           ax2.errorbar(x=epoch_vec,y=[np.median(gpr_test)]*len(epoch_vec), yerr=[np.std(gpr_test)]*len(epoch_vec),label=gp_nm)
-        #           ax3.errorbar(x=epoch_vec,y=[np.median(gpr_valid_test)]*len(epoch_vec), yerr=[np.std(gpr_valid_test)]*len(epoch_vec),label=gp_nm)
-
-        ax2.legend()
-        ax3.legend()
-
-        # x = np.loadtxt(d+"/loss_vec_test.txt")
-        # ax3.plot(x, label=d_label)
-        ax4.set_xlabel('Epochs')
-        ax3.set_xlabel('Epochs')
-        ax2.set_xlabel('Epochs')
-        ax1.set_xlabel('Epochs')
-
-        ax1.set_ylabel('Error')
-        ax1.set_title('Train Error')
-        # ax1.legend(fontsize=6, handlelength=2, loc='upper right')
-        ax2.set_ylabel('Error')
-        ax2.set_title('Test Error (predicting clean data)')
-        ax3.set_ylabel('Valid Time')
-        ax3.set_title('Test Validity Time')
-        ax4.set_title('KL-divergence')
-        # ax3.set_xlabel('Epochs')
-        # ax3.set_ylabel('Error')
-        # ax3.set_title('Test Error (on noisy data)')
-        # fig.suptitle("Comparison of training efficacy (trained on noisy data)")
-        fig.savefig(fname=output_dir+'/TrainTest_win'+str(win))
-        # plot in log scale
-        ax1.set_yscale('log')
-        ax2.set_yscale('log')
-        ax3.set_yscale('log')
-        ax4.set_yscale('log')
-        ax1.set_ylabel('log Error')
-        ax2.set_ylabel('log Error')
-        ax3.set_ylabel('Valid Time')
-        fig.savefig(fname=output_dir+'/TrainTest_log'+'_win'+str(win))
-        plt.close(fig)
+			y_clean_train, y_noisy_train,
+			y_clean_test, y_noisy_test,
+			y_clean_testSynch, y_noisy_testSynch,
+			model_params, hidden_size=6, n_epochs=100, lr=0.05,
+			output_dir='.', normz_info=None, model=None,
+			trivial_init=False, perturb_trivial_init=True, sd_perturb = 0.001,
+			stack_hidden=True, stack_output=True,
+			x_train=None, x_test=None,
+			f_normalize_Y=f_normalize_minmax,
+			f_unNormalize_Y=f_unNormalize_minmax,
+			f_normalize_X = f_normalize_ztrans,
+			f_unNormalize_X = f_unNormalize_ztrans,
+			max_plot=None, n_param_saves=None,
+			err_thresh=0.4, plot_state_indices=None,
+			precompute_model=True, kde_func=kde_scipy,
+			compute_kl=False, gp_only=False, gp_style=2, learn_residuals=False,
+			learn_flow = False,
+			save_iterEpochs=True,
+			model_params_TRUE=None,
+			GP_grid = False,
+			alpha_list = [1e-10],
+			ode_only=False,
+			y_fast_train=None,
+			y_fast_test=None,
+			ODE=None,
+			use_ode_test_data=False,
+			gp_space_map='fulltofull'):
+
+	model_params['smaller_delta_t'] = model_params['delta_t'] # later, need to remove smaller_delta_t as field
+
+	t0 = time()
+
+	if torch.cuda.is_available():
+		print('Using CUDA FloatTensor')
+		dtype = torch.cuda.FloatTensor
+	else:
+		print('Using regular torch.FloatTensor')
+		dtype = torch.FloatTensor
+
+	if max_plot is None:
+		max_plot = int(np.floor(30./model_params['delta_t']))
+
+	n_plttrain = min(max_plot,y_clean_train.shape[0])
+	n_plttest = min(max_plot,y_clean_test.shape[1])
+
+	if not plot_state_indices:
+		plot_state_indices = np.arange(y_clean_test.shape[2]).tolist()
+
+	if not model_params_TRUE:
+		model_params_TRUE = model_params.copy()
+		model_params_TRUE['ode_params'] = LORENZ_DEFAULT_PARAMS
+
+	model_params['learn_residuals_rnn'] = learn_residuals
+
+
+	# keep_param_history = np.log10( n_epochs * y_clean_train.shape[0] * (hidden_size**2) ) < mem_thresh_order
+	# if not keep_param_history:
+	#   print('NOT saving parameter history...would take too much memory!')
+
+	if not os.path.exists(output_dir):
+		os.makedirs(output_dir)
+
+	print('Starting training for: ', output_dir)
+
+	output_train = torch.FloatTensor(y_noisy_train).type(dtype)
+	output_clean_train = torch.FloatTensor(y_clean_train).type(dtype)
+	output_test = torch.FloatTensor(y_noisy_test).type(dtype)
+	output_clean_test = torch.FloatTensor(y_clean_test).type(dtype)
+	test_synch_clean = y_clean_testSynch
+	test_synch_noisy = torch.FloatTensor(y_noisy_testSynch).type(dtype)
+
+	try:
+		avg_output_test = model_params['time_avg_norm']
+	except:
+		avg_output_test = torch.mean(output_test**2).detach().numpy()**0.5
+	# avg_output_test = torch.mean(output_test**2,dim=(0,1)).detach().numpy()**0.5
+	try:
+		avg_output_clean_test = model_params['time_avg_norm']
+	except:
+		avg_output_clean_test = torch.mean(output_clean_test**2).detach().numpy()**0.5
+	# avg_output_clean_test = torch.mean(output_clean_test**2,dim=(0,1)).detach().numpy()**0.5
+
+	output_size = output_train.shape[1]
+	train_seq_length = output_train.size(0)
+	test_seq_length = output_test.size(1)
+	n_test_sets = output_test.size(0)
+	synch_length = test_synch_noisy.size(1)
+
+	# compute one-step-ahead model-based prediction for each point in the training set
+	if precompute_model:
+		model_pred = np.zeros((train_seq_length-1,output_size))
+		for j in range(train_seq_length-1):
+			tspan = get_tspan(model_params)
+			# tspan = [0, 0.5*model_params['delta_t'], model_params['delta_t']]
+			# unnormalize model_input so that it can go through the ODE solver
+			y0 = f_unNormalize_minmax(normz_info, output_train[j,:].numpy())
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+
+			# y_out = odeint(model, y0, tspan, args=model_params['ode_params'], mxstep=0)
+			# model_pred[j,:] = f_normalize_minmax(normz_info, y_out[-1,:])
+			model_pred[j,:] = f_normalize_minmax(normz_info, sol.y[:,-1])
+	else:
+		model_pred = [None for j in range(train_seq_length-1)]
+
+	# pdb.set_trace()
+	# identify Attractor points for GP grid eval
+	get_attractor = False
+	random_attractor_points = None
+	if get_attractor:
+		n_points = 1000
+		bigTspan = np.arange(0, 10*n_points, 0.1)
+		run_again = True
+		while run_again:
+			y_out_ATT, info_dict = odeint(model, np.squeeze(get_lorenz_inits(n=1)), bigTspan, args=model_params['ode_params'], mxstep=0, full_output=True)
+			if info_dict['message'] == 'Integration successful.':
+				run_again = False
+
+		# do a one 1/10 burn-in, then randomly downsample.
+		my_inds = np.random.randint(low=n_points, high=(10*n_points)-1, size=n_points)
+		random_attractor_points = y_out_ATT[my_inds,]
+
+	if ode_only:
+		run_ode_test(y_clean_test, y_noisy_test,
+					y_clean_testSynch, y_noisy_testSynch,
+					model,f_unNormalize_Y,
+					model_pred,
+					train_seq_length,
+					test_seq_length,
+					output_size,
+					avg_output_test,
+					avg_output_clean_test,
+					normz_info, model_params, model_params_TRUE, random_attractor_points,
+					plot_state_indices,
+					output_dir,
+					n_plttrain,
+					n_plttest,
+					n_test_sets,
+					err_thresh,
+					y_fast_test=y_fast_test,
+					y_fast_train=y_fast_train,
+					ODE=ODE,
+					use_ode_test_data=use_ode_test_data)
+
+		return
+
+
+	if gp_only:
+		for alpha in alpha_list:
+			print('Running GPR',gp_style,'for alpha=',alpha)
+			run_GP(y_clean_train, y_noisy_train,
+					y_clean_test, y_noisy_test,
+					y_clean_testSynch, y_noisy_testSynch,
+					model,f_unNormalize_Y,
+					model_pred,
+					train_seq_length,
+					test_seq_length,
+					output_size,
+					avg_output_test,
+					avg_output_clean_test,
+					normz_info, model_params, model_params_TRUE, random_attractor_points,
+					plot_state_indices,
+					output_dir,
+					n_plttrain,
+					n_plttest,
+					n_test_sets,
+					err_thresh,
+					gp_style=gp_style,
+					gp_only=gp_only,
+					GP_grid = GP_grid,
+					alpha = alpha,
+					do_resid = learn_residuals,
+					learn_flow = learn_flow,
+					y_fast_test=y_fast_test,
+					y_fast_train=y_fast_train,
+					ODE=ODE,
+					gp_space_map=gp_space_map)
+		# plot GP comparisons
+		if GP_grid:
+			style_list = [1,2,3]
+			compare_GPs(output_dir,style_list)
+		return
+
+
+	# first, SHOW that a simple mechRNN can fit the data perfectly (if we are running a mechRNN)
+	if stack_hidden or stack_output:
+		# now, TRAIN to fit the output from the previous model
+		# w2 = torch.zeros(hidden_size, input_size).type(dtype)
+		A = torch.zeros(hidden_size, hidden_size).type(dtype)
+		B = torch.zeros(hidden_size, (1+stack_hidden)*output_size).type(dtype)
+		a = torch.zeros(hidden_size, 1).type(dtype)
+		C = torch.zeros(output_size, hidden_size + (stack_output*output_size) ).type(dtype)
+		b = torch.zeros(output_size, 1).type(dtype)
+
+		if not model_params['learn_residuals_rnn']:
+			for jj in range(output_size):
+				C[jj,jj] = 1
+
+
+		perfect_loss_vec_test = np.zeros((1,n_test_sets))
+		perfect_loss_vec_clean_test = np.zeros((1,n_test_sets))
+		perfect_pred_validity_vec_test = np.zeros((1,n_test_sets))
+		perfect_pred_validity_vec_clean_test = np.zeros((1,n_test_sets))
+
+
+		perfect_test_loss = []
+		perfect_t_valid = []
+		for kkt in range(n_test_sets):
+			# first, synchronize the hidden state
+			hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+			solver_failed = False
+			for i in range(synch_length-1):
+				(pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
+
+			# hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+			predictions = np.zeros([test_seq_length, output_size])
+			# yb_normalized = (yb - YMIN)/(YMAX - YMIN)
+			# initializing y0 of hidden state to the true initial condition from the clean signal
+			# hidden_state[0] = float(y_clean_test[0])
+			# pred = output_train[-1,:,None]
+			pred = test_synch_noisy[kkt,-1,:,None]
+			perf_total_loss_test = 0
+			perf_total_loss_clean_test = 0
+			# running_epoch_loss_test = np.zeros(test_seq_length)
+			perf_pw_loss_test = np.zeros(test_seq_length)
+			perf_pw_loss_clean_test = np.zeros(test_seq_length)
+			solver_failed = False
+			for i in range(test_seq_length):
+				(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
+				# hidden_state = hidden_state
+				predictions[i,:] = pred.data.numpy().ravel()
+				i_loss = (pred.detach().squeeze() - output_test[kkt,i,None].squeeze()).pow(2).sum()
+				i_loss_clean = (pred.detach().squeeze() - output_clean_test[kkt,i,None].squeeze()).pow(2).sum()
+				perf_total_loss_test += i_loss
+				perf_total_loss_clean_test += i_loss_clean
+				# running_epoch_loss_test[j] = total_loss_test/(j+1)
+				perf_pw_loss_test[i] = i_loss.pow(0.5).numpy() / avg_output_test
+				perf_pw_loss_clean_test[i] = i_loss_clean.pow(0.5).numpy() / avg_output_clean_test
+
+			# get error metrics
+			perfect_loss_vec_test[0,kkt] = perf_total_loss_test.numpy() / test_seq_length
+			perfect_loss_vec_clean_test[0,kkt] = perf_total_loss_clean_test.numpy() / test_seq_length
+			perfect_pred_validity_vec_test[0,kkt] = np.argmax(perf_pw_loss_test > err_thresh)*model_params['delta_t']
+			perfect_pred_validity_vec_clean_test[0,kkt] = np.argmax(perf_pw_loss_clean_test > err_thresh)*model_params['delta_t']
+
+			# protect against case where the model is perfect!
+			if perfect_pred_validity_vec_test[0,kkt]==0 and perf_pw_loss_test[0]==0:
+				perfect_pred_validity_vec_test[0,kkt] = (1+len(perf_pw_loss_test))*model_params['delta_t']
+
+			if perfect_pred_validity_vec_clean_test[0,kkt]==0 and perf_pw_loss_clean_test[0]==0:
+				perfect_pred_validity_vec_clean_test[0,kkt] = (1+len(perf_pw_loss_clean_test))*model_params['delta_t']
+
+
+			# plot predictions vs truth
+			fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+			if not isinstance(ax_list,np.ndarray):
+				ax_list = [ax_list]
+
+			for kk in range(len(ax_list)):
+				ax1 = ax_list[kk]
+				ax1.scatter(np.arange(len(y_noisy_test[kkt,:n_plttest,plot_state_indices[kk]])), y_noisy_test[kkt,:n_plttest,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+				ax1.plot(y_clean_test[kkt,:n_plttest,kk], color='red', label='true model')
+				ax1.plot(predictions[:n_plttest,kk], ':' ,color='red', label='perturbed model')
+				ax1.set_xlabel('time')
+				ax1.set_ylabel(model_params['state_names'][kk] + '(t)', color='red')
+				ax1.tick_params(axis='y', labelcolor='red')
+
+			ax_list[0].legend()
+			fig.suptitle('RNN w/ just mechanism fit to ODE simulation TEST SET')
+			fig.savefig(fname=output_dir+'/PERFECT_MechRnn_fit_TestODE_'+str(kkt))
+			plt.close(fig)
+
+		# output perfect fits
+		np.savetxt(output_dir+'/perfectModel_loss_vec_test.txt',perfect_loss_vec_test)
+		np.savetxt(output_dir+'/perfectModel_loss_vec_clean_test.txt',perfect_loss_vec_clean_test)
+		np.savetxt(output_dir+'/perfectModel_prediction_validity_time_test.txt',perfect_pred_validity_vec_test)
+		np.savetxt(output_dir+'/perfectModel_prediction_validity_time_clean_test.txt',perfect_pred_validity_vec_clean_test)
+
+
+	# Initilize parameters for training
+	A = torch.zeros(hidden_size, hidden_size).type(dtype)
+	B = torch.zeros(hidden_size, (1+stack_hidden)*output_size).type(dtype)
+	a = torch.zeros(hidden_size, 1).type(dtype)
+	C = torch.zeros(output_size, hidden_size + (stack_output*output_size) ).type(dtype)
+	b = torch.zeros(output_size, 1).type(dtype)
+
+	# pdb.set_trace()
+	# trivial_init trains the mechRNN starting from parameters (specified above)
+	# that trivialize the RNN to the forward ODE model
+	# now, TRAIN to fit the output from the previous model
+	if trivial_init:
+		init.zeros_(A)
+		init.zeros_(B)
+		init.zeros_(C)
+		init.zeros_(a)
+		init.zeros_(b)
+		for jj in range(output_size):
+			C[jj,jj] = 1
+		if perturb_trivial_init:
+			init.normal_(A, 0.0, sd_perturb)
+			init.normal_(B, 0.0, sd_perturb)
+			init.normal_(a, 0.0, sd_perturb)
+			init.normal_(b, 0.0, sd_perturb)
+			C = C + torch.FloatTensor(sd_perturb*np.random.randn(C.shape[0], C.shape[1]))
+	else:
+		init.normal_(A, 0.0, 0.1)
+		init.normal_(B, 0.0, 0.1)
+		init.normal_(C, 0.0, 0.1)
+		init.normal_(a, 0.0, 0.1)
+		init.normal_(b, 0.0, 0.1)
+
+	# additional perturbation for trivial init case
+
+
+	A = Variable(A, requires_grad=True)
+	B =  Variable(B, requires_grad=True)
+	C =  Variable(C, requires_grad=True)
+	a =  Variable(a, requires_grad=True)
+	b =  Variable(b, requires_grad=True)
+
+	if not n_param_saves:
+		n_param_saves = int(n_epochs*(train_seq_length-1))
+		save_interval = 1
+	else:
+		n_param_saves = min(n_param_saves, int(n_epochs*(train_seq_length-1)))
+		save_interval = int(math.ceil((n_epochs*(train_seq_length-1)/n_param_saves) / 100.0)) * 100
+
+	# if keep_param_history:
+	# A_history = np.zeros((n_param_saves, A.shape[0], A.shape[1]))
+	# B_history = np.zeros((n_param_saves, B.shape[0], B.shape[1]))
+	# C_history = np.zeros((n_param_saves, C.shape[0], C.shape[1]))
+	# a_history = np.zeros((n_param_saves, a.shape[0], a.shape[1]))
+	# b_history = np.zeros((n_param_saves, b.shape[0], b.shape[1]))
+	A_history = np.zeros((n_param_saves,1))
+	B_history = np.zeros((n_param_saves,1))
+	C_history = np.zeros((n_param_saves,1))
+	a_history = np.zeros((n_param_saves,1))
+	b_history = np.zeros((n_param_saves,1))
+	# A_history_running = np.zeros((n_param_saves,1))
+	# B_history_running = np.zeros((n_param_saves,1))
+	# C_history_running = np.zeros((n_param_saves,1))
+	# a_history_running = np.zeros((n_param_saves,1))
+	# b_history_running = np.zeros((n_param_saves,1))
+
+	loss_vec_train = np.zeros(n_epochs)
+	loss_vec_clean_train = np.zeros(n_epochs)
+	loss_vec_test = np.zeros((n_epochs,n_test_sets))
+	loss_vec_clean_test = np.zeros((n_epochs,n_test_sets))
+	pred_validity_vec_test = np.zeros((n_epochs,n_test_sets))
+	pred_validity_vec_clean_test = np.zeros((n_epochs,n_test_sets))
+	kl_vec_inv_test = np.zeros((n_epochs,n_test_sets, output_size))
+	kl_vec_inv_clean_test = np.zeros((n_epochs,n_test_sets, output_size))
+
+	cc = -1 # iteration counter for saving weight updates
+	cc_inc = -1
+	for i_epoch in range(n_epochs):
+		total_loss_train = 0
+		total_loss_clean_train = 0
+		#init.normal_(hidden_state, 0.0, 1)
+		#hidden_state = Variable(hidden_state, requires_grad=True)
+		pred = output_train[0,:,None]
+		hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=True)
+		init.normal_(hidden_state,0.0,0.1)
+		running_epoch_loss_train = np.zeros(train_seq_length)
+		running_epoch_loss_clean_train = np.zeros(train_seq_length)
+		solver_failed = False
+		for j in range(train_seq_length-1):
+			cc += 1
+			target = output_train[j+1,None]
+			target_clean = output_clean_train[j+1,None]
+			# pdb.set_trace()
+			(pred, hidden_state, solver_failed) = forward(output_train[j,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[j], solver_failed=solver_failed)
+			# (pred, hidden_state) = forward(pred.detach(), hidden_state, A,B,C,a,b, normz_info, model, model_params)
+			loss = (pred.squeeze() - target.squeeze()).pow(2).sum()
+			total_loss_train += loss
+			total_loss_clean_train += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()
+			running_epoch_loss_train[j] = total_loss_train/(j+1)
+			running_epoch_loss_clean_train[j] = total_loss_clean_train/(j+1)
+			loss.backward()
+
+			A.data -= lr * A.grad.data
+			B.data -= lr * B.grad.data
+			C.data -= lr * C.grad.data
+			a.data -= lr * a.grad.data
+			b.data -= lr * b.grad.data
+
+			# print('|grad_A| = {}'.format(np.linalg.norm(A.grad.data)))
+			# print('|grad_B| = {}'.format(np.linalg.norm(B.grad.data)))
+			# print('|grad_C| = {}'.format(np.linalg.norm(C.grad.data)))
+			# print('|grad_a| = {}'.format(np.linalg.norm(a.grad.data)))
+			# print('|grad_b| = {}'.format(np.linalg.norm(b.grad.data)))
+			# print("A:",A)
+			# print("C:",C)
+			# print("a:",a)
+			# print("b:",b)
+
+			A.grad.data.zero_()
+			B.grad.data.zero_()
+			C.grad.data.zero_()
+			a.grad.data.zero_()
+			b.grad.data.zero_()
+
+			hidden_state = hidden_state.detach()
+			# print updates every 2 iterations or in 5% incrememnts
+			if (n_epochs==1) and (cc % int( max(2, np.ceil(train_seq_length/20)) ) == 0):
+				print("Iteration: {}\nRunning Training Loss = {}\n".format(
+							cc,
+							running_epoch_loss_train[j]))
+			# save updated parameters
+			if cc % save_interval == 0:
+				cc_inc += 1
+				A_history[cc_inc,:] = np.linalg.norm(A.detach().numpy())
+				B_history[cc_inc,:] = np.linalg.norm(B.detach().numpy())
+				C_history[cc_inc,:] = np.linalg.norm(C.detach().numpy())
+				a_history[cc_inc,:] = np.linalg.norm(a.detach().numpy())
+				b_history[cc_inc,:] = np.linalg.norm(b.detach().numpy())
+
+				# cumulative means
+				# A_history_running[cc_inc,:] = np.mean(A_history[:cc_inc,:])
+				# B_history_running[cc_inc,:] = np.mean(B_history[:cc_inc,:])
+				# C_history_running[cc_inc,:] = np.mean(C_history[:cc_inc,:])
+				# a_history_running[cc_inc,:] = np.mean(a_history[:cc_inc,:])
+				# b_history_running[cc_inc,:] = np.mean(b_history[:cc_inc,:])
+		#normalize losses
+		total_loss_train = total_loss_train / train_seq_length
+		total_loss_clean_train = total_loss_clean_train / train_seq_length
+		#store losses
+		loss_vec_train[i_epoch] = total_loss_train
+		loss_vec_clean_train[i_epoch] = total_loss_clean_train
+
+		# now evaluate test loss
+		for kkt in range(n_test_sets):
+			if synch_length > 1:
+				# first, synchronize the hidden state
+				hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+				solver_failed = False
+				for i in range(synch_length-1):
+					(pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
+				pred = test_synch_noisy[kkt,-1,:,None]
+			else:
+				pred = output_train[-1,:,None]
+
+			total_loss_test = 0
+			total_loss_clean_test = 0
+			running_epoch_loss_test = np.zeros(test_seq_length)
+			running_epoch_loss_clean_test = np.zeros(test_seq_length)
+			# hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
+			pw_loss_test = np.zeros(test_seq_length)
+			pw_loss_clean_test = np.zeros(test_seq_length)
+			long_predictions = np.zeros([test_seq_length, output_size])
+			solver_failed = False
+			for j in range(test_seq_length):
+				target = output_test[kkt,j,None]
+				target_clean = output_clean_test[kkt,j,None]
+				(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed)
+				j_loss = (pred.detach().squeeze() - target.squeeze()).pow(2).sum()
+				j_loss_clean = (pred.detach().squeeze() - target_clean.squeeze()).pow(2).sum()
+				total_loss_test += j_loss
+				total_loss_clean_test += j_loss_clean
+				running_epoch_loss_clean_test[j] = total_loss_clean_test/(j+1)
+				running_epoch_loss_test[j] = total_loss_test/(j+1)
+				pw_loss_test[j] = j_loss.pow(0.5).numpy() / avg_output_test
+				pw_loss_clean_test[j] = j_loss_clean.pow(0.5).numpy() / avg_output_clean_test
+				pred = pred.detach()
+				long_predictions[j,:] = pred.data.numpy().ravel()
+				hidden_state = hidden_state.detach()
+			#normalize losses
+			total_loss_test = total_loss_test / test_seq_length
+			total_loss_clean_test = total_loss_clean_test / test_seq_length
+			#store losses
+			loss_vec_test[i_epoch,kkt] = total_loss_test
+			loss_vec_clean_test[i_epoch,kkt] = total_loss_clean_test
+			pred_validity_vec_test[i_epoch,kkt] = np.argmax(pw_loss_test > err_thresh)*model_params['delta_t']
+			pred_validity_vec_clean_test[i_epoch,kkt] = np.argmax(pw_loss_clean_test > err_thresh)*model_params['delta_t']
+
+			# protect against case where the model is perfect!
+			if pred_validity_vec_test[i_epoch,kkt]==0 and pw_loss_test[0]==0:
+				pred_validity_vec_test[i_epoch,kkt] = (1+len(pw_loss_test))*model_params['delta_t']
+
+			if pred_validity_vec_clean_test[i_epoch,kkt]==0 and pw_loss_clean_test[0]==0:
+				pred_validity_vec_clean_test[i_epoch,kkt] = (1+len(pw_loss_clean_test))*model_params['delta_t']
+
+
+			# compute KL divergence between long predictions and whole test set:
+			if compute_kl:
+				kl_vec_inv_test[i_epoch,kkt,:] = kl4dummies(
+								f_unNormalize_Y(normz_info, y_noisy_test),
+								f_unNormalize_Y(normz_info, long_predictions))
+				kl_vec_inv_clean_test[i_epoch,kkt,:] = kl4dummies(
+								f_unNormalize_Y(normz_info, y_clean_test),
+								f_unNormalize_Y(normz_info, long_predictions))
+
+		# print updates every 10 iterations or in 10% incrememnts
+		if  i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0:
+			print("Epoch {0}\nTotal run-time = {1}\nTraining Loss = {2}\nTesting Loss = {3}".format(
+						i_epoch,
+						str(timedelta(seconds=time()-t0)),
+						total_loss_train.data.item(),
+						np.mean(loss_vec_test[i_epoch,:])))
+
+		if  (i_epoch==(n_epochs-1)) or (save_iterEpochs and (i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0)):
+			 # plot predictions vs truth
+			# fig, (ax1, ax3) = plt.subplots(1, 2)
+			# first run and plot training fits
+			hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+			# init.normal_(hidden_state,0.0,0.1)
+			predictions = np.zeros([train_seq_length, output_size])
+			pred = output_train[0,:,None]
+			predictions[0,:] = np.squeeze(output_train[0,:,None])
+			saved_hidden_states = np.zeros([train_seq_length, hidden_size])
+			saved_hidden_states[0,:] = hidden_state.data.numpy().ravel()
+			solver_failed = False
+			for i in range(train_seq_length-1):
+				(pred, hidden_state, solver_failed) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i], solver_failed=solver_failed)
+				# (pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
+				# hidden_state = hidden_state
+				saved_hidden_states[i+1,:] = hidden_state.data.numpy().ravel()
+				predictions[i+1,:] = pred.data.numpy().ravel()
+
+			y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
+			y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
+			predictions_raw = f_unNormalize_Y(normz_info,predictions)
+			# y_clean_test_raw = y_clean_test
+			# y_noisy_train_raw = y_noisy_train
+			# y_clean_train_raw = y_clean_train
+			# predictions_raw = predictions
+
+			## Plot first part of training
+			fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+			if not isinstance(ax_list,np.ndarray):
+				ax_list = [ax_list]
+			for kk in range(len(ax_list)):
+				ax1 = ax_list[kk]
+				t_plot = np.arange(0,round(len(y_noisy_train[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+				# ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+				ax1.plot(t_plot, y_clean_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', label='clean data')
+				ax1.plot(t_plot, predictions_raw[:n_plttrain,plot_state_indices[kk]], color='black', label='NN fit')
+				ax1.set_xlabel('time')
+				ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)', color='red')
+				ax1.tick_params(axis='y', labelcolor='red')
+			ax_list[0].legend()
+			fig.suptitle('Training Fit')
+			fig.savefig(fname=output_dir+'/rnn_train_fit_START_ode_iterEpochs'+str(i_epoch))
+			plt.close(fig)
+
+			## Plot end part of training
+			fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+			if not isinstance(ax_list,np.ndarray):
+				ax_list = [ax_list]
+			for kk in range(len(ax_list)):
+				ax1 = ax_list[kk]
+				t_plot = np.arange(0,round(len(y_noisy_train[-n_plttrain:,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+				# ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+				ax1.plot(t_plot, y_clean_train_raw[-n_plttrain:,plot_state_indices[kk]], color='red', label='clean data')
+				ax1.plot(t_plot, predictions_raw[-n_plttrain:,plot_state_indices[kk]], color='black', label='NN fit')
+				ax1.set_xlabel('time')
+				ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)', color='red')
+				ax1.tick_params(axis='y', labelcolor='red')
+			ax_list[0].legend()
+			fig.suptitle('Training Fit')
+			fig.savefig(fname=output_dir+'/rnn_train_fit_END_ode_iterEpochs'+str(i_epoch))
+			plt.close(fig)
+
+
+
+			# plot dynamics of hidden state over training set
+			n_hidden_plots = min(10, hidden_size)
+			fig, (ax_list) = plt.subplots(n_hidden_plots,1)
+			if not isinstance(ax_list,np.ndarray):
+				ax_list = [ax_list]
+			for kk in range(len(ax_list)):
+				ax1 = ax_list[kk]
+				t_plot = np.arange(0,round(len(saved_hidden_states[:n_plttrain,kk])*model_params['delta_t'],8),model_params['delta_t'])
+				ax1.plot(t_plot, saved_hidden_states[:n_plttrain,kk], color='red', label='clean data')
+				ax1.set_xlabel('time')
+				ax1.set_ylabel('h_{}'.format(kk), color='red')
+				ax1.tick_params(axis='y', labelcolor='red')
+
+			ax_list[0].legend()
+
+			fig.suptitle('Hidden State Dynamics')
+			fig.savefig(fname=output_dir+'/rnn_train_hidden_states_iterEpochs'+str(i_epoch))
+			plt.close(fig)
+
+
+			# now, loop over testing trajectories
+			ALLy_clean_test_raw = []
+			ALLgpr_test_predictions_raw = []
+			for kkt in range(n_test_sets):
+				y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
+				test_synch_clean_raw = f_unNormalize_Y(normz_info,test_synch_clean[kkt,:,:])
+				figsynch, (ax_list_synch) = plt.subplots(len(plot_state_indices),1)
+				fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+				if not isinstance(ax_list,np.ndarray):
+					ax_list = [ax_list]
+
+				# NOW, show testing fit
+				if synch_length > 1:
+					# first, synchronize the hidden state
+					hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+					solver_failed = False
+					synch_predictions = np.zeros([synch_length, output_size])
+					for i in range(synch_length-1):
+						(pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
+						synch_predictions[i+1,:] = pred.data.numpy().ravel()
+					synch_predictions_raw = f_unNormalize_Y(normz_info,synch_predictions)
+					for kk in range(len(ax_list_synch)):
+						ax3 = ax_list_synch[kk]
+						t_plot = np.arange(0,len(test_synch_clean[kkt,:,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+						# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
+						ax3.plot(t_plot, test_synch_clean_raw[:,plot_state_indices[kk]], color='red', label='clean synch data')
+						ax3.plot(t_plot, synch_predictions_raw[:,plot_state_indices[kk]], color='black', label='NN fit')
+						ax3.set_xlabel('time')
+						ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
+						ax3.tick_params(axis='y', labelcolor='red')
+
+					# set prediction
+					pred = test_synch_noisy[kkt,-1,:,None]
+				else:
+					pred = output_train[-1,:,None]
+
+				# hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
+				predictions = np.zeros([test_seq_length, output_size])
+				# pred = output_train[-1,:,None]
+				saved_hidden_states = np.zeros([test_seq_length, hidden_size])
+				solver_failed = False
+				for i in range(test_seq_length):
+					(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed)
+					# hidden_state = hidden_state
+					predictions[i,:] = pred.data.numpy().ravel()
+					saved_hidden_states[i,:] = hidden_state.data.numpy().ravel()
+
+				predictions_raw = f_unNormalize_Y(normz_info,predictions)
+				for kk in range(len(ax_list)):
+					ax3 = ax_list[kk]
+					t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+					# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
+					ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
+					ax3.plot(t_plot, predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
+					ax3.set_xlabel('time')
+					ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
+					ax3.tick_params(axis='y', labelcolor='red')
+
+				ax_list[0].legend()
+
+				fig.suptitle('RNN TEST fit to ODE simulation--' + str(i_epoch) + 'training epochs')
+				fig.savefig(fname=output_dir+'/rnn_test_fit_ode_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
+				plt.close(fig)
+
+				ax_list_synch[0].legend()
+
+				figsynch.suptitle('RNN Synch fit to ODE simulation--' + str(i_epoch) + 'training epochs')
+				figsynch.savefig(fname=output_dir+'/rnn_synch_fit_ode_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
+				plt.close(figsynch)
+
+				## Plot phase plots
+				# phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt), delta_t=model_params['delta_t'])
+				phase_plot(data=predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_RNNpredicted_iterEpochs{0}_test{1}'.format(i_epoch,kkt), delta_t=model_params['delta_t'])
+
+
+				# plot dynamics of hidden state over TESTING set
+				n_hidden_plots = min(10, hidden_size)
+				fig, (ax_list) = plt.subplots(n_hidden_plots,1)
+				if not isinstance(ax_list,np.ndarray):
+					ax_list = [ax_list]
+				for kk in range(len(ax_list)):
+					ax1 = ax_list[kk]
+					t_plot = np.arange(0,round(len(saved_hidden_states[:n_plttest,kk])*model_params['delta_t'],8),model_params['delta_t'])
+					ax1.plot(t_plot, saved_hidden_states[:n_plttest,kk], color='red', label='clean data')
+					ax1.set_xlabel('time')
+					ax1.set_ylabel('h_{}'.format(kk), color='red')
+					ax1.tick_params(axis='y', labelcolor='red')
+
+				ax_list[0].legend()
+
+				fig.suptitle('Hidden State Dynamics')
+				fig.savefig(fname=output_dir+'/rnn_test_hidden_states_ode_iterEpochs{0}_test{1}'.format(i_epoch,kkt))
+				plt.close(fig)
+
+				# plot KDE of test data vs predictions
+				invdens_plotname = output_dir+'/rnn_test_invDensity_iterEpochs{0}_test{1}'.format(i_epoch,kkt)
+				invariant_density_plot(test_data=y_clean_test_raw, pred_data=predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
+
+				ALLy_clean_test_raw.append(y_clean_test_raw)
+				ALLgpr_test_predictions_raw.append(predictions_raw)
+
+			ALLy_clean_test_raw = np.array(ALLy_clean_test_raw)
+			ALLgpr_test_predictions_raw = np.array(ALLgpr_test_predictions_raw)
+			ALLy_clean_test_raw = np.reshape(ALLy_clean_test_raw,(ALLy_clean_test_raw.shape[0]*ALLy_clean_test_raw.shape[1],ALLy_clean_test_raw.shape[2]))
+			ALLgpr_test_predictions_raw = np.reshape(ALLgpr_test_predictions_raw,(ALLgpr_test_predictions_raw.shape[0]*ALLgpr_test_predictions_raw.shape[1],ALLgpr_test_predictions_raw.shape[2]))
+			# plot KDE of ALL test sets vs ALL prediction
+			invdens_plotname = output_dir+'/rnn_test_invDensity_iterEpochs{0}_test_ALL'.format(i_epoch)
+			invariant_density_plot(test_data=ALLy_clean_test_raw, pred_data=ALLgpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
+
+
+	## save loss_vec
+	if n_epochs == 1:
+		np.savetxt(output_dir+'/loss_vec_train.txt',running_epoch_loss_train)
+		np.savetxt(output_dir+'/loss_vec_clean_train.txt',running_epoch_loss_clean_train)
+		np.savetxt(output_dir+'/loss_vec_test.txt',running_epoch_loss_test)
+		np.savetxt(output_dir+'/loss_vec_clean_test.txt',running_epoch_loss_clean_test)
+	else:
+		np.savetxt(output_dir+'/loss_vec_train.txt',loss_vec_train)
+		np.savetxt(output_dir+'/loss_vec_clean_train.txt',loss_vec_clean_train)
+		np.savetxt(output_dir+'/loss_vec_test.txt',loss_vec_test)
+		np.savetxt(output_dir+'/loss_vec_clean_test.txt',loss_vec_clean_test)
+		np.savetxt(output_dir+'/prediction_validity_time_test.txt',pred_validity_vec_test)
+		np.savetxt(output_dir+'/prediction_validity_time_clean_test.txt',pred_validity_vec_clean_test)
+		# np.savetxt(output_dir+'/kl_vec_inv_test.txt',kl_vec_inv_test)
+		# np.savetxt(output_dir+'/kl_vec_inv_clean_test.txt',kl_vec_inv_clean_test)
+		np.save(output_dir+'/kl_vec_inv_test.npy',kl_vec_inv_test)
+		np.save(output_dir+'/kl_vec_inv_clean_test.npy',kl_vec_inv_clean_test)
+
+	np.savetxt(output_dir+'/A_mat.txt',A.detach().numpy())
+	np.savetxt(output_dir+'/B_mat.txt',B.detach().numpy())
+	np.savetxt(output_dir+'/C_mat.txt',C.detach().numpy())
+	np.savetxt(output_dir+'/a_vec.txt',a.detach().numpy())
+	np.savetxt(output_dir+'/b_vec.txt',b.detach().numpy())
+	# print("W1:",w1)
+	# print("W2:",w2)
+	# print("b:",b)
+	# print("c:",c)
+	# print("v:",v)
+
+	# plot parameter convergence
+	# if keep_param_history:
+	fig, my_axes = plt.subplots(2, 3, sharex=True, figsize=[8,6])
+
+	x_vals = np.linspace(0,n_epochs,len(A_history))
+	my_axes[0,0].plot(x_vals, A_history)
+	# my_axes[0,0].plot(x_vals, A_history_running)
+	# my_axes[0,0].plot(x_vals, np.linalg.norm(A.detach().numpy() - A_history, ord='fro', axis=(1,2)))
+	my_axes[0,0].set_title('A')
+	my_axes[0,0].set_xlabel('Epochs')
+
+	# my_axes[0,1].plot(x_vals, np.linalg.norm(B.detach().numpy() - B_history, ord='fro', axis=(1,2)))
+	my_axes[0,1].plot(x_vals, B_history)
+	# my_axes[0,1].plot(x_vals, B_history_running)
+	my_axes[0,1].set_title('B')
+	my_axes[0,1].set_xlabel('Epochs')
+
+	# my_axes[1,0].plot(x_vals, np.linalg.norm(C.detach().numpy() - C_history, ord='fro', axis=(1,2)))
+	my_axes[1,0].plot(x_vals, C_history)
+	# my_axes[1,0].plot(x_vals, C_history_running)
+	my_axes[1,0].set_title('C')
+	my_axes[1,0].set_xlabel('Epochs')
+
+	# my_axes[1,1].plot(x_vals, np.linalg.norm(a.detach().numpy() - a_history, ord='fro', axis=(1,2)))
+	my_axes[1,1].plot(x_vals, a_history)
+	# my_axes[1,1].plot(x_vals, a_history_running)
+	my_axes[1,1].set_title('a')
+	my_axes[1,1].set_xlabel('Epochs')
+
+	# my_axes[1,2].plot(x_vals, np.linalg.norm(b.detach().numpy() - b_history, ord='fro', axis=(1,2)))
+	my_axes[1,2].plot(x_vals, b_history)
+	# my_axes[1,2].plot(x_vals, b_history_running)
+	my_axes[1,2].set_title('b')
+	my_axes[1,2].set_xlabel('Epochs')
+
+	fig.suptitle("Parameter convergence")
+	fig.savefig(fname=output_dir+'/rnn_parameter_convergence')
+	plt.close(fig)
+
+	## now, inspect the quality of the learned model
+	# plot predictions vs truth
+	# fig, (ax1, ax3) = plt.subplots(1, 2)
+	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+	if not isinstance(ax_list,np.ndarray):
+		ax_list = [ax_list]
+
+	# first run and plot training fits
+	hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+	init.normal_(hidden_state,0.0,0.1)
+	predictions = np.zeros([train_seq_length, output_size])
+	pred = output_train[0,:,None]
+	predictions[0,:] = np.squeeze(output_train[0,:,None])
+	solver_failed = False
+	for i in range(train_seq_length-1):
+		(pred, hidden_state, solver_failed) = forward(output_train[i,:,None], hidden_state, A,B,C,a,b, normz_info, model, model_params, model_output=model_pred[i], solver_failed=solver_failed)
+		# (pred, hidden_state) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params)
+		# hidden_state = hidden_state
+		predictions[i+1,:] = pred.data.numpy().ravel()
+
+	predictions_raw = f_unNormalize_Y(normz_info,predictions)
+	for kk in range(len(ax_list)):
+		ax1 = ax_list[kk]
+		t_plot = np.arange(0,round(len(y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+		# ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+		ax1.plot(t_plot, y_clean_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', label='clean data')
+		ax1.plot(t_plot, predictions_raw[:n_plttrain,plot_state_indices[kk]], color='black', label='NN fit')
+		ax1.set_xlabel('time')
+		ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
+		ax1.tick_params(axis='y', labelcolor='red')
+		# ax1.set_title('Training Fit')
+
+	ax_list[0].legend()
+	fig.suptitle('RNN TRAIN fit to ODE simulation')
+	fig.savefig(fname=output_dir+'/rnn_fit_ode_TRAIN')
+	plt.close(fig)
+
+
+	# NOW, show final testing fit
+	ALLy_clean_test_raw = []
+	ALLgpr_test_predictions_raw = []
+	for kkt in range(n_test_sets):
+		y_clean_test_raw = f_unNormalize_Y(normz_info,y_clean_test[kkt,:,:])
+		fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+		if not isinstance(ax_list,np.ndarray):
+			ax_list = [ax_list]
+
+		# NOW, show testing fit
+		if synch_length > 1:
+			# first, synchronize the hidden state
+			hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+			solver_failed = False
+			for i in range(synch_length-1):
+				(pred, hidden_state, solver_failed) = forward(test_synch_noisy[kkt,i,:,None], hidden_state, A,B,C,a,b , normz_info, model, model_params, solver_failed=solver_failed)
+			pred = test_synch_noisy[kkt,-1,:,None]
+		else:
+			pred = output_train[-1,:,None]
+
+		# hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
+		predictions = np.zeros([test_seq_length, output_size])
+		# pred = output_train[-1,:,None]
+		saved_hidden_states = np.zeros([test_seq_length, hidden_size])
+		solver_failed = False
+		for i in range(test_seq_length):
+			(pred, hidden_state, solver_failed) = forward(pred, hidden_state, A,B,C,a,b, normz_info, model, model_params, solver_failed=solver_failed)
+			# hidden_state = hidden_state
+			predictions[i,:] = pred.data.numpy().ravel()
+			saved_hidden_states[i,:] = hidden_state.data.numpy().ravel()
+
+		predictions_raw = f_unNormalize_Y(normz_info,predictions)
+		for kk in range(len(ax_list)):
+			ax3 = ax_list[kk]
+			t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+			# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
+			ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
+			ax3.plot(t_plot, predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
+			ax3.set_xlabel('time')
+			ax3.set_ylabel(model_params['state_names'][plot_state_indices[kk]] +'(t)', color='red')
+			ax3.tick_params(axis='y', labelcolor='red')
+
+		ax_list[0].legend()
+
+		fig.suptitle('RNN TEST fit to ODE simulation')
+		fig.savefig(fname=output_dir+'/rnn_fit_ode_TEST_{0}'.format(kkt))
+		plt.close(fig)
+
+		## plot phase plots
+		# phase_plot(data=y_clean_test_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_testData{0}'.format(kkt), delta_t=model_params['delta_t'])
+		phase_plot(data=predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=output_dir+'/phase_plot_finalRNNpredicted_TEST_{0}'.format(kkt), delta_t=model_params['delta_t'])
+
+
+		# plot KDE of test data vs predictions
+		invdens_plotname = output_dir+'/rnn_invDensity_TEST_{0}'.format(kkt)
+		invariant_density_plot(test_data=y_clean_test_raw, pred_data=predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
+
+		ALLy_clean_test_raw.append(y_clean_test_raw)
+		ALLgpr_test_predictions_raw.append(predictions_raw)
+
+	ALLy_clean_test_raw = np.array(ALLy_clean_test_raw)
+	ALLgpr_test_predictions_raw = np.array(ALLgpr_test_predictions_raw)
+	ALLy_clean_test_raw = np.reshape(ALLy_clean_test_raw,(ALLy_clean_test_raw.shape[0]*ALLy_clean_test_raw.shape[1],ALLy_clean_test_raw.shape[2]))
+	ALLgpr_test_predictions_raw = np.reshape(ALLgpr_test_predictions_raw,(ALLgpr_test_predictions_raw.shape[0]*ALLgpr_test_predictions_raw.shape[1],ALLgpr_test_predictions_raw.shape[2]))
+	# plot KDE of ALL test sets vs ALL prediction
+	invdens_plotname = output_dir+'/rnn_invDensity_TEST_ALL'
+	invariant_density_plot(test_data=ALLy_clean_test_raw, pred_data=ALLgpr_test_predictions_raw, plot_inds=plot_state_indices, state_names=model_params['state_names'], output_fname=invdens_plotname)
+
+
+
+	# plot Train/Test curve
+	x_test = pd.DataFrame(np.loadtxt(output_dir+"/loss_vec_clean_test.txt"))
+	n_vals = n_epochs
+	epoch_vec = np.arange(0,n_vals)
+	max_exp = int(np.floor(np.log10(n_vals)))
+	win_list = [1] + list(10**np.arange(1,max_exp))
+	for win in win_list:
+		fig, ax_vec = plt.subplots(nrows=2, ncols=2,
+			figsize = [10, 10],
+			sharey=False, sharex=False)
+
+		ax1 = ax_vec[0,0]
+		ax2 = ax_vec[0,1]
+		ax3 = ax_vec[1,0]
+		ax4 = ax_vec[1,1]
+
+		x_train = pd.DataFrame(np.loadtxt(output_dir+'/loss_vec_train.txt'))
+		x_test = pd.DataFrame(np.loadtxt(output_dir+"/loss_vec_clean_test.txt"))
+
+		if n_epochs > 1:
+			x_valid_test = pd.DataFrame(np.loadtxt(output_dir+"/prediction_validity_time_clean_test.txt"))
+			x_kl_test = np.load(output_dir+"/kl_vec_inv_clean_test.npy")
+
+		ax1.plot(x_train.rolling(win).mean())
+		ax2.errorbar(x=epoch_vec,y=x_test.median(axis=1).rolling(win).mean(), yerr=x_test.std(axis=1), label='RNN')
+		if n_epochs > 1:
+			ax3.errorbar(x=epoch_vec,y=x_valid_test.median(axis=1).rolling(win).mean(), yerr=x_valid_test.std(axis=1), label='RNN')
+			for kk in plot_state_indices:
+				ax4.errorbar(x=epoch_vec,y=pd.DataFrame(np.median(x_kl_test[:,:,kk],axis=1)).rolling(win).mean().loc[:,0], yerr=np.std(x_kl_test[:,:,kk],axis=1), label='RNN')
+
+		# for learn_flow in learn_flow_list:
+		#   for do_resid in gp_resid_list:
+		#       for gp_style in style_list:
+		#           gp_nm = 'GPR {0} {1} {2}'.format(gp_style,do_resid*'residuals',learn_flow*' flow')
+		#           gpr_valid_test = np.loadtxt(output_dir+'/GPR{0}_residual{1}_learnflow{2}prediction_validity_time_clean_test.txt'.format(gp_style, do_resid,learn_flow))
+		#           gpr_test = np.loadtxt(output_dir+'/GPR{0}_residual{1}_learnflow{2}loss_vec_clean_test.txt'.format(gp_style, do_resid,learn_flow))
+		#           ax2.errorbar(x=epoch_vec,y=[np.median(gpr_test)]*len(epoch_vec), yerr=[np.std(gpr_test)]*len(epoch_vec),label=gp_nm)
+		#           ax3.errorbar(x=epoch_vec,y=[np.median(gpr_valid_test)]*len(epoch_vec), yerr=[np.std(gpr_valid_test)]*len(epoch_vec),label=gp_nm)
+
+		ax2.legend()
+		ax3.legend()
+
+		# x = np.loadtxt(d+"/loss_vec_test.txt")
+		# ax3.plot(x, label=d_label)
+		ax4.set_xlabel('Epochs')
+		ax3.set_xlabel('Epochs')
+		ax2.set_xlabel('Epochs')
+		ax1.set_xlabel('Epochs')
+
+		ax1.set_ylabel('Error')
+		ax1.set_title('Train Error')
+		# ax1.legend(fontsize=6, handlelength=2, loc='upper right')
+		ax2.set_ylabel('Error')
+		ax2.set_title('Test Error (predicting clean data)')
+		ax3.set_ylabel('Valid Time')
+		ax3.set_title('Test Validity Time')
+		ax4.set_title('KL-divergence')
+		# ax3.set_xlabel('Epochs')
+		# ax3.set_ylabel('Error')
+		# ax3.set_title('Test Error (on noisy data)')
+		# fig.suptitle("Comparison of training efficacy (trained on noisy data)")
+		fig.savefig(fname=output_dir+'/TrainTest_win'+str(win))
+		# plot in log scale
+		ax1.set_yscale('log')
+		ax2.set_yscale('log')
+		ax3.set_yscale('log')
+		ax4.set_yscale('log')
+		ax1.set_ylabel('log Error')
+		ax2.set_ylabel('log Error')
+		ax3.set_ylabel('Valid Time')
+		fig.savefig(fname=output_dir+'/TrainTest_log'+'_win'+str(win))
+		plt.close(fig)
 
 
 def train_RNN(forward,
-            y_clean_train, y_noisy_train, x_train,
-            y_clean_test, y_noisy_test, x_test,
-            model_params, hidden_size=6, n_epochs=100, lr=0.05,
-            output_dir='.', normz_info=None, model=None,
-            trivial_init=False, drive_system=True):
+			y_clean_train, y_noisy_train, x_train,
+			y_clean_test, y_noisy_test, x_test,
+			model_params, hidden_size=6, n_epochs=100, lr=0.05,
+			output_dir='.', normz_info=None, model=None,
+			trivial_init=False, drive_system=True):
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+	if not os.path.exists(output_dir):
+		os.makedirs(output_dir)
 
-    print('Starting RNN training for: ', output_dir)
+	print('Starting RNN training for: ', output_dir)
 
-    if drive_system:
-        x_train = torch.FloatTensor(x_train)
-        x_test = torch.FloatTensor(x_test)
-        input_size = x_train.shape[0]
+	if drive_system:
+		x_train = torch.FloatTensor(x_train)
+		x_test = torch.FloatTensor(x_test)
+		input_size = x_train.shape[0]
 
-    output_train = torch.FloatTensor(y_noisy_train)
-    output_clean_train = torch.FloatTensor(y_clean_train)
-    output_test = torch.FloatTensor(y_noisy_test)
-    output_clean_test = torch.FloatTensor(y_clean_test)
+	output_train = torch.FloatTensor(y_noisy_train)
+	output_clean_train = torch.FloatTensor(y_clean_train)
+	output_test = torch.FloatTensor(y_noisy_test)
+	output_clean_test = torch.FloatTensor(y_clean_test)
 
-    dtype = torch.FloatTensor
-    output_size = output_train.shape[1]
-    train_seq_length = output_train.size(0)
-    test_seq_length = output_test.size(0)
+	dtype = torch.FloatTensor
+	output_size = output_train.shape[1]
+	train_seq_length = output_train.size(0)
+	test_seq_length = output_test.size(0)
 
-    # first, SHOW that a simple mechRNN can fit the data perfectly
-    # now, TRAIN to fit the output from the previous model
-    if drive_system:
-        w2 = torch.zeros(hidden_size, input_size).type(dtype)
-    w1 = torch.zeros(hidden_size, hidden_size).type(dtype)
-    w1[0,0] = 1.
-    b = torch.zeros(hidden_size, 1).type(dtype)
-    c = torch.zeros(output_size, 1).type(dtype)
-    v = torch.zeros(output_size, hidden_size).type(dtype)
-    v[0] = 1.
-    hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
-    predictions = []
-    # yb_normalized = (yb - YMIN)/(YMAX - YMIN)
-    # initializing y0 of hidden state to the true initial condition from the clean signal
+	# first, SHOW that a simple mechRNN can fit the data perfectly
+	# now, TRAIN to fit the output from the previous model
+	if drive_system:
+		w2 = torch.zeros(hidden_size, input_size).type(dtype)
+	w1 = torch.zeros(hidden_size, hidden_size).type(dtype)
+	w1[0,0] = 1.
+	b = torch.zeros(hidden_size, 1).type(dtype)
+	c = torch.zeros(output_size, 1).type(dtype)
+	v = torch.zeros(output_size, hidden_size).type(dtype)
+	v[0] = 1.
+	hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
+	predictions = []
+	# yb_normalized = (yb - YMIN)/(YMAX - YMIN)
+	# initializing y0 of hidden state to the true initial condition from the clean signal
 
-    hidden_state[0] = float(y_clean_test[0])
-    for i in range(test_seq_length):
-        (pred, hidden_state) = forward(x_test[:,i:i+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
-        hidden_state = hidden_state
-        predictions.append(pred.data.numpy().ravel()[0])
-    # plot predictions vs truth
-    fig, ax1 = plt.subplots()
+	hidden_state[0] = float(y_clean_test[0])
+	for i in range(test_seq_length):
+		(pred, hidden_state) = forward(x_test[:,i:i+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
+		hidden_state = hidden_state
+		predictions.append(pred.data.numpy().ravel()[0])
+	# plot predictions vs truth
+	fig, ax1 = plt.subplots()
 
-    ax1.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-    ax1.plot(y_clean_test, color='red', label='clean data')
-    ax1.plot(predictions, ':' ,color='red', label='NN trivial fit')
-    ax1.set_xlabel('time')
-    ax1.set_ylabel('y(t)', color='red')
-    ax1.tick_params(axis='y', labelcolor='red')
+	ax1.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
+	ax1.plot(y_clean_test, color='red', label='clean data')
+	ax1.plot(predictions, ':' ,color='red', label='NN trivial fit')
+	ax1.set_xlabel('time')
+	ax1.set_ylabel('y(t)', color='red')
+	ax1.tick_params(axis='y', labelcolor='red')
 
-    if drive_system:
-        ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-        color = 'tab:blue'
-        ax2.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
-        ax2.plot((x_test[0,:].numpy()), ':', color=color, linestyle='--', label='input/driver data')
-        ax2.tick_params(axis='y', labelcolor=color)
+	if drive_system:
+		ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+		color = 'tab:blue'
+		ax2.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
+		ax2.plot((x_test[0,:].numpy()), ':', color=color, linestyle='--', label='input/driver data')
+		ax2.tick_params(axis='y', labelcolor=color)
 
-    fig.legend()
-    fig.suptitle('RNN w/ just mechanism fit to ODE simulation TEST SET')
-    fig.savefig(fname=output_dir+'/PERFECT_MechRnn_fit_ode')
-    plt.close(fig)
+	fig.legend()
+	fig.suptitle('RNN w/ just mechanism fit to ODE simulation TEST SET')
+	fig.savefig(fname=output_dir+'/PERFECT_MechRnn_fit_ode')
+	plt.close(fig)
 
-    # Initilize parameters for training
-    if drive_system:
-        w2 = torch.FloatTensor(hidden_size, input_size).type(dtype)
-    w1 = torch.FloatTensor(hidden_size, hidden_size).type(dtype)
-    b = torch.FloatTensor(hidden_size, 1).type(dtype)
-    c = torch.FloatTensor(output_size, 1).type(dtype)
-    v = torch.FloatTensor(output_size, hidden_size).type(dtype)
+	# Initilize parameters for training
+	if drive_system:
+		w2 = torch.FloatTensor(hidden_size, input_size).type(dtype)
+	w1 = torch.FloatTensor(hidden_size, hidden_size).type(dtype)
+	b = torch.FloatTensor(hidden_size, 1).type(dtype)
+	c = torch.FloatTensor(output_size, 1).type(dtype)
+	v = torch.FloatTensor(output_size, hidden_size).type(dtype)
 
-    # trivial_init trains the mechRNN starting from parameters (specified above)
-    # that trivialize the RNN to the forward ODE model
-    # now, TRAIN to fit the output from the previous model
-    if trivial_init:
-        if drive_system:
-            init.zeros_(w2)
-        init.zeros_(w1)
-        init.zeros_(b)
-        init.zeros_(c)
-        init.zeros_(v)
-        w1[0,0] = 1.
-        v[0] = 1.
-    else:
-        if drive_system:
-            init.normal_(w2, 0.0, 0.1)
-        init.normal_(w1, 0.0, 0.1)
-        init.normal_(b, 0.0, 0.1)
-        init.normal_(c, 0.0, 0.1)
-        init.normal_(v, 0.0, 0.1)
+	# trivial_init trains the mechRNN starting from parameters (specified above)
+	# that trivialize the RNN to the forward ODE model
+	# now, TRAIN to fit the output from the previous model
+	if trivial_init:
+		if drive_system:
+			init.zeros_(w2)
+		init.zeros_(w1)
+		init.zeros_(b)
+		init.zeros_(c)
+		init.zeros_(v)
+		w1[0,0] = 1.
+		v[0] = 1.
+	else:
+		if drive_system:
+			init.normal_(w2, 0.0, 0.1)
+		init.normal_(w1, 0.0, 0.1)
+		init.normal_(b, 0.0, 0.1)
+		init.normal_(c, 0.0, 0.1)
+		init.normal_(v, 0.0, 0.1)
 
-    if drive_system:
-        w2 = Variable(w2, requires_grad=True)
-    w1 =  Variable(w1, requires_grad=True)
-    b =  Variable(b, requires_grad=True)
-    c =  Variable(c, requires_grad=True)
-    v =  Variable(v, requires_grad=True)
+	if drive_system:
+		w2 = Variable(w2, requires_grad=True)
+	w1 =  Variable(w1, requires_grad=True)
+	b =  Variable(b, requires_grad=True)
+	c =  Variable(c, requires_grad=True)
+	v =  Variable(v, requires_grad=True)
 
-    if drive_system:
-        w2_history = np.zeros((n_epochs*train_seq_length,w2.shape[0],w2.shape[1]))
-    w1_history = np.zeros((n_epochs*train_seq_length,w1.shape[0],w1.shape[1]))
-    b_history = np.zeros((n_epochs*train_seq_length,b.shape[0],b.shape[1]))
-    c_history = np.zeros((n_epochs*train_seq_length,c.shape[0],c.shape[1]))
-    v_history = np.zeros((n_epochs*train_seq_length,v.shape[0],v.shape[1]))
+	if drive_system:
+		w2_history = np.zeros((n_epochs*train_seq_length,w2.shape[0],w2.shape[1]))
+	w1_history = np.zeros((n_epochs*train_seq_length,w1.shape[0],w1.shape[1]))
+	b_history = np.zeros((n_epochs*train_seq_length,b.shape[0],b.shape[1]))
+	c_history = np.zeros((n_epochs*train_seq_length,c.shape[0],c.shape[1]))
+	v_history = np.zeros((n_epochs*train_seq_length,v.shape[0],v.shape[1]))
 
-    loss_vec_train = np.zeros(n_epochs)
-    loss_vec_clean_train = np.zeros(n_epochs)
-    loss_vec_test = np.zeros(n_epochs)
-    loss_vec_clean_test = np.zeros(n_epochs)
-    cc = -1 # iteration counter for saving weight updates
-    for i_epoch in range(n_epochs):
-        total_loss_train = 0
-        total_loss_clean_train = 0
-        #init.normal_(hidden_state, 0.0, 1)
-        #hidden_state = Variable(hidden_state, requires_grad=True)
-        hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-        for j in range(train_seq_length):
-            cc += 1
-            target = output_train[j:(j+1)]
-            target_clean = output_clean_train[j:(j+1)]
-            if drive_system:
-                (pred, hidden_state) = forward(x_train[:,j:j+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
-            else:
-                (pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
-            loss = (pred.squeeze() - target.squeeze()).pow(2).sum()
-            total_loss_train += loss
-            total_loss_clean_train += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()
-            loss.backward()
+	loss_vec_train = np.zeros(n_epochs)
+	loss_vec_clean_train = np.zeros(n_epochs)
+	loss_vec_test = np.zeros(n_epochs)
+	loss_vec_clean_test = np.zeros(n_epochs)
+	cc = -1 # iteration counter for saving weight updates
+	for i_epoch in range(n_epochs):
+		total_loss_train = 0
+		total_loss_clean_train = 0
+		#init.normal_(hidden_state, 0.0, 1)
+		#hidden_state = Variable(hidden_state, requires_grad=True)
+		hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
+		for j in range(train_seq_length):
+			cc += 1
+			target = output_train[j:(j+1)]
+			target_clean = output_clean_train[j:(j+1)]
+			if drive_system:
+				(pred, hidden_state) = forward(x_train[:,j:j+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
+			else:
+				(pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
+			loss = (pred.squeeze() - target.squeeze()).pow(2).sum()
+			total_loss_train += loss
+			total_loss_clean_train += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()
+			loss.backward()
 
-            if drive_system:
-                w2.data -= lr * w2.grad.data
-            w1.data -= lr * w1.grad.data
-            b.data -= lr * b.grad.data
-            c.data -= lr * c.grad.data
-            v.data -= lr * v.grad.data
+			if drive_system:
+				w2.data -= lr * w2.grad.data
+			w1.data -= lr * w1.grad.data
+			b.data -= lr * b.grad.data
+			c.data -= lr * c.grad.data
+			v.data -= lr * v.grad.data
 
-            if drive_system:
-                w2.grad.data.zero_()
-            w1.grad.data.zero_()
-            b.grad.data.zero_()
-            c.grad.data.zero_()
-            v.grad.data.zero_()
+			if drive_system:
+				w2.grad.data.zero_()
+			w1.grad.data.zero_()
+			b.grad.data.zero_()
+			c.grad.data.zero_()
+			v.grad.data.zero_()
 
-            hidden_state = hidden_state.detach()
+			hidden_state = hidden_state.detach()
 
-            # save updated parameters
-            if drive_system:
-                w2_history[cc,:] = w2.detach().numpy()
-            w1_history[cc,:] = w1.detach().numpy()
-            b_history[cc,:] = b.detach().numpy()
-            c_history[cc,:] = c.detach().numpy()
-            v_history[cc,:] = v.detach().numpy()
+			# save updated parameters
+			if drive_system:
+				w2_history[cc,:] = w2.detach().numpy()
+			w1_history[cc,:] = w1.detach().numpy()
+			b_history[cc,:] = b.detach().numpy()
+			c_history[cc,:] = c.detach().numpy()
+			v_history[cc,:] = v.detach().numpy()
 
-        #normalize losses
-        total_loss_train = total_loss_train / train_seq_length
-        total_loss_clean_train = total_loss_clean_train / train_seq_length
-        #store losses
-        loss_vec_train[i_epoch] = total_loss_train
-        loss_vec_clean_train[i_epoch] = total_loss_clean_train
+		#normalize losses
+		total_loss_train = total_loss_train / train_seq_length
+		total_loss_clean_train = total_loss_clean_train / train_seq_length
+		#store losses
+		loss_vec_train[i_epoch] = total_loss_train
+		loss_vec_clean_train[i_epoch] = total_loss_clean_train
 
-        total_loss_test = 0
-        total_loss_clean_test = 0
-        hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-        for j in range(test_seq_length):
-            target = output_test[j:(j+1)]
-            target_clean = output_clean_test[j:(j+1)]
-            if drive_system:
-                (pred, hidden_state) = forward(x_test[:,j:j+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
-            else:
-                (pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
-            total_loss_test += (pred.squeeze() - target.squeeze()).pow(2).sum()
-            total_loss_clean_test += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()
+		total_loss_test = 0
+		total_loss_clean_test = 0
+		hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
+		for j in range(test_seq_length):
+			target = output_test[j:(j+1)]
+			target_clean = output_clean_test[j:(j+1)]
+			if drive_system:
+				(pred, hidden_state) = forward(x_test[:,j:j+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
+			else:
+				(pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
+			total_loss_test += (pred.squeeze() - target.squeeze()).pow(2).sum()
+			total_loss_clean_test += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()
 
-            hidden_state = hidden_state.detach()
-        #normalize losses
-        total_loss_test = total_loss_test / test_seq_length
-        total_loss_clean_test = total_loss_clean_test / test_seq_length
-        #store losses
-        loss_vec_test[i_epoch] = total_loss_test
-        loss_vec_clean_test[i_epoch] = total_loss_clean_test
+			hidden_state = hidden_state.detach()
+		#normalize losses
+		total_loss_test = total_loss_test / test_seq_length
+		total_loss_clean_test = total_loss_clean_test / test_seq_length
+		#store losses
+		loss_vec_test[i_epoch] = total_loss_test
+		loss_vec_clean_test[i_epoch] = total_loss_clean_test
 
-        # print updates every 10 iterations or in 10% incrememnts
-        if i_epoch % int( max(10, np.ceil(n_epochs/10)) ) == 0:
-            print("Epoch: {}\nTraining Loss = {}\nTesting Loss = {}".format(
-                        i_epoch,
-                        total_loss_train.data.item(),
-                        total_loss_test.data.item()))
-                 # plot predictions vs truth
-            fig, (ax1, ax3) = plt.subplots(1, 2)
+		# print updates every 10 iterations or in 10% incrememnts
+		if i_epoch % int( max(10, np.ceil(n_epochs/10)) ) == 0:
+			print("Epoch: {}\nTraining Loss = {}\nTesting Loss = {}".format(
+						i_epoch,
+						total_loss_train.data.item(),
+						total_loss_test.data.item()))
+				 # plot predictions vs truth
+			fig, (ax1, ax3) = plt.subplots(1, 2)
 
-            # first run and plot training fits
-            hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-            predictions = []
-            for i in range(train_seq_length):
-                if drive_system:
-                    (pred, hidden_state) = forward(x_train[:,i:i+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
-                else:
-                    (pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
-                hidden_state = hidden_state
-                predictions.append(pred.data.numpy().ravel()[0])
+			# first run and plot training fits
+			hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
+			predictions = []
+			for i in range(train_seq_length):
+				if drive_system:
+					(pred, hidden_state) = forward(x_train[:,i:i+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
+				else:
+					(pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
+				hidden_state = hidden_state
+				predictions.append(pred.data.numpy().ravel()[0])
 
-            ax1.scatter(np.arange(len(y_noisy_train[:,0])), y_noisy_train[:,0], color='red', s=10, alpha=0.3, label='noisy data')
-            ax1.plot(y_clean_train[:,0], color='red', label='clean data')
-            ax1.plot(predictions, color='black', label='NN fit')
-            ax1.set_xlabel('time')
-            ax1.set_ylabel('y(t)', color='red')
-            ax1.tick_params(axis='y', labelcolor='red')
-
-
-            if drive_system:
-                ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-                color = 'tab:blue'
-                ax2.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
-                ax2.plot((x_train[0,:].numpy()), ':', color=color, linestyle='--', label='driver/input data')
-                ax2.tick_params(axis='y', labelcolor=color)
-
-            ax1.set_title('Training Fit')
-
-            # NOW, show testing fit
-            hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-            predictions = []
-            for i in range(test_seq_length):
-                if drive_system:
-                    (pred, hidden_state) = forward(x_test[:,i:i+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
-                else:
-                    (pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
-                hidden_state = hidden_state
-                predictions.append(pred.data.numpy().ravel()[0])
-
-            # ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-            ax3.plot(y_clean_test[:,0], color='red', label='clean data')
-            ax3.plot(predictions, color='black', label='NN fit')
-            ax3.set_xlabel('time')
-            ax3.set_ylabel('y(t)', color='red')
-            ax3.tick_params(axis='y', labelcolor='red')
-
-            if drive_system:
-                ax4 = ax3.twinx()  # instantiate a second axes that shares the same x-axis
-                color = 'tab:blue'
-                ax4.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
-                ax4.plot((x_test[0,:].numpy()), ':', color=color, linestyle='--', label='driver/input data')
-                ax4.tick_params(axis='y', labelcolor=color)
-
-            ax3.set_title('Testing Fit')
-
-            ax3.legend()
-            ax2.legend()
-
-            fig.suptitle('RNN fit to ODE simulation--' + str(i_epoch) + 'training epochs')
-            fig.savefig(fname=output_dir+'/rnn_fit_ode_iterEpochs'+str(i_epoch))
-            plt.close(fig)
-
-            # Plot parameter convergence
+			ax1.scatter(np.arange(len(y_noisy_train[:,0])), y_noisy_train[:,0], color='red', s=10, alpha=0.3, label='noisy data')
+			ax1.plot(y_clean_train[:,0], color='red', label='clean data')
+			ax1.plot(predictions, color='black', label='NN fit')
+			ax1.set_xlabel('time')
+			ax1.set_ylabel('y(t)', color='red')
+			ax1.tick_params(axis='y', labelcolor='red')
 
 
-    ## save loss_vec
-    np.savetxt(output_dir+'/loss_vec_train.txt',loss_vec_train)
-    np.savetxt(output_dir+'/loss_vec_clean_train.txt',loss_vec_clean_train)
-    np.savetxt(output_dir+'/loss_vec_test.txt',loss_vec_test)
-    np.savetxt(output_dir+'/loss_vec_clean_test.txt',loss_vec_clean_test)
-    np.savetxt(output_dir+'/w1.txt',w1.detach().numpy())
-    if drive_system:
-        np.savetxt(output_dir+'/w2.txt',w2.detach().numpy())
-    np.savetxt(output_dir+'/b.txt',b.detach().numpy())
-    np.savetxt(output_dir+'/c.txt',c.detach().numpy())
-    np.savetxt(output_dir+'/v.txt',v.detach().numpy())
+			if drive_system:
+				ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+				color = 'tab:blue'
+				ax2.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
+				ax2.plot((x_train[0,:].numpy()), ':', color=color, linestyle='--', label='driver/input data')
+				ax2.tick_params(axis='y', labelcolor=color)
 
-    # print("W1:",w1)
-    # print("W2:",w2)
-    # print("b:",b)
-    # print("c:",c)
-    # print("v:",v)
+			ax1.set_title('Training Fit')
 
-    # plot parameter convergence
-    fig, my_axes = plt.subplots(2, 3, sharex=True, figsize=[8,6])
+			# NOW, show testing fit
+			hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
+			predictions = []
+			for i in range(test_seq_length):
+				if drive_system:
+					(pred, hidden_state) = forward(x_test[:,i:i+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
+				else:
+					(pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
+				hidden_state = hidden_state
+				predictions.append(pred.data.numpy().ravel()[0])
 
-    x_vals = np.linspace(0,n_epochs,len(w1_history))
-    my_axes[0,0].plot(x_vals, np.linalg.norm(w1.detach().numpy() - w1_history, ord='fro', axis=(1,2)))
-    my_axes[0,0].set_title('W_1')
-    my_axes[0,0].set_xlabel('Epochs')
+			# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
+			ax3.plot(y_clean_test[:,0], color='red', label='clean data')
+			ax3.plot(predictions, color='black', label='NN fit')
+			ax3.set_xlabel('time')
+			ax3.set_ylabel('y(t)', color='red')
+			ax3.tick_params(axis='y', labelcolor='red')
 
-    if drive_system:
-        my_axes[0,1].plot(x_vals, np.linalg.norm(w2.detach().numpy() - w2_history, ord='fro', axis=(1,2)))
-        my_axes[0,1].set_title('W_2')
-        my_axes[0,1].set_xlabel('Epochs')
+			if drive_system:
+				ax4 = ax3.twinx()  # instantiate a second axes that shares the same x-axis
+				color = 'tab:blue'
+				ax4.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
+				ax4.plot((x_test[0,:].numpy()), ':', color=color, linestyle='--', label='driver/input data')
+				ax4.tick_params(axis='y', labelcolor=color)
 
-    my_axes[1,0].plot(x_vals, np.linalg.norm(v.detach().numpy() - v_history, ord='fro', axis=(1,2)))
-    my_axes[1,0].set_title('v')
-    my_axes[1,0].set_xlabel('Epochs')
+			ax3.set_title('Testing Fit')
 
-    my_axes[1,1].plot(x_vals, np.linalg.norm(b.detach().numpy() - b_history, ord='fro', axis=(1,2)))
-    my_axes[1,1].set_title('b')
-    my_axes[1,1].set_xlabel('Epochs')
+			ax3.legend()
+			ax2.legend()
 
-    my_axes[1,2].plot(x_vals, np.linalg.norm(c.detach().numpy() - c_history, ord='fro', axis=(1,2)))
-    my_axes[1,2].set_title('c')
-    my_axes[1,2].set_xlabel('Epochs')
+			fig.suptitle('RNN fit to ODE simulation--' + str(i_epoch) + 'training epochs')
+			fig.savefig(fname=output_dir+'/rnn_fit_ode_iterEpochs'+str(i_epoch))
+			plt.close(fig)
+
+			# Plot parameter convergence
 
 
-    fig.suptitle("Parameter convergence")
-    fig.savefig(fname=output_dir+'/rnn_parameter_convergence')
-    plt.close(fig)
+	## save loss_vec
+	np.savetxt(output_dir+'/loss_vec_train.txt',loss_vec_train)
+	np.savetxt(output_dir+'/loss_vec_clean_train.txt',loss_vec_clean_train)
+	np.savetxt(output_dir+'/loss_vec_test.txt',loss_vec_test)
+	np.savetxt(output_dir+'/loss_vec_clean_test.txt',loss_vec_clean_test)
+	np.savetxt(output_dir+'/w1.txt',w1.detach().numpy())
+	if drive_system:
+		np.savetxt(output_dir+'/w2.txt',w2.detach().numpy())
+	np.savetxt(output_dir+'/b.txt',b.detach().numpy())
+	np.savetxt(output_dir+'/c.txt',c.detach().numpy())
+	np.savetxt(output_dir+'/v.txt',v.detach().numpy())
 
-    ## now, inspect the quality of the learned model
-    # plot predictions vs truth
-    fig, (ax1, ax3) = plt.subplots(1, 2)
+	# print("W1:",w1)
+	# print("W2:",w2)
+	# print("b:",b)
+	# print("c:",c)
+	# print("v:",v)
 
-    # first run and plot training fits
-    hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-    predictions = []
-    for i in range(train_seq_length):
-        if drive_system:
-            (pred, hidden_state) = forward(x_train[:,i:i+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
-        else:
-            (pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
-        hidden_state = hidden_state
-        predictions.append(pred.data.numpy().ravel()[0])
+	# plot parameter convergence
+	fig, my_axes = plt.subplots(2, 3, sharex=True, figsize=[8,6])
 
-    ax1.scatter(np.arange(len(y_noisy_train[:,0])), y_noisy_train[:,0], color='red', s=10, alpha=0.3, label='noisy data')
-    ax1.plot(y_clean_train[:,0], color='red', label='clean data')
-    ax1.plot(predictions, color='black', label='NN fit')
-    ax1.set_xlabel('time')
-    ax1.set_ylabel('y(t)', color='red')
-    ax1.tick_params(axis='y', labelcolor='red')
+	x_vals = np.linspace(0,n_epochs,len(w1_history))
+	my_axes[0,0].plot(x_vals, np.linalg.norm(w1.detach().numpy() - w1_history, ord='fro', axis=(1,2)))
+	my_axes[0,0].set_title('W_1')
+	my_axes[0,0].set_xlabel('Epochs')
 
-    if drive_system:
-        ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-        color = 'tab:blue'
-        ax2.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
-        ax2.plot((x_train[0,:].numpy()), ':', color=color, linestyle='--', label='driver/input data')
-        ax2.tick_params(axis='y', labelcolor=color)
+	if drive_system:
+		my_axes[0,1].plot(x_vals, np.linalg.norm(w2.detach().numpy() - w2_history, ord='fro', axis=(1,2)))
+		my_axes[0,1].set_title('W_2')
+		my_axes[0,1].set_xlabel('Epochs')
 
-    ax1.set_title('Training Fit')
+	my_axes[1,0].plot(x_vals, np.linalg.norm(v.detach().numpy() - v_history, ord='fro', axis=(1,2)))
+	my_axes[1,0].set_title('v')
+	my_axes[1,0].set_xlabel('Epochs')
 
-    # NOW, show testing fit
-    hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-    predictions = []
-    for i in range(test_seq_length):
-        if drive_system:
-            (pred, hidden_state) = forward(x_test[:,i:i+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
-        else:
-            (pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
-        hidden_state = hidden_state
-        predictions.append(pred.data.numpy().ravel()[0])
+	my_axes[1,1].plot(x_vals, np.linalg.norm(b.detach().numpy() - b_history, ord='fro', axis=(1,2)))
+	my_axes[1,1].set_title('b')
+	my_axes[1,1].set_xlabel('Epochs')
 
-    # ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-    ax3.plot(y_clean_test[:,0], color='red', label='clean data')
-    ax3.plot(predictions[:,0], color='black', label='NN fit')
-    ax3.set_xlabel('time')
-    ax3.set_ylabel('y(t)', color='red')
-    ax3.tick_params(axis='y', labelcolor='red')
+	my_axes[1,2].plot(x_vals, np.linalg.norm(c.detach().numpy() - c_history, ord='fro', axis=(1,2)))
+	my_axes[1,2].set_title('c')
+	my_axes[1,2].set_xlabel('Epochs')
 
-    if drive_system:
-        ax4 = ax3.twinx()  # instantiate a second axes that shares the same x-axis
-        color = 'tab:blue'
-        ax4.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
-        ax4.plot((x_test[0,:].numpy()), ':', color=color, linestyle='--', label='driver/input data')
-        ax4.tick_params(axis='y', labelcolor=color)
 
-    ax3.set_title('Testing Fit')
+	fig.suptitle("Parameter convergence")
+	fig.savefig(fname=output_dir+'/rnn_parameter_convergence')
+	plt.close(fig)
 
-    ax3.legend()
-    ax2.legend()
+	## now, inspect the quality of the learned model
+	# plot predictions vs truth
+	fig, (ax1, ax3) = plt.subplots(1, 2)
 
-    fig.suptitle('RNN fit to ODE simulation')
-    fig.savefig(fname=output_dir+'/rnn_fit_ode')
-    plt.close(fig)
+	# first run and plot training fits
+	hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
+	predictions = []
+	for i in range(train_seq_length):
+		if drive_system:
+			(pred, hidden_state) = forward(x_train[:,i:i+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
+		else:
+			(pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
+		hidden_state = hidden_state
+		predictions.append(pred.data.numpy().ravel()[0])
+
+	ax1.scatter(np.arange(len(y_noisy_train[:,0])), y_noisy_train[:,0], color='red', s=10, alpha=0.3, label='noisy data')
+	ax1.plot(y_clean_train[:,0], color='red', label='clean data')
+	ax1.plot(predictions, color='black', label='NN fit')
+	ax1.set_xlabel('time')
+	ax1.set_ylabel('y(t)', color='red')
+	ax1.tick_params(axis='y', labelcolor='red')
+
+	if drive_system:
+		ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+		color = 'tab:blue'
+		ax2.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
+		ax2.plot((x_train[0,:].numpy()), ':', color=color, linestyle='--', label='driver/input data')
+		ax2.tick_params(axis='y', labelcolor=color)
+
+	ax1.set_title('Training Fit')
+
+	# NOW, show testing fit
+	hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
+	predictions = []
+	for i in range(test_seq_length):
+		if drive_system:
+			(pred, hidden_state) = forward(x_test[:,i:i+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
+		else:
+			(pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
+		hidden_state = hidden_state
+		predictions.append(pred.data.numpy().ravel()[0])
+
+	# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
+	ax3.plot(y_clean_test[:,0], color='red', label='clean data')
+	ax3.plot(predictions[:,0], color='black', label='NN fit')
+	ax3.set_xlabel('time')
+	ax3.set_ylabel('y(t)', color='red')
+	ax3.tick_params(axis='y', labelcolor='red')
+
+	if drive_system:
+		ax4 = ax3.twinx()  # instantiate a second axes that shares the same x-axis
+		color = 'tab:blue'
+		ax4.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
+		ax4.plot((x_test[0,:].numpy()), ':', color=color, linestyle='--', label='driver/input data')
+		ax4.tick_params(axis='y', labelcolor=color)
+
+	ax3.set_title('Testing Fit')
+
+	ax3.legend()
+	ax2.legend()
+
+	fig.suptitle('RNN fit to ODE simulation')
+	fig.savefig(fname=output_dir+'/rnn_fit_ode')
+	plt.close(fig)
 
 
 def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indices=None):
 
-    # first, get sizes of things...max window size is 10% of whole test set.
-    d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
-    x_test = pd.DataFrame(np.loadtxt(my_dirs[0]+"/loss_vec_clean_test.txt"))
-    n_vals = x_test.shape[0]
-    epoch_vec = np.arange(0,n_vals)
-    max_exp = int(np.floor(np.log10(n_vals)))
-    win_list = [1] + list(10**np.arange(1,max_exp))
+	# first, get sizes of things...max window size is 10% of whole test set.
+	d_label = my_dirs[0].split("/")[-1].rstrip('_noisy').rstrip('_clean')
+	x_test = pd.DataFrame(np.loadtxt(my_dirs[0]+"/loss_vec_clean_test.txt"))
+	n_vals = x_test.shape[0]
+	epoch_vec = np.arange(0,n_vals)
+	max_exp = int(np.floor(np.log10(n_vals)))
+	win_list = [1] + list(10**np.arange(1,max_exp))
 
-    try:
-        many_epochs = True
-        x_kl_test = np.load(my_dirs[0]+"/kl_vec_inv_clean_test.npy")
-        if not plot_state_indices:
-            plot_state_indices = np.arange(x_kl_test.shape[2])
-    except:
-        many_epochs = False
+	try:
+		many_epochs = True
+		x_kl_test = np.load(my_dirs[0]+"/kl_vec_inv_clean_test.npy")
+		if not plot_state_indices:
+			plot_state_indices = np.arange(x_kl_test.shape[2])
+	except:
+		many_epochs = False
 
 
-    for win in win_list:
-        fig, ax_vec = plt.subplots(nrows=2, ncols=2,
-            figsize = [10, 10],
-            sharey=False, sharex=False)
+	for win in win_list:
+		fig, ax_vec = plt.subplots(nrows=2, ncols=2,
+			figsize = [10, 10],
+			sharey=False, sharex=False)
 
-        ax1 = ax_vec[0,0]
-        ax2 = ax_vec[0,1]
-        ax3 = ax_vec[1,0]
-        ax4 = ax_vec[1,1]
+		ax1 = ax_vec[0,0]
+		ax2 = ax_vec[0,1]
+		ax3 = ax_vec[1,0]
+		ax4 = ax_vec[1,1]
 
-        for d in my_dirs:
-            d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
-            # if 'GPR' in d_label:
-            #   continue
-            x_test = np.loadtxt(d+"/loss_vec_clean_test.txt",ndmin=2)
-            if 'GPR' not in d_label:
-                x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
-                x_test = pd.DataFrame(x_test)
+		for d in my_dirs:
+			d_label = d.split("/")[-1].rstrip('_noisy').rstrip('_clean')
+			# if 'GPR' in d_label:
+			#   continue
+			x_test = np.loadtxt(d+"/loss_vec_clean_test.txt",ndmin=2)
+			if 'GPR' not in d_label:
+				x_train = pd.DataFrame(np.loadtxt(d+"/loss_vec_train.txt"))
+				x_test = pd.DataFrame(x_test)
 
-            # get GPR fits
-            # gpr1_valid_test = np.loadtxt(d+'/GPR1_prediction_validity_time_clean_test.txt')
-            # gpr2_valid_test = np.loadtxt(d+'/GPR2_prediction_validity_time_clean_test.txt')
-            # gpr1_test = np.loadtxt(d+'/GPR1_loss_vec_clean_test.txt')
-            # gpr2_test = np.loadtxt(d+'/GPR2_loss_vec_clean_test.txt')
+			# get GPR fits
+			# gpr1_valid_test = np.loadtxt(d+'/GPR1_prediction_validity_time_clean_test.txt')
+			# gpr2_valid_test = np.loadtxt(d+'/GPR2_prediction_validity_time_clean_test.txt')
+			# gpr1_test = np.loadtxt(d+'/GPR1_loss_vec_clean_test.txt')
+			# gpr2_test = np.loadtxt(d+'/GPR2_loss_vec_clean_test.txt')
 
-            if many_epochs:
-                x_valid_test = np.loadtxt(d+"/prediction_validity_time_clean_test.txt",ndmin=2)
-                if 'GPR' not in d_label:
-                    x_valid_test = pd.DataFrame(x_valid_test)
-            # if win:
-            if 'GPR' not in d_label:
-                ax1.plot(x_train.rolling(win).mean(), label=d_label)
-                ax2.errorbar(x=epoch_vec,y=x_test.median(axis=1).rolling(win).mean(), yerr=x_test.std(axis=1), label=d_label)
-            else:
-                ax2.errorbar(x=epoch_vec,y=[np.median(x_test)]*len(epoch_vec), yerr=[np.std(x_test)]*len(epoch_vec), label=d_label)
-            if many_epochs:
-                if 'GPR' not in d_label:
-                    ax3.errorbar(x=epoch_vec,y=x_valid_test.median(axis=1).rolling(win).mean(), yerr=x_valid_test.std(axis=1), label=d_label)
-                    x_kl_test = np.load(d+"/kl_vec_inv_clean_test.npy")
-                    for kk in plot_state_indices:
-                        ax4.errorbar(x=epoch_vec,y=pd.DataFrame(np.median(x_kl_test[:,:,kk],axis=1)).rolling(win).mean().loc[:,0], yerr=np.std(x_kl_test[:,:,kk],axis=1), label=d_label)
-                else:
-                    ax3.errorbar(x=epoch_vec,y=[np.median(x_valid_test)]*len(epoch_vec), yerr=[np.std(x_valid_test)]*len(epoch_vec),label=d_label)
-            # else:
-            #   if 'GPR' not in d_label:
-            #       ax1.plot(x_train, label=d_label)
-            #       ax2.errorbar(x=epoch_vec,y=x_test.median(axis=1), yerr=x_test.std(axis=1), label=d_label)
-            #   else:
-            #       ax2.errorbar(x=epoch_vec,y=[np.median(x_test)]*len(epoch_vec), yerr=[np.std(x_test)]*len(epoch_vec), label=d_label)
-            #   if many_epochs:
-            #       if 'GPR' not in d_label:
-            #           ax3.errorbar(x=epoch_vec,y=x_valid_test.median(axis=1), yerr=x_valid_test.std(axis=1), label=d_label)
-            #           x_kl_test = np.load(d+"/kl_vec_inv_clean_test.npy")
-            #           for kk in plot_state_indices:
-            #               ax4.errorbar(x=epoch_vec,y=np.median(x_kl_test[:,:,kk],axis=1), yerr=np.std(x_kl_test[:,:,kk],axis=1), label=d_label)
-            #       else:
-            #           ax3.errorbar(x=epoch_vec,y=[np.median(x_valid_test)]*len(epoch_vec), yerr=[np.std(x_valid_test)]*len(epoch_vec),label=d_label)
+			if many_epochs:
+				x_valid_test = np.loadtxt(d+"/prediction_validity_time_clean_test.txt",ndmin=2)
+				if 'GPR' not in d_label:
+					x_valid_test = pd.DataFrame(x_valid_test)
+			# if win:
+			if 'GPR' not in d_label:
+				ax1.plot(x_train.rolling(win).mean(), label=d_label)
+				ax2.errorbar(x=epoch_vec,y=x_test.median(axis=1).rolling(win).mean(), yerr=x_test.std(axis=1), label=d_label)
+			else:
+				ax2.errorbar(x=epoch_vec,y=[np.median(x_test)]*len(epoch_vec), yerr=[np.std(x_test)]*len(epoch_vec), label=d_label)
+			if many_epochs:
+				if 'GPR' not in d_label:
+					ax3.errorbar(x=epoch_vec,y=x_valid_test.median(axis=1).rolling(win).mean(), yerr=x_valid_test.std(axis=1), label=d_label)
+					x_kl_test = np.load(d+"/kl_vec_inv_clean_test.npy")
+					for kk in plot_state_indices:
+						ax4.errorbar(x=epoch_vec,y=pd.DataFrame(np.median(x_kl_test[:,:,kk],axis=1)).rolling(win).mean().loc[:,0], yerr=np.std(x_kl_test[:,:,kk],axis=1), label=d_label)
+				else:
+					ax3.errorbar(x=epoch_vec,y=[np.median(x_valid_test)]*len(epoch_vec), yerr=[np.std(x_valid_test)]*len(epoch_vec),label=d_label)
+			# else:
+			#   if 'GPR' not in d_label:
+			#       ax1.plot(x_train, label=d_label)
+			#       ax2.errorbar(x=epoch_vec,y=x_test.median(axis=1), yerr=x_test.std(axis=1), label=d_label)
+			#   else:
+			#       ax2.errorbar(x=epoch_vec,y=[np.median(x_test)]*len(epoch_vec), yerr=[np.std(x_test)]*len(epoch_vec), label=d_label)
+			#   if many_epochs:
+			#       if 'GPR' not in d_label:
+			#           ax3.errorbar(x=epoch_vec,y=x_valid_test.median(axis=1), yerr=x_valid_test.std(axis=1), label=d_label)
+			#           x_kl_test = np.load(d+"/kl_vec_inv_clean_test.npy")
+			#           for kk in plot_state_indices:
+			#               ax4.errorbar(x=epoch_vec,y=np.median(x_kl_test[:,:,kk],axis=1), yerr=np.std(x_kl_test[:,:,kk],axis=1), label=d_label)
+			#       else:
+			#           ax3.errorbar(x=epoch_vec,y=[np.median(x_valid_test)]*len(epoch_vec), yerr=[np.std(x_valid_test)]*len(epoch_vec),label=d_label)
 
-            # try:
-            #   gp_label = [x for x in d_label.split('_') if 'epsBad' in x][0]
-            #   ax2.plot([0,n_vals-1],[gpr1_test,gpr1_test],label='GPR 1 ' + gp_label)
-            #   ax2.plot([0,n_vals-1],[gpr2_test,gpr2_test],label='GPR 2 '+gp_label)
-            #   ax3.plot([0,n_vals-1],[gpr1_valid_test,gpr1_valid_test],label='GPR 1 ' + gp_label)
-            #   ax3.plot([0,n_vals-1],[gpr2_valid_test,gpr2_valid_test],label='GPR 2 ' + gp_label)
-            # except:
-            #   pass
+			# try:
+			#   gp_label = [x for x in d_label.split('_') if 'epsBad' in x][0]
+			#   ax2.plot([0,n_vals-1],[gpr1_test,gpr1_test],label='GPR 1 ' + gp_label)
+			#   ax2.plot([0,n_vals-1],[gpr2_test,gpr2_test],label='GPR 2 '+gp_label)
+			#   ax3.plot([0,n_vals-1],[gpr1_valid_test,gpr1_valid_test],label='GPR 1 ' + gp_label)
+			#   ax3.plot([0,n_vals-1],[gpr2_valid_test,gpr2_valid_test],label='GPR 2 ' + gp_label)
+			# except:
+			#   pass
 
-        ax2.legend(fontsize=6, handlelength=2, loc='upper right')
-            # x = np.loadtxt(d+"/loss_vec_test.txt")
-            # ax3.plot(x, label=d_label)
-        ax4.set_xlabel('Epochs')
-        ax3.set_xlabel('Epochs')
-        ax2.set_xlabel('Epochs')
-        ax1.set_xlabel('Epochs')
+		ax2.legend(fontsize=6, handlelength=2, loc='upper right')
+			# x = np.loadtxt(d+"/loss_vec_test.txt")
+			# ax3.plot(x, label=d_label)
+		ax4.set_xlabel('Epochs')
+		ax3.set_xlabel('Epochs')
+		ax2.set_xlabel('Epochs')
+		ax1.set_xlabel('Epochs')
 
-        ax1.set_ylabel('Error')
-        ax1.set_title('Train Error')
-        ax1.legend(fontsize=6, handlelength=2, loc='upper right')
-        ax2.set_ylabel('Error')
-        ax2.set_title('Test Error (predicting clean data)')
-        ax3.set_ylabel('Valid Time')
-        ax3.set_title('Test Validity Time')
-        ax4.set_title('KL-divergence of Invariant Density Approx')
+		ax1.set_ylabel('Error')
+		ax1.set_title('Train Error')
+		ax1.legend(fontsize=6, handlelength=2, loc='upper right')
+		ax2.set_ylabel('Error')
+		ax2.set_title('Test Error (predicting clean data)')
+		ax3.set_ylabel('Valid Time')
+		ax3.set_title('Test Validity Time')
+		ax4.set_title('KL-divergence of Invariant Density Approx')
 
-        # ax3.set_xlabel('Epochs')
-        # ax3.set_ylabel('Error')
-        # ax3.set_title('Test Error (on noisy data)')
-        # fig.suptitle("Comparison of training efficacy (trained on noisy data)")
-        fig.savefig(fname=output_fname+'_win'+str(win))
-        # plot in log scale
-        ax1.set_yscale('log')
-        ax2.set_yscale('log')
-        ax3.set_yscale('log')
-        ax4.set_yscale('log')
-        ax1.set_ylabel('log Error')
-        ax2.set_ylabel('log Error')
-        ax3.set_ylabel('Valid Time')
-        fig.savefig(fname=output_fname+'_log'+'_win'+str(win))
-        plt.close(fig)
+		# ax3.set_xlabel('Epochs')
+		# ax3.set_ylabel('Error')
+		# ax3.set_title('Test Error (on noisy data)')
+		# fig.suptitle("Comparison of training efficacy (trained on noisy data)")
+		fig.savefig(fname=output_fname+'_win'+str(win))
+		# plot in log scale
+		ax1.set_yscale('log')
+		ax2.set_yscale('log')
+		ax3.set_yscale('log')
+		ax4.set_yscale('log')
+		ax1.set_ylabel('log Error')
+		ax2.set_ylabel('log Error')
+		ax3.set_ylabel('Valid Time')
+		fig.savefig(fname=output_fname+'_log'+'_win'+str(win))
+		plt.close(fig)
 
 
 def run_3DVAR(y_clean, y_noisy, eta, G_assim, delta_t,
-        model, model_params, lr, output_dir,
-        H_obs_lowfi=None, H_obs_hifi=None, noisy_hifi=False,
-        inits=None, plot_state_indices=None,
-        max_plot=None, learn_assim=False, eps=None, cheat=False, new_cheat=False, h=1e-3, lr_G=0.0005,
-        G_update_interval=1, N_q_tries=1, n_epochs=1, eps_hifi=None,
-        full_sequence=False, optimization=None, opt_surfaces_only=False,
-        optim_full_state=True, random_nelder_inits=True, n_nelder_inits=1,
-        max_nelder_sols=None):
-
-    dtype = torch.FloatTensor
-
-    H_obs_lowfi = torch.FloatTensor(H_obs_lowfi)
-    # H_obs_hifi = torch.FloatTensor(H_obs_hifi)
-
-    # y_clean = torch.FloatTensor(y_clean)
-    # y_noisy = torch.FloatTensor(y_noisy)
-
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    if max_plot is None:
-        max_plot = int(np.floor(100./model_params['delta_t']))
-
-    n_plt = min(max_plot,y_clean.shape[0])
-    n_plt_start = y_clean.shape[0] - n_plt
-
-    if not plot_state_indices:
-        plot_state_indices = np.arange(y_clean.shape[1])
-
-    y_clean_lowfi = np.matmul(H_obs_lowfi.numpy(),y_clean.T).T
-    y_noisy_lowfi = np.matmul(H_obs_lowfi.numpy(),y_noisy.T).T
-
-    y_hifi = y_clean
-
-    # y_hifi = np.matmul(H_obs_hifi.numpy(),y_clean.T).T
-    # if noisy_hifi:
-    #   if eps_hifi is None:
-    #       eps_hifi = eps
-    #   # add decoupled noise of size epsilon to hifi measurements
-    #   y_hifi = y_hifi + eps_hifi*np.random.randn(y_hifi.shape[0],y_hifi.shape[1])
-
-    # if noisy_hifi:
-    #   y_hifi = np.matmul(H_obs_hifi.numpy(),y_noisy.T).T
-    # else:
-    #   y_hifi = np.matmul(H_obs_hifi.numpy(),y_clean.T).T
-
-    n_iters = y_clean.shape[0]
-    y_assim = np.zeros(y_clean.shape)
-    y_predictions = np.zeros(y_clean.shape)
-
-
-    if inits is None:
-        inits = get_lorenz_inits(n=1).squeeze()
-        # inits = y_noisy[0,:] + np.random.randn()
-        # inits = np.array([-5, 0, 30]) + 20*np.random.randn()
-
-    tspan = [0, 0.5*delta_t, delta_t]
-    # initialize G_assim variable
-    G_assim = torch.FloatTensor(G_assim)
-    if learn_assim and not full_sequence:
-        # G_assim = torch.zeros(y_clean.shape[1], y_clean_lowfi.shape[1]).type(dtype)
-        # init.normal_(G_assim, 0.0, 0.1)
-        G_assim = Variable(G_assim, requires_grad=True)
-
-
-    def f_mk(G, m_pred_now, meas_lowfi_now, H_obs_lowfi=H_obs_lowfi):
-        foo_assim = torch.mm( torch.eye(G.shape[0]) - torch.mm(G, H_obs_lowfi), m_pred_now.detach()) + torch.mm(G,meas_lowfi_now)
-        return foo_assim
-
-    def f_Lk_cheat_OLD(G, m_pred_now, meas_lowfi_now, meas_hifi_now, H_obs_lowfi=H_obs_lowfi):
-        mk = f_mk(G, m_pred_now, meas_lowfi_now)
-        Lk = ( torch.mm(H_obs_lowfi, mk).squeeze() -  meas_hifi_now.squeeze() ).pow(2).sum()
-        return Lk
-
-    def f_Lk_cheat(G, m_pred_now, meas_lowfi_now, meas_hifi_now):
-        mk = f_mk(G, m_pred_now, meas_lowfi_now)
-        Lk = ( mk.squeeze() -  meas_hifi_now.squeeze() ).pow(2).sum()
-        return Lk
-
-    def f_Lk(G, m_assim_prev2, meas_prev1, meas_now, H=H_obs_lowfi):
-        sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=m_assim_prev2.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-        m_pred_prev1 = torch.FloatTensor(sol.y.T[-1,:,None])
-        m_assim_prev1 = f_mk(G, m_pred_prev1, meas_prev1).detach().numpy().squeeze()
-
-        sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=m_assim_prev1.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-        m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
-        Lk = ( torch.mm(H, m_pred_now) -  meas_now ).pow(2).sum()
-        return Lk
-
-    def f_Loss_Sum_OLD(G_input, n_iters=n_iters, use_inits=inits):
-        loss = 0
-        loss_cheat = 0
-        y_assim = np.zeros(y_clean.shape)
-        for i in range(n_iters):
-            meas_now = torch.FloatTensor(y_noisy_lowfi[i,:,None])
-
-            # make prediction using previous state estimate
-            sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-            m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
-            y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
-
-            # Do the assimilation!
-            m_assim_now = f_mk(G_input, m_pred_now, meas_now)
-            # compute loss
-            if i > 200:
-                loss += ( torch.mm(H_obs_lowfi, m_pred_now).squeeze() -  meas_now.squeeze() ).pow(2).sum()
-                loss_cheat += ( m_pred_now.squeeze() -  torch.FloatTensor(y_clean[i,:]).squeeze() ).pow(2).sum()
-                # loss += ( torch.mm(H_obs_lowfi, m_assim_now).squeeze() -  meas_now.squeeze() ).pow(2).sum()
-                # loss_cheat += ( m_assim_now.squeeze() -  torch.FloatTensor(y_clean[i,:]).squeeze() ).pow(2).sum()
-            # loss += ( torch.mm(H_obs_lowfi, m_pred_now).squeeze() -  meas_now.squeeze() ).pow(2).sum()
-
-            # set inits
-            use_inits = m_assim_now.detach().numpy().squeeze()
-
-            y_assim[i,:] = use_inits
-
-        # pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
-        return loss/n_iters
-
-    def f_Loss_Sum(G_input, n_iters=n_iters, use_inits=inits):
-        print('G=',G_input)
-        if type(G_input) is not torch.Tensor:
-            G_input = torch.FloatTensor(G_input[:,None])
-
-        in_stationary = False
-        total_loss = 0
-        stationary_loss = np.inf
-        y_assim = np.zeros(y_clean.shape)
-        for i in range(n_iters):
-            meas_now = torch.FloatTensor(y_noisy_lowfi[i,:,None])
-
-            # make prediction using previous state estimate
-            sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-            m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
-            y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
-
-            # Do the assimilation!
-            m_assim_now = f_mk(G_input, m_pred_now, meas_now)
-
-            # set inits
-            use_inits = m_assim_now.detach().numpy().squeeze()
-
-            # compute loss
-            tmp_loss = ( torch.mm(H_obs_lowfi, m_pred_now).squeeze() -  meas_now.squeeze() ).pow(2).sum()
-            total_loss += tmp_loss
-
-            if not in_stationary and (tmp_loss<=eps):
-                in_stationary = True
-                stationary_loss = 0
-
-            if in_stationary:
-                stationary_loss += tmp_loss
-
-            y_assim[i,:] = use_inits
-
-            if any(abs(m_assim_now) > 1000):
-                print('Model is blowing up! Abort!')
-                print(m_assim_now)
-                n_iters = i
-                break
-
-        # pdb.set_trace()
-        if in_stationary:
-            loss = stationary_loss
-        else:
-            loss = total_loss
-
-        print('Loss=',loss/n_iters)
-        # pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
-        return loss/n_iters
-
-
-    def f_Loss_PartialState(G_input, partial_traj, n_max, use_inits=inits):
-        print('G=',G_input)
-        if type(G_input) is not torch.Tensor:
-            G_input = torch.FloatTensor(G_input[:,None])
-
-        in_stationary = False
-        total_loss = 0
-        stationary_loss = np.inf
-        y_assim = np.zeros(y_clean.shape)
-        for i in range(n_max):
-            meas_now = torch.FloatTensor(partial_traj[i,:,None])
-
-            # make prediction using previous state estimate
-            sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-            m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
-            # y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
-
-            # Do the assimilation!
-            m_assim_now = f_mk(G_input, m_pred_now, meas_now)
-
-            # set inits
-            use_inits = m_assim_now.detach().numpy().squeeze()
-
-            # compute loss
-            tmp_loss = ( torch.mm(H_obs_lowfi, m_pred_now).squeeze() -  meas_now.squeeze() ).pow(2).sum()
-            total_loss += tmp_loss
-
-            if not in_stationary and (tmp_loss<=eps):
-                in_stationary = True
-                stationary_loss = 0
-
-            if in_stationary:
-                stationary_loss += tmp_loss
-
-            # y_assim[i,:] = use_inits
-
-            if any(abs(m_assim_now) > 1000):
-                print('Model is blowing up! Abort!')
-                print(m_assim_now)
-                # n_iters = i
-                break
-
-        # pdb.set_trace()
-        if in_stationary:
-            loss = stationary_loss
-        else:
-            loss = total_loss
-
-        print('Loss=',loss/i)
-        # pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
-        return (loss.numpy()/i, total_loss.numpy()/i)
-
-
-    def f_Loss_FullState(G_input, partial_traj, full_traj, n_max, use_inits=inits):
-        print('G=',G_input)
-        if type(G_input) is not torch.Tensor:
-            G_input = torch.FloatTensor(G_input[:,None])
-
-        in_stationary = False
-        total_loss = 0
-        stationary_loss = np.inf
-        y_assim = np.zeros(y_clean.shape)
-        for i in range(n_max):
-            true_now = torch.FloatTensor(full_traj[i,:,None])
-            meas_now = torch.FloatTensor(partial_traj[i,:,None])
-
-            # make prediction using previous state estimate
-            sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-            m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
-            # y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
-
-            # Do the assimilation!
-            m_assim_now = f_mk(G_input, m_pred_now, meas_now)
-
-            # set inits
-            use_inits = m_assim_now.detach().numpy().squeeze()
-
-            # compute loss
-            tmp_loss = ( m_assim_now.squeeze() -  true_now.squeeze() ).pow(2).sum()
-            total_loss += tmp_loss
-
-            if not in_stationary and (tmp_loss<=eps):
-                in_stationary = True
-                stationary_loss = 0
-
-            if in_stationary:
-                stationary_loss += tmp_loss
-
-            # y_assim[i,:] = use_inits
-
-            if any(abs(m_assim_now) > 1000):
-                print('Model is blowing up! Abort!')
-                print(m_assim_now)
-                # n_iters = i
-                break
-
-        # pdb.set_trace()
-        if in_stationary:
-            loss = stationary_loss
-        else:
-            loss = total_loss
-
-        print('Loss=',loss/i)
-        # pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
-        return (loss.numpy()/i, total_loss.numpy()/i)
-
-
-    print('G_assim:', G_assim)
-    # print('Total Loss for G:', f_Loss_Sum(G_assim))
-    if opt_surfaces_only:
-        tvec = [10,50,100]
-        tvec_dict = {t: np.int(t/model_params['delta_t']) for t in tvec}
-        xgrid = np.linspace(-0.1,0.3,50)
-        ygrid = np.linspace(-0.1,0.3,50)
-        tmax = max(tvec)
-        t_span_opt = np.arange(0, tmax, model_params['delta_t'])
-        N_trajs = 1
-        for n_traj in range(N_trajs):
-            L_grid_PartialState = np.zeros((len(tvec),len(xgrid),len(ygrid)))
-            L_grid_FullState = np.zeros((len(tvec),len(xgrid),len(ygrid)))
-            L_grid_PartialState_total = np.zeros((len(tvec),len(xgrid),len(ygrid)))
-            L_grid_FullState_total = np.zeros((len(tvec),len(xgrid),len(ygrid)))
-            G_grid = np.zeros((len(tvec),len(xgrid),len(ygrid),3))
-            v0_true = get_lorenz_inits(n=1).squeeze()
-            v0_3dvar = get_lorenz_inits(n=1).squeeze()
-            sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(t_span_opt[0],t_span_opt[-1]), y0=v0_true, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=t_span_opt)
-            true_traj = torch.FloatTensor(sol.y.T)
-            true_partial = torch.mm(true_traj,H_obs_lowfi.t())
-            noisy_partial_traj = true_partial + eps*torch.FloatTensor(np.random.randn(true_partial.shape[0],true_partial.shape[1]))
-            i = -1
-            for x in xgrid:
-                i += 1
-                j = -1
-                for y in ygrid:
-                    j += 1
-                    print('Solving for (x,y)=',x,y)
-                    # G = torch.FloatTensor(np.array([[x,y,0.00351079]]).T)
-                    G = torch.FloatTensor(np.array([[x,y,0.]]).T)
-                    tc = -1
-                    for t in tvec_dict:
-                        tc += 1
-                        n_max = tvec_dict[t]
-                        (L_grid_PartialState[tc,i,j], L_grid_PartialState_total[tc,i,j]) = f_Loss_PartialState(G, noisy_partial_traj, n_max=n_max, use_inits=v0_3dvar)
-                        (L_grid_FullState[tc,i,j], L_grid_FullState_total[tc,i,j]) = f_Loss_FullState(G, noisy_partial_traj, true_traj, n_max=n_max, use_inits=v0_3dvar)
-                        # L_grid[tc,i,j] = f_Loss_Sum(G)
-                        G_grid[tc,i,j,:] = G.numpy().squeeze()
-
-            np.save(output_dir+'/L_grid_PartialState_'+str(n_traj), L_grid_PartialState)
-            np.save(output_dir+'/L_grid_FullState_'+str(n_traj), L_grid_FullState)
-            np.save(output_dir+'/L_grid_PartialStateTotal_'+str(n_traj), L_grid_PartialState_total)
-            np.save(output_dir+'/L_grid_FullStateTotal_'+str(n_traj), L_grid_FullState_total)
-            np.save(output_dir+'/G_grid', G_grid)
-
-            # stationary loss
-            def f_make_plots(outputname, Lpartial, Lfull, Lthresh=1.5, cmap='gist_ncar_r'):
-                Lfull = np.copy(Lfull)
-                Lpartial = np.copy(Lpartial)
-                Lfull[Lfull>Lthresh] = Lthresh
-                Lpartial[Lpartial>Lthresh] = Lthresh
-                tc = -1
-                for my_t in tvec_dict:
-                    tc += 1
-                    fig, axlist = plt.subplots(nrows=1, ncols=2, figsize=(12,6))
-                    ax0 = axlist[0]
-                    im0 = ax0.imshow(Lfull[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
-                    ax0.set_xlabel('K_2')
-                    ax0.set_ylabel('K_1')
-                    min_val = np.min(Lfull[tc,:,:].squeeze())
-                    my_min = np.squeeze(G_grid[tc,:].squeeze()[np.where(Lfull[tc,:,:].squeeze()==min_val)])
-                    ax0.set_title('Full-State \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
-                    fig.colorbar(im0, ax=ax0)
-
-                    ax1 = axlist[1]
-                    im1 = ax1.imshow(Lpartial[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
-                    ax1.set_xlabel('K_2')
-                    ax1.set_ylabel('K_1')
-                    min_val = np.min(Lpartial[tc,:,:].squeeze())
-                    my_min = np.squeeze(G_grid[tc,:].squeeze()[np.where(Lpartial[tc,:,:].squeeze()==min_val)])
-                    ax1.set_title('Partial-State \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
-                    fig.colorbar(im1, ax=ax1)
-
-                    fig.suptitle('Trajectory {0}, Length {1}, Stationary-Loss Surface'.format(n_traj, my_t))
-                    fig.savefig(fname=output_dir+outputname+str(n_traj)+'_length'+str(my_t))
-                    plt.close(fig)
-                return
-
-            f_make_plots('/global_StationaryLoss_surface', L_grid_PartialState, L_grid_FullState, Lthresh=1.5)
-            f_make_plots('/global_TotalLoss_surface', L_grid_PartialState_total, L_grid_FullState_total, Lthresh=12)
-            f_make_plots('/global_StationaryLoss_surface_noThresh', L_grid_PartialState, L_grid_FullState, Lthresh=np.inf)
-            f_make_plots('/global_TotalLoss_surface_noThresh', L_grid_PartialState_total, L_grid_FullState_total, Lthresh=np.inf)
-
-
-            # now show total loss
-            # L_grid_FullState_total[L_grid_FullState_total>12] = 12
-            # L_grid_PartialState_total[L_grid_PartialState_total>12] = 12
-            # tc = -1
-            # cmap = 'gist_ncar_r'
-            # for my_t in tvec_dict:
-            #   tc += 1
-            #   fig, axlist = plt.subplots(nrows=1, ncols=2, figsize=(12,6))
-            #   ax0 = axlist[0]
-            #   im0 = ax0.imshow(L_grid_FullState_total[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
-            #   ax0.set_xlabel('K_2')
-            #   ax0.set_ylabel('K_1')
-            #   min_val = np.min(L_grid_FullState_total[tc,:,:].squeeze())
-            #   my_min = np.squeeze(G_grid[tc,:].squeeze()[np.where(L_grid_FullState_total[tc,:,:].squeeze()==min_val)])
-            #   ax0.set_title('Full-State \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
-            #   fig.colorbar(im0, ax=ax0)
-
-            #   ax1 = axlist[1]
-            #   im1 = ax1.imshow(L_grid_PartialState_total[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
-            #   ax1.set_xlabel('K_2')
-            #   ax1.set_ylabel('K_1')
-            #   min_val = np.min(L_grid_PartialState_total[tc,:,:].squeeze())
-            #   my_min = np.squeeze(G_grid[tc,:].squeeze()[np.where(L_grid_PartialState_total[tc,:,:].squeeze()==min_val)])
-            #   ax1.set_title('Partial-State \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
-            #   fig.colorbar(im1, ax=ax1)
-
-            #   fig.suptitle('Trajectory {0}, Length {1}, Total-Loss Surface'.format(n_traj, my_t))
-            #   fig.savefig(fname=output_dir+'/global_TotalLoss_surface'+str(n_traj)+'_length'+str(my_t))
-            #   plt.close(fig)
-
-            # return
-
-
-    ### optimize G over entire sequence
-    G_opt = {}
-    if full_sequence:
-        # initialize storage variables
-        loss_history = np.zeros(n_epochs)
-        dL_history = np.zeros(n_epochs)
-        G_assim_history = np.zeros((n_epochs, G_assim.shape[0]))
-        G_assim_history_running_mean = np.zeros((n_epochs, G_assim.shape[0]))
-        if optimization == 'NelderMead':
-            if optim_full_state:
-                evalG = lambda G: f_Loss_FullState(G, partial_traj=torch.FloatTensor(y_noisy_lowfi), full_traj=torch.FloatTensor(y_clean), n_max=n_iters, use_inits=inits)[0]
-            else:
-                evalG = lambda G: f_Loss_PartialState(G, partial_traj=torch.FloatTensor(y_noisy_lowfi), n_max=n_iters, use_inits=inits)[0]
-            fmin = np.inf
-            # G0 = np.array([1,1,1])
-            # opt = scipy.optimize.fmin(func=evalG, x0=G0, full_output=True)
-            # if opt[1] <= fmin:
-            #   fmin = opt[1]
-            #   Gbest = opt[0]
-            # G_opt['opt_struct'] = []
-            G_opt['inits'] = np.zeros((n_nelder_inits,G_assim.shape[0]))
-            G_opt['final'] = np.zeros((n_nelder_inits,G_assim.shape[0]))
-            G_opt['optval'] = np.zeros((n_nelder_inits,G_assim.shape[0]))
-            for i_nm in range(n_nelder_inits):
-                if random_nelder_inits:
-                    G0 = np.random.multivariate_normal(mean=[0,0,0], cov=(0.1**2)*np.eye(3)).T[:,None]
-                else:
-                    G0 = G_assim.numpy()
-                print('NM Init=',G0)
-
-                # KoptHistory = [] #np.zeros((1, G_assim.shape[0]))
-                # def store(G):
-                #   KoptHistory.append(G)
-                # opt = scipy.optimize.fmin(func=evalG, x0=G0.squeeze(), callback=store, maxfun=max_nelder_sols, full_output=True, disp=True)
-
-                opt = scipy.optimize.fmin(func=evalG, x0=G0.squeeze(), maxfun=max_nelder_sols, full_output=True, disp=True)
-                # G_opt['opt_struct'].append(opt)
-                G_opt['inits'][i_nm,:] = G0.squeeze()
-                G_opt['final'][i_nm,:] = opt[0].squeeze()
-                G_opt['optval'][i_nm,:] = opt[1].squeeze()
-                print('NM solution=', opt[0])
-                if opt[1] <= fmin:
-                    fmin = opt[1]
-                    Gbest = opt[0]
-            G_assim_history[:,:] = Gbest
-            G_assim_history_running_mean[:,:] = Gbest
-        else:
-            for kk in range(n_epochs):
-                print('Iter',kk,'G_assim Pre:', G_assim)
-                use_inits = inits #get_lorenz_inits(n=1).squeeze()
-                LkG = f_Loss_Sum(G_assim, use_inits=use_inits)
-                # perturb
-                Q = np.random.randn(*G_assim.shape)
-                Q = torch.FloatTensor(Q/np.linalg.norm(Q,'fro'))
-                Gplus = G_assim + h*Q
-                Gminus = G_assim - h*Q
-
-                # if any(abs(Gplus)>1):
-                #   print('Gplus is violating constraint. Mapping to constraint boundary.')
-                # Gplus[Gplus>1] = 1
-                # Gplus[Gplus<-1] = -1
-
-                LkPlus = np.log(f_Loss_Sum(Gplus, use_inits=use_inits))
-                LkMinus = np.log(f_Loss_Sum(Gminus, use_inits=use_inits))
-
-                # dL = ( LkPlus - LkG )/h
-                dL = ( LkPlus - LkMinus )/(2*h)
-
-                G_assim -= lr_G * dL * Q
-
-                # if any(abs(G_assim)>1):
-                #   print('G_assim is violating constraint. Mapping to constraint boundary.')
-                # G_assim[G_assim>1] = 1
-                # G_assim[G_assim<-1] = -1
-
-                print('LkMinus:', LkMinus)
-                print('LkPlus:', LkPlus)
-                print('dL:', dL)
-                print('G_assim Post:', G_assim)
-
-                # store progress
-                dL_history[kk] = dL
-                loss_history[kk] = LkG
-                G_assim_history[kk,:] = G_assim.detach().numpy().squeeze()
-                G_assim_history_running_mean[kk,:] = np.mean(G_assim_history[:kk,:], axis=0)
-
-            np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean,
-                model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G)
-    else:
-        # Standard Gradient Descent
-        # initialize storage variables
-        loss_history = np.zeros(n_iters)
-        dL_history = np.zeros(n_iters)
-        G_assim_history = np.zeros((y_clean.shape[0], G_assim.shape[0]))
-        G_assim_history_running_mean = np.zeros((y_clean.shape[0], G_assim.shape[0]))
-        ### NEW code for updating G_assim
-        for kk in range(n_epochs):
-            use_inits = inits
-            for i in range(n_iters):
-                meas_now = torch.FloatTensor(y_noisy_lowfi[i,:,None])
-
-                # make prediction using previous state estimate
-                # pdb.set_trace()
-                sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
-                m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
-                y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
-
-                # Do the assimilation!
-                try:
-                    m_assim_now = f_mk(G_assim, m_pred_now, meas_now)
-                except:
-                    pdb.set_trace()
-                G_assim_history[i,:] = G_assim.detach().numpy().squeeze()
-                G_assim_history_running_mean[i,:] = np.mean(G_assim_history[:i,:], axis=0)
-                use_inits = m_assim_now.detach().numpy().squeeze()
-                y_assim[i,:] = use_inits
-
-                # compute loss
-                if learn_assim:
-                    if cheat:
-                        meas_hifi_now = torch.FloatTensor(y_hifi[i,:])
-                        meas_lowfi_now = meas_now
-                        loss = f_Lk_cheat(G_assim, m_pred_now, meas_lowfi_now, meas_hifi_now)
-                        loss.backward()
-                        G_assim.data -= lr * G_assim.grad.data
-                        G_assim.grad.data.zero_()
-                        loss_history[i] = loss
-                        # print('Iter',i,'Loss:',loss)
-                    else:
-                        if new_cheat:
-                            H = H_obs_hifi
-                            meas_now = torch.FloatTensor(y_hifi[i,:])
-                        else:
-                            H = H_obs_lowfi
-
-                        if i>1:
-                            # Gather historical data for propagation
-                            m_assim_prev2 = y_assim[i-2,:] #basically \hat{m}_{i-2}
-                            meas_prev1 = torch.FloatTensor(y_noisy_lowfi[i-1,:,None])
-
-                            LkG = f_Lk(G_assim, m_assim_prev2, meas_prev1, meas_now, H=H)
-                            for iq in range(N_q_tries):
-                                # sample a G-like matrix for approximating a random directional derivative
-                                Q = np.random.randn(*G_assim.shape)
-                                Q = torch.FloatTensor(Q/np.linalg.norm(Q,'fro'))
-                                Gplus = G_assim + h*Q
-
-                                # approximate directional derivative
-                                LkGplus = f_Lk(Gplus, m_assim_prev2, meas_prev1, meas_now, H=H)
-                                if iq==0 or (LkGplus < LkGplus_best):
-                                    LkGplus_best = LkGplus
-                                    Q_best = Q
-
-
-                            # update G_assim by random approximate directional derivative
-                            dL = ( LkGplus_best - LkG )/h
-                            Gdiff += lr_G * dL * Q_best
-                            if (i % G_update_interval)==0:
-                                G_assim.data -= Gdiff
-                                Gdiff = 0*G_assim.data
-                            loss_history[i] = LkG
-                            dL_history[i] = dL
-                        else:
-                            Gdiff = 0*G_assim.data
-                    # save intermittently during training
-                    if (i % 50) == 0:
-                        np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean, y_assim=y_assim, y_predictions=y_predictions,
-                            model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G, i=i, kk=kk)
-
-
-    ## Done running 3DVAR, now summarize
-    if learn_assim:
-        if full_sequence:
-            fig, (axlist) = plt.subplots(nrows=3, ncols=1)
-
-            # plot running average of G_assim
-            for kk in range(len(plot_state_indices)):
-                axlist[0].plot(G_assim_history_running_mean[:,plot_state_indices[kk]],label='G_{0}'.format(plot_state_indices[kk]))
-                axlist[1].plot(G_assim_history[:,plot_state_indices[kk]],label='G_{0}'.format(plot_state_indices[kk]))
-            axlist[0].legend()
-            axlist[1].legend()
-            axlist[0].set_title('3DVAR Assimilation Matrix Convergence (Running Mean)')
-            axlist[1].set_title('3DVAR Assimilation Matrix Sequence')
-
-            axlist[2].plot(loss_history/n_iters, label='MSE')
-            # axlist[2].plot([eps for _ in range(len(loss_history))], color = 'black', linestyle='--', label = r'$\epsilon$')
-            axlist[2].set_title('Assimilation MSE')
-            axlist[2].set_xlabel('time')
-            axlist[2].set_yscale('log')
-        else:
-            fig, (axlist) = plt.subplots(nrows=2+len(plot_state_indices), ncols=1,
-                                figsize = [10, 12])
-
-            # plot running average of G_assim
-            for kk in range(len(plot_state_indices)):
-                t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
-                axlist[0].plot(t_plot, G_assim_history_running_mean[:,plot_state_indices[kk]],label='G_{0}'.format(plot_state_indices[kk]))
-                axlist[1].plot(t_plot, G_assim_history[:,plot_state_indices[kk]],label='G_{0}'.format(plot_state_indices[kk]))
-            # axlist[2].plot(t_plot, loss_history)
-            # axlist[2].plot(t_plot, dL_history)
-
-            axlist[0].legend()
-            axlist[1].legend()
-            axlist[0].set_xticklabels([])
-            # axlist[1].set_xticklabels([])
-
-            axlist[0].set_title('3DVAR Assimilation Matrix Convergence (Running Mean)')
-            axlist[1].set_title('3DVAR Assimilation Matrix Sequence')
-            # axlist[2].set_title('Loss Sequence')
-            # axlist[2].set_ylabel('dL')
-
-            # axlist[2].set_yscale('log')
-
-            for kk in range(len(plot_state_indices)):
-                ax = axlist[kk+2]
-                t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
-                ax.plot(t_plot, y_clean[:,plot_state_indices[kk]], color='red', label='clean data')
-                ax.plot(t_plot, y_predictions[:,plot_state_indices[kk]], color='black', label='3DVAR')
-                ax.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)')
-
-            ax.set_xlabel('time')
-
-        fig.savefig(fname=output_dir+'/3DVAR_assimilation_matrix_learning_convergence')
-        plt.close(fig)
-
-
-    if full_sequence:
-        np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean,
-        model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G, G_opt=G_opt)
-        return G_assim_history_running_mean[-1,:]
-
-    ## PLOTS
-    fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
-    if not isinstance(ax_list,np.ndarray):
-        ax_list = [ax_list]
-    for kk in range(len(ax_list)):
-        ax1 = ax_list[kk]
-        t_plot = np.arange(0,round(len(y_clean[n_plt_start:,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
-        t_max = round(len(y_clean[:,0])*model_params['delta_t'],8)
-        t_plot = t_plot + (t_max - max(t_plot))
-        # ax1.scatter(t_plot, y_noisy[:n_plt,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
-        ax1.plot(t_plot, y_clean[n_plt_start:,plot_state_indices[kk]], color='red', label='clean data')
-        ax1.plot(t_plot, y_predictions[n_plt_start:,plot_state_indices[kk]], color='black', label='3DVAR')
-        ax1.set_xlabel('time')
-        ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)')
-    ax_list[0].legend()
-    fig.suptitle('3DVAR output')
-    fig.savefig(fname=output_dir+'/3DVAR_timeseries')
-    plt.close(fig)
-
-    fig, (ax0, ax1) = plt.subplots(nrows=2,ncols=1, sharex=True)
-
-    # ax0 is for assimilation errors...Cumulative AVG and Pointwise, meas-only and all states
-    # ax1 is for prediction errors...Cumulative AVG and Pointwise, all states
-    t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
-
-    # these give the mean squared error
-    pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
-    pw_assim_errors_OBS = np.linalg.norm(np.matmul(H_obs_lowfi.numpy(),y_assim.T).T - y_clean_lowfi, axis=1, ord=2)**2
-    pw_pred_errors = np.linalg.norm(y_predictions - y_clean, axis=1, ord=2)**2
-    pw_pred_errors_OBS = np.linalg.norm(np.matmul(H_obs_lowfi.numpy(),y_predictions.T).T - y_clean_lowfi, axis=1, ord=2)**2
-
-    print('Mean(pw_assim_errors) = ', np.mean(pw_assim_errors))
-
-    running_pred_errors = np.zeros(pw_pred_errors.shape)
-    running_pred_errors_OBS = np.zeros(pw_pred_errors.shape)
-    running_assim_errors = np.zeros(pw_pred_errors.shape)
-    running_assim_errors_OBS = np.zeros(pw_pred_errors.shape)
-
-    for k in range(running_pred_errors.shape[0]):
-        running_pred_errors[k] = np.mean(pw_pred_errors[:(k+1)])
-        running_pred_errors_OBS[k] = np.mean(pw_pred_errors_OBS[:(k+1)])
-        running_assim_errors[k] = np.mean(pw_assim_errors[:(k+1)])
-        running_assim_errors_OBS[k] = np.mean(pw_assim_errors_OBS[:(k+1)])
-
-    ax0.plot(t_plot, pw_pred_errors, color='blue', label='Full-State Point-wise')
-    if eps:
-        ax0.plot(t_plot, [eps for _ in range(len(t_plot))], color = 'black', linestyle='--', label = r'$\epsilon$')
-    # ax0.scatter(t_plot, pw_pred_errors_OBS[:n_plt], color='blue', label='Observed-State Point-wise')
-    # ax0.plot(t_plot, running_pred_errors, linestyle='--', color='black', label='Full-State Cumulative')
-    # ax0.plot(t_plot, running_pred_errors_OBS[:n_plt], linestyle=':', color='black', label='Observed-State Cumulative')
-    ax0.set_ylabel('MSE')
-    ax0.legend()
-    ax0.set_title('1-step Prediction Errors')
-
-    ax1.plot(t_plot, pw_assim_errors, linestyle='--', color='blue', label='Full-State Point-wise')
-    if eps:
-        ax1.plot(t_plot, [eps for _ in range(len(t_plot))], color = 'black', linestyle='--', label = r'$\epsilon$')
-    # ax1.plot(t_plot, running_assim_errors, linestyle='--', color='black', label='Full-State Cumulative')
-    ax1.set_ylabel('MSE')
-    ax1.legend()
-    ax1.set_title('Assimilation Errors')
-    ax1.set_xlabel('time')
-
-    fig.suptitle('3DVAR error convergence')
-    fig.savefig(fname=output_dir+'/3DVAR_error_convergence')
-
-    ax0.set_yscale('log')
-    ax0.set_ylabel('log MSE')
-    ax1.set_yscale('log')
-    ax1.set_ylabel('log MSE')
-    fig.savefig(fname=output_dir+'/3DVAR_error_convergence_log')
-    plt.close(fig)
-
-    np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean, y_assim=y_assim, y_predictions=y_predictions,
-        pw_assim_errors=pw_assim_errors, pw_assim_errors_OBS=pw_assim_errors_OBS, pw_pred_errors=pw_pred_errors, pw_pred_errors_OBS=pw_pred_errors_OBS,
-        model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G)
-
-    return G_assim
+		model, model_params, lr, output_dir,
+		H_obs_lowfi=None, H_obs_hifi=None, noisy_hifi=False,
+		inits=None, plot_state_indices=None,
+		max_plot=None, learn_assim=False, eps=None, cheat=False, new_cheat=False, h=1e-3, lr_G=0.0005,
+		G_update_interval=1, N_q_tries=1, n_epochs=1, eps_hifi=None,
+		full_sequence=False, optimization=None, opt_surfaces_only=False,
+		optim_full_state=True, random_nelder_inits=True, n_nelder_inits=1,
+		max_nelder_sols=None):
+
+	dtype = torch.FloatTensor
+
+	H_obs_lowfi = torch.FloatTensor(H_obs_lowfi)
+	# H_obs_hifi = torch.FloatTensor(H_obs_hifi)
+
+	# y_clean = torch.FloatTensor(y_clean)
+	# y_noisy = torch.FloatTensor(y_noisy)
+
+	if not os.path.exists(output_dir):
+		os.makedirs(output_dir)
+
+	if max_plot is None:
+		max_plot = int(np.floor(100./model_params['delta_t']))
+
+	n_plt = min(max_plot,y_clean.shape[0])
+	n_plt_start = y_clean.shape[0] - n_plt
+
+	if not plot_state_indices:
+		plot_state_indices = np.arange(y_clean.shape[1])
+
+	y_clean_lowfi = np.matmul(H_obs_lowfi.numpy(),y_clean.T).T
+	y_noisy_lowfi = np.matmul(H_obs_lowfi.numpy(),y_noisy.T).T
+
+	y_hifi = y_clean
+
+	# y_hifi = np.matmul(H_obs_hifi.numpy(),y_clean.T).T
+	# if noisy_hifi:
+	#   if eps_hifi is None:
+	#       eps_hifi = eps
+	#   # add decoupled noise of size epsilon to hifi measurements
+	#   y_hifi = y_hifi + eps_hifi*np.random.randn(y_hifi.shape[0],y_hifi.shape[1])
+
+	# if noisy_hifi:
+	#   y_hifi = np.matmul(H_obs_hifi.numpy(),y_noisy.T).T
+	# else:
+	#   y_hifi = np.matmul(H_obs_hifi.numpy(),y_clean.T).T
+
+	n_iters = y_clean.shape[0]
+	y_assim = np.zeros(y_clean.shape)
+	y_predictions = np.zeros(y_clean.shape)
+
+
+	if inits is None:
+		inits = get_lorenz_inits(n=1).squeeze()
+		# inits = y_noisy[0,:] + np.random.randn()
+		# inits = np.array([-5, 0, 30]) + 20*np.random.randn()
+
+	tspan = [0, 0.5*delta_t, delta_t]
+	# initialize G_assim variable
+	G_assim = torch.FloatTensor(G_assim)
+	if learn_assim and not full_sequence:
+		# G_assim = torch.zeros(y_clean.shape[1], y_clean_lowfi.shape[1]).type(dtype)
+		# init.normal_(G_assim, 0.0, 0.1)
+		G_assim = Variable(G_assim, requires_grad=True)
+
+
+	def f_mk(G, m_pred_now, meas_lowfi_now, H_obs_lowfi=H_obs_lowfi):
+		foo_assim = torch.mm( torch.eye(G.shape[0]) - torch.mm(G, H_obs_lowfi), m_pred_now.detach()) + torch.mm(G,meas_lowfi_now)
+		return foo_assim
+
+	def f_Lk_cheat_OLD(G, m_pred_now, meas_lowfi_now, meas_hifi_now, H_obs_lowfi=H_obs_lowfi):
+		mk = f_mk(G, m_pred_now, meas_lowfi_now)
+		Lk = ( torch.mm(H_obs_lowfi, mk).squeeze() -  meas_hifi_now.squeeze() ).pow(2).sum()
+		return Lk
+
+	def f_Lk_cheat(G, m_pred_now, meas_lowfi_now, meas_hifi_now):
+		mk = f_mk(G, m_pred_now, meas_lowfi_now)
+		Lk = ( mk.squeeze() -  meas_hifi_now.squeeze() ).pow(2).sum()
+		return Lk
+
+	def f_Lk(G, m_assim_prev2, meas_prev1, meas_now, H=H_obs_lowfi):
+		sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=m_assim_prev2.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+		m_pred_prev1 = torch.FloatTensor(sol.y.T[-1,:,None])
+		m_assim_prev1 = f_mk(G, m_pred_prev1, meas_prev1).detach().numpy().squeeze()
+
+		sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=m_assim_prev1.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+		m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
+		Lk = ( torch.mm(H, m_pred_now) -  meas_now ).pow(2).sum()
+		return Lk
+
+	def f_Loss_Sum_OLD(G_input, n_iters=n_iters, use_inits=inits):
+		loss = 0
+		loss_cheat = 0
+		y_assim = np.zeros(y_clean.shape)
+		for i in range(n_iters):
+			meas_now = torch.FloatTensor(y_noisy_lowfi[i,:,None])
+
+			# make prediction using previous state estimate
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+			m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
+			y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
+
+			# Do the assimilation!
+			m_assim_now = f_mk(G_input, m_pred_now, meas_now)
+			# compute loss
+			if i > 200:
+				loss += ( torch.mm(H_obs_lowfi, m_pred_now).squeeze() -  meas_now.squeeze() ).pow(2).sum()
+				loss_cheat += ( m_pred_now.squeeze() -  torch.FloatTensor(y_clean[i,:]).squeeze() ).pow(2).sum()
+				# loss += ( torch.mm(H_obs_lowfi, m_assim_now).squeeze() -  meas_now.squeeze() ).pow(2).sum()
+				# loss_cheat += ( m_assim_now.squeeze() -  torch.FloatTensor(y_clean[i,:]).squeeze() ).pow(2).sum()
+			# loss += ( torch.mm(H_obs_lowfi, m_pred_now).squeeze() -  meas_now.squeeze() ).pow(2).sum()
+
+			# set inits
+			use_inits = m_assim_now.detach().numpy().squeeze()
+
+			y_assim[i,:] = use_inits
+
+		# pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
+		return loss/n_iters
+
+	def f_Loss_Sum(G_input, n_iters=n_iters, use_inits=inits):
+		print('G=',G_input)
+		if type(G_input) is not torch.Tensor:
+			G_input = torch.FloatTensor(G_input[:,None])
+
+		in_stationary = False
+		total_loss = 0
+		stationary_loss = np.inf
+		y_assim = np.zeros(y_clean.shape)
+		for i in range(n_iters):
+			meas_now = torch.FloatTensor(y_noisy_lowfi[i,:,None])
+
+			# make prediction using previous state estimate
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+			m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
+			y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
+
+			# Do the assimilation!
+			m_assim_now = f_mk(G_input, m_pred_now, meas_now)
+
+			# set inits
+			use_inits = m_assim_now.detach().numpy().squeeze()
+
+			# compute loss
+			tmp_loss = ( torch.mm(H_obs_lowfi, m_pred_now).squeeze() -  meas_now.squeeze() ).pow(2).sum()
+			total_loss += tmp_loss
+
+			if not in_stationary and (tmp_loss<=eps):
+				in_stationary = True
+				stationary_loss = 0
+
+			if in_stationary:
+				stationary_loss += tmp_loss
+
+			y_assim[i,:] = use_inits
+
+			if any(abs(m_assim_now) > 1000):
+				print('Model is blowing up! Abort!')
+				print(m_assim_now)
+				n_iters = i
+				break
+
+		# pdb.set_trace()
+		if in_stationary:
+			loss = stationary_loss
+		else:
+			loss = total_loss
+
+		print('Loss=',loss/n_iters)
+		# pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
+		return loss/n_iters
+
+
+	def f_Loss_PartialState(G_input, partial_traj, n_max, use_inits=inits):
+		print('G=',G_input)
+		if type(G_input) is not torch.Tensor:
+			G_input = torch.FloatTensor(G_input[:,None])
+
+		in_stationary = False
+		total_loss = 0
+		stationary_loss = np.inf
+		y_assim = np.zeros(y_clean.shape)
+		for i in range(n_max):
+			meas_now = torch.FloatTensor(partial_traj[i,:,None])
+
+			# make prediction using previous state estimate
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+			m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
+			# y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
+
+			# Do the assimilation!
+			m_assim_now = f_mk(G_input, m_pred_now, meas_now)
+
+			# set inits
+			use_inits = m_assim_now.detach().numpy().squeeze()
+
+			# compute loss
+			tmp_loss = ( torch.mm(H_obs_lowfi, m_pred_now).squeeze() -  meas_now.squeeze() ).pow(2).sum()
+			total_loss += tmp_loss
+
+			if not in_stationary and (tmp_loss<=eps):
+				in_stationary = True
+				stationary_loss = 0
+
+			if in_stationary:
+				stationary_loss += tmp_loss
+
+			# y_assim[i,:] = use_inits
+
+			if any(abs(m_assim_now) > 1000):
+				print('Model is blowing up! Abort!')
+				print(m_assim_now)
+				# n_iters = i
+				break
+
+		# pdb.set_trace()
+		if in_stationary:
+			loss = stationary_loss
+		else:
+			loss = total_loss
+
+		print('Loss=',loss/i)
+		# pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
+		return (loss.numpy()/i, total_loss.numpy()/i)
+
+
+	def f_Loss_FullState(G_input, partial_traj, full_traj, n_max, use_inits=inits):
+		print('G=',G_input)
+		if type(G_input) is not torch.Tensor:
+			G_input = torch.FloatTensor(G_input[:,None])
+
+		in_stationary = False
+		total_loss = 0
+		stationary_loss = np.inf
+		y_assim = np.zeros(y_clean.shape)
+		for i in range(n_max):
+			true_now = torch.FloatTensor(full_traj[i,:,None])
+			meas_now = torch.FloatTensor(partial_traj[i,:,None])
+
+			# make prediction using previous state estimate
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+			m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
+			# y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
+
+			# Do the assimilation!
+			m_assim_now = f_mk(G_input, m_pred_now, meas_now)
+
+			# set inits
+			use_inits = m_assim_now.detach().numpy().squeeze()
+
+			# compute loss
+			tmp_loss = ( m_assim_now.squeeze() -  true_now.squeeze() ).pow(2).sum()
+			total_loss += tmp_loss
+
+			if not in_stationary and (tmp_loss<=eps):
+				in_stationary = True
+				stationary_loss = 0
+
+			if in_stationary:
+				stationary_loss += tmp_loss
+
+			# y_assim[i,:] = use_inits
+
+			if any(abs(m_assim_now) > 1000):
+				print('Model is blowing up! Abort!')
+				print(m_assim_now)
+				# n_iters = i
+				break
+
+		# pdb.set_trace()
+		if in_stationary:
+			loss = stationary_loss
+		else:
+			loss = total_loss
+
+		print('Loss=',loss/i)
+		# pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
+		return (loss.numpy()/i, total_loss.numpy()/i)
+
+
+	print('G_assim:', G_assim)
+	# print('Total Loss for G:', f_Loss_Sum(G_assim))
+	if opt_surfaces_only:
+		tvec = [10,50,100]
+		tvec_dict = {t: np.int(t/model_params['delta_t']) for t in tvec}
+		xgrid = np.linspace(-0.1,0.3,50)
+		ygrid = np.linspace(-0.1,0.3,50)
+		tmax = max(tvec)
+		t_span_opt = np.arange(0, tmax, model_params['delta_t'])
+		N_trajs = 1
+		for n_traj in range(N_trajs):
+			L_grid_PartialState = np.zeros((len(tvec),len(xgrid),len(ygrid)))
+			L_grid_FullState = np.zeros((len(tvec),len(xgrid),len(ygrid)))
+			L_grid_PartialState_total = np.zeros((len(tvec),len(xgrid),len(ygrid)))
+			L_grid_FullState_total = np.zeros((len(tvec),len(xgrid),len(ygrid)))
+			G_grid = np.zeros((len(tvec),len(xgrid),len(ygrid),3))
+			v0_true = get_lorenz_inits(n=1).squeeze()
+			v0_3dvar = get_lorenz_inits(n=1).squeeze()
+			sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(t_span_opt[0],t_span_opt[-1]), y0=v0_true, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=t_span_opt)
+			true_traj = torch.FloatTensor(sol.y.T)
+			true_partial = torch.mm(true_traj,H_obs_lowfi.t())
+			noisy_partial_traj = true_partial + eps*torch.FloatTensor(np.random.randn(true_partial.shape[0],true_partial.shape[1]))
+			i = -1
+			for x in xgrid:
+				i += 1
+				j = -1
+				for y in ygrid:
+					j += 1
+					print('Solving for (x,y)=',x,y)
+					# G = torch.FloatTensor(np.array([[x,y,0.00351079]]).T)
+					G = torch.FloatTensor(np.array([[x,y,0.]]).T)
+					tc = -1
+					for t in tvec_dict:
+						tc += 1
+						n_max = tvec_dict[t]
+						(L_grid_PartialState[tc,i,j], L_grid_PartialState_total[tc,i,j]) = f_Loss_PartialState(G, noisy_partial_traj, n_max=n_max, use_inits=v0_3dvar)
+						(L_grid_FullState[tc,i,j], L_grid_FullState_total[tc,i,j]) = f_Loss_FullState(G, noisy_partial_traj, true_traj, n_max=n_max, use_inits=v0_3dvar)
+						# L_grid[tc,i,j] = f_Loss_Sum(G)
+						G_grid[tc,i,j,:] = G.numpy().squeeze()
+
+			np.save(output_dir+'/L_grid_PartialState_'+str(n_traj), L_grid_PartialState)
+			np.save(output_dir+'/L_grid_FullState_'+str(n_traj), L_grid_FullState)
+			np.save(output_dir+'/L_grid_PartialStateTotal_'+str(n_traj), L_grid_PartialState_total)
+			np.save(output_dir+'/L_grid_FullStateTotal_'+str(n_traj), L_grid_FullState_total)
+			np.save(output_dir+'/G_grid', G_grid)
+
+			# stationary loss
+			def f_make_plots(outputname, Lpartial, Lfull, Lthresh=1.5, cmap='gist_ncar_r'):
+				Lfull = np.copy(Lfull)
+				Lpartial = np.copy(Lpartial)
+				Lfull[Lfull>Lthresh] = Lthresh
+				Lpartial[Lpartial>Lthresh] = Lthresh
+				tc = -1
+				for my_t in tvec_dict:
+					tc += 1
+					fig, axlist = plt.subplots(nrows=1, ncols=2, figsize=(12,6))
+					ax0 = axlist[0]
+					im0 = ax0.imshow(Lfull[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
+					ax0.set_xlabel('K_2')
+					ax0.set_ylabel('K_1')
+					min_val = np.min(Lfull[tc,:,:].squeeze())
+					my_min = np.squeeze(G_grid[tc,:].squeeze()[np.where(Lfull[tc,:,:].squeeze()==min_val)])
+					ax0.set_title('Full-State \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
+					fig.colorbar(im0, ax=ax0)
+
+					ax1 = axlist[1]
+					im1 = ax1.imshow(Lpartial[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
+					ax1.set_xlabel('K_2')
+					ax1.set_ylabel('K_1')
+					min_val = np.min(Lpartial[tc,:,:].squeeze())
+					my_min = np.squeeze(G_grid[tc,:].squeeze()[np.where(Lpartial[tc,:,:].squeeze()==min_val)])
+					ax1.set_title('Partial-State \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
+					fig.colorbar(im1, ax=ax1)
+
+					fig.suptitle('Trajectory {0}, Length {1}, Stationary-Loss Surface'.format(n_traj, my_t))
+					fig.savefig(fname=output_dir+outputname+str(n_traj)+'_length'+str(my_t))
+					plt.close(fig)
+				return
+
+			f_make_plots('/global_StationaryLoss_surface', L_grid_PartialState, L_grid_FullState, Lthresh=1.5)
+			f_make_plots('/global_TotalLoss_surface', L_grid_PartialState_total, L_grid_FullState_total, Lthresh=12)
+			f_make_plots('/global_StationaryLoss_surface_noThresh', L_grid_PartialState, L_grid_FullState, Lthresh=np.inf)
+			f_make_plots('/global_TotalLoss_surface_noThresh', L_grid_PartialState_total, L_grid_FullState_total, Lthresh=np.inf)
+
+
+			# now show total loss
+			# L_grid_FullState_total[L_grid_FullState_total>12] = 12
+			# L_grid_PartialState_total[L_grid_PartialState_total>12] = 12
+			# tc = -1
+			# cmap = 'gist_ncar_r'
+			# for my_t in tvec_dict:
+			#   tc += 1
+			#   fig, axlist = plt.subplots(nrows=1, ncols=2, figsize=(12,6))
+			#   ax0 = axlist[0]
+			#   im0 = ax0.imshow(L_grid_FullState_total[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
+			#   ax0.set_xlabel('K_2')
+			#   ax0.set_ylabel('K_1')
+			#   min_val = np.min(L_grid_FullState_total[tc,:,:].squeeze())
+			#   my_min = np.squeeze(G_grid[tc,:].squeeze()[np.where(L_grid_FullState_total[tc,:,:].squeeze()==min_val)])
+			#   ax0.set_title('Full-State \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
+			#   fig.colorbar(im0, ax=ax0)
+
+			#   ax1 = axlist[1]
+			#   im1 = ax1.imshow(L_grid_PartialState_total[tc,:,:].squeeze(), cmap=cmap, interpolation='none', extent=(min(xgrid),max(xgrid),max(ygrid),min(ygrid)))
+			#   ax1.set_xlabel('K_2')
+			#   ax1.set_ylabel('K_1')
+			#   min_val = np.min(L_grid_PartialState_total[tc,:,:].squeeze())
+			#   my_min = np.squeeze(G_grid[tc,:].squeeze()[np.where(L_grid_PartialState_total[tc,:,:].squeeze()==min_val)])
+			#   ax1.set_title('Partial-State \n min={0:.2f} \n @ K1={1:.2f}, K2={2:.2f})'.format(min_val, my_min[0],my_min[1]))
+			#   fig.colorbar(im1, ax=ax1)
+
+			#   fig.suptitle('Trajectory {0}, Length {1}, Total-Loss Surface'.format(n_traj, my_t))
+			#   fig.savefig(fname=output_dir+'/global_TotalLoss_surface'+str(n_traj)+'_length'+str(my_t))
+			#   plt.close(fig)
+
+			# return
+
+
+	### optimize G over entire sequence
+	G_opt = {}
+	if full_sequence:
+		# initialize storage variables
+		loss_history = np.zeros(n_epochs)
+		dL_history = np.zeros(n_epochs)
+		G_assim_history = np.zeros((n_epochs, G_assim.shape[0]))
+		G_assim_history_running_mean = np.zeros((n_epochs, G_assim.shape[0]))
+		if optimization == 'NelderMead':
+			if optim_full_state:
+				evalG = lambda G: f_Loss_FullState(G, partial_traj=torch.FloatTensor(y_noisy_lowfi), full_traj=torch.FloatTensor(y_clean), n_max=n_iters, use_inits=inits)[0]
+			else:
+				evalG = lambda G: f_Loss_PartialState(G, partial_traj=torch.FloatTensor(y_noisy_lowfi), n_max=n_iters, use_inits=inits)[0]
+			fmin = np.inf
+			# G0 = np.array([1,1,1])
+			# opt = scipy.optimize.fmin(func=evalG, x0=G0, full_output=True)
+			# if opt[1] <= fmin:
+			#   fmin = opt[1]
+			#   Gbest = opt[0]
+			# G_opt['opt_struct'] = []
+			G_opt['inits'] = np.zeros((n_nelder_inits,G_assim.shape[0]))
+			G_opt['final'] = np.zeros((n_nelder_inits,G_assim.shape[0]))
+			G_opt['optval'] = np.zeros((n_nelder_inits,G_assim.shape[0]))
+			for i_nm in range(n_nelder_inits):
+				if random_nelder_inits:
+					G0 = np.random.multivariate_normal(mean=[0,0,0], cov=(0.1**2)*np.eye(3)).T[:,None]
+				else:
+					G0 = G_assim.numpy()
+				print('NM Init=',G0)
+
+				# KoptHistory = [] #np.zeros((1, G_assim.shape[0]))
+				# def store(G):
+				#   KoptHistory.append(G)
+				# opt = scipy.optimize.fmin(func=evalG, x0=G0.squeeze(), callback=store, maxfun=max_nelder_sols, full_output=True, disp=True)
+
+				opt = scipy.optimize.fmin(func=evalG, x0=G0.squeeze(), maxfun=max_nelder_sols, full_output=True, disp=True)
+				# G_opt['opt_struct'].append(opt)
+				G_opt['inits'][i_nm,:] = G0.squeeze()
+				G_opt['final'][i_nm,:] = opt[0].squeeze()
+				G_opt['optval'][i_nm,:] = opt[1].squeeze()
+				print('NM solution=', opt[0])
+				if opt[1] <= fmin:
+					fmin = opt[1]
+					Gbest = opt[0]
+			G_assim_history[:,:] = Gbest
+			G_assim_history_running_mean[:,:] = Gbest
+		else:
+			for kk in range(n_epochs):
+				print('Iter',kk,'G_assim Pre:', G_assim)
+				use_inits = inits #get_lorenz_inits(n=1).squeeze()
+				LkG = f_Loss_Sum(G_assim, use_inits=use_inits)
+				# perturb
+				Q = np.random.randn(*G_assim.shape)
+				Q = torch.FloatTensor(Q/np.linalg.norm(Q,'fro'))
+				Gplus = G_assim + h*Q
+				Gminus = G_assim - h*Q
+
+				# if any(abs(Gplus)>1):
+				#   print('Gplus is violating constraint. Mapping to constraint boundary.')
+				# Gplus[Gplus>1] = 1
+				# Gplus[Gplus<-1] = -1
+
+				LkPlus = np.log(f_Loss_Sum(Gplus, use_inits=use_inits))
+				LkMinus = np.log(f_Loss_Sum(Gminus, use_inits=use_inits))
+
+				# dL = ( LkPlus - LkG )/h
+				dL = ( LkPlus - LkMinus )/(2*h)
+
+				G_assim -= lr_G * dL * Q
+
+				# if any(abs(G_assim)>1):
+				#   print('G_assim is violating constraint. Mapping to constraint boundary.')
+				# G_assim[G_assim>1] = 1
+				# G_assim[G_assim<-1] = -1
+
+				print('LkMinus:', LkMinus)
+				print('LkPlus:', LkPlus)
+				print('dL:', dL)
+				print('G_assim Post:', G_assim)
+
+				# store progress
+				dL_history[kk] = dL
+				loss_history[kk] = LkG
+				G_assim_history[kk,:] = G_assim.detach().numpy().squeeze()
+				G_assim_history_running_mean[kk,:] = np.mean(G_assim_history[:kk,:], axis=0)
+
+			np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean,
+				model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G)
+	else:
+		# Standard Gradient Descent
+		# initialize storage variables
+		loss_history = np.zeros(n_iters)
+		dL_history = np.zeros(n_iters)
+		G_assim_history = np.zeros((y_clean.shape[0], G_assim.shape[0]))
+		G_assim_history_running_mean = np.zeros((y_clean.shape[0], G_assim.shape[0]))
+		### NEW code for updating G_assim
+		for kk in range(n_epochs):
+			use_inits = inits
+			for i in range(n_iters):
+				meas_now = torch.FloatTensor(y_noisy_lowfi[i,:,None])
+
+				# make prediction using previous state estimate
+				# pdb.set_trace()
+				sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(tspan[0], tspan[-1]), y0=use_inits.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=tspan)
+				m_pred_now = torch.FloatTensor(sol.y.T[-1,:,None])
+				y_predictions[i,:] = m_pred_now.detach().numpy().squeeze()
+
+				# Do the assimilation!
+				try:
+					m_assim_now = f_mk(G_assim, m_pred_now, meas_now)
+				except:
+					pdb.set_trace()
+				G_assim_history[i,:] = G_assim.detach().numpy().squeeze()
+				G_assim_history_running_mean[i,:] = np.mean(G_assim_history[:i,:], axis=0)
+				use_inits = m_assim_now.detach().numpy().squeeze()
+				y_assim[i,:] = use_inits
+
+				# compute loss
+				if learn_assim:
+					if cheat:
+						meas_hifi_now = torch.FloatTensor(y_hifi[i,:])
+						meas_lowfi_now = meas_now
+						loss = f_Lk_cheat(G_assim, m_pred_now, meas_lowfi_now, meas_hifi_now)
+						loss.backward()
+						G_assim.data -= lr * G_assim.grad.data
+						G_assim.grad.data.zero_()
+						loss_history[i] = loss
+						# print('Iter',i,'Loss:',loss)
+					else:
+						if new_cheat:
+							H = H_obs_hifi
+							meas_now = torch.FloatTensor(y_hifi[i,:])
+						else:
+							H = H_obs_lowfi
+
+						if i>1:
+							# Gather historical data for propagation
+							m_assim_prev2 = y_assim[i-2,:] #basically \hat{m}_{i-2}
+							meas_prev1 = torch.FloatTensor(y_noisy_lowfi[i-1,:,None])
+
+							LkG = f_Lk(G_assim, m_assim_prev2, meas_prev1, meas_now, H=H)
+							for iq in range(N_q_tries):
+								# sample a G-like matrix for approximating a random directional derivative
+								Q = np.random.randn(*G_assim.shape)
+								Q = torch.FloatTensor(Q/np.linalg.norm(Q,'fro'))
+								Gplus = G_assim + h*Q
+
+								# approximate directional derivative
+								LkGplus = f_Lk(Gplus, m_assim_prev2, meas_prev1, meas_now, H=H)
+								if iq==0 or (LkGplus < LkGplus_best):
+									LkGplus_best = LkGplus
+									Q_best = Q
+
+
+							# update G_assim by random approximate directional derivative
+							dL = ( LkGplus_best - LkG )/h
+							Gdiff += lr_G * dL * Q_best
+							if (i % G_update_interval)==0:
+								G_assim.data -= Gdiff
+								Gdiff = 0*G_assim.data
+							loss_history[i] = LkG
+							dL_history[i] = dL
+						else:
+							Gdiff = 0*G_assim.data
+					# save intermittently during training
+					if (i % 50) == 0:
+						np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean, y_assim=y_assim, y_predictions=y_predictions,
+							model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G, i=i, kk=kk)
+
+
+	## Done running 3DVAR, now summarize
+	if learn_assim:
+		if full_sequence:
+			fig, (axlist) = plt.subplots(nrows=3, ncols=1)
+
+			# plot running average of G_assim
+			for kk in range(len(plot_state_indices)):
+				axlist[0].plot(G_assim_history_running_mean[:,plot_state_indices[kk]],label='G_{0}'.format(plot_state_indices[kk]))
+				axlist[1].plot(G_assim_history[:,plot_state_indices[kk]],label='G_{0}'.format(plot_state_indices[kk]))
+			axlist[0].legend()
+			axlist[1].legend()
+			axlist[0].set_title('3DVAR Assimilation Matrix Convergence (Running Mean)')
+			axlist[1].set_title('3DVAR Assimilation Matrix Sequence')
+
+			axlist[2].plot(loss_history/n_iters, label='MSE')
+			# axlist[2].plot([eps for _ in range(len(loss_history))], color = 'black', linestyle='--', label = r'$\epsilon$')
+			axlist[2].set_title('Assimilation MSE')
+			axlist[2].set_xlabel('time')
+			axlist[2].set_yscale('log')
+		else:
+			fig, (axlist) = plt.subplots(nrows=2+len(plot_state_indices), ncols=1,
+								figsize = [10, 12])
+
+			# plot running average of G_assim
+			for kk in range(len(plot_state_indices)):
+				t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
+				axlist[0].plot(t_plot, G_assim_history_running_mean[:,plot_state_indices[kk]],label='G_{0}'.format(plot_state_indices[kk]))
+				axlist[1].plot(t_plot, G_assim_history[:,plot_state_indices[kk]],label='G_{0}'.format(plot_state_indices[kk]))
+			# axlist[2].plot(t_plot, loss_history)
+			# axlist[2].plot(t_plot, dL_history)
+
+			axlist[0].legend()
+			axlist[1].legend()
+			axlist[0].set_xticklabels([])
+			# axlist[1].set_xticklabels([])
+
+			axlist[0].set_title('3DVAR Assimilation Matrix Convergence (Running Mean)')
+			axlist[1].set_title('3DVAR Assimilation Matrix Sequence')
+			# axlist[2].set_title('Loss Sequence')
+			# axlist[2].set_ylabel('dL')
+
+			# axlist[2].set_yscale('log')
+
+			for kk in range(len(plot_state_indices)):
+				ax = axlist[kk+2]
+				t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
+				ax.plot(t_plot, y_clean[:,plot_state_indices[kk]], color='red', label='clean data')
+				ax.plot(t_plot, y_predictions[:,plot_state_indices[kk]], color='black', label='3DVAR')
+				ax.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)')
+
+			ax.set_xlabel('time')
+
+		fig.savefig(fname=output_dir+'/3DVAR_assimilation_matrix_learning_convergence')
+		plt.close(fig)
+
+
+	if full_sequence:
+		np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean,
+		model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G, G_opt=G_opt)
+		return G_assim_history_running_mean[-1,:]
+
+	## PLOTS
+	fig, (ax_list) = plt.subplots(len(plot_state_indices),1)
+	if not isinstance(ax_list,np.ndarray):
+		ax_list = [ax_list]
+	for kk in range(len(ax_list)):
+		ax1 = ax_list[kk]
+		t_plot = np.arange(0,round(len(y_clean[n_plt_start:,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+		t_max = round(len(y_clean[:,0])*model_params['delta_t'],8)
+		t_plot = t_plot + (t_max - max(t_plot))
+		# ax1.scatter(t_plot, y_noisy[:n_plt,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+		ax1.plot(t_plot, y_clean[n_plt_start:,plot_state_indices[kk]], color='red', label='clean data')
+		ax1.plot(t_plot, y_predictions[n_plt_start:,plot_state_indices[kk]], color='black', label='3DVAR')
+		ax1.set_xlabel('time')
+		ax1.set_ylabel(model_params['state_names'][plot_state_indices[kk]] + '(t)')
+	ax_list[0].legend()
+	fig.suptitle('3DVAR output')
+	fig.savefig(fname=output_dir+'/3DVAR_timeseries')
+	plt.close(fig)
+
+	fig, (ax0, ax1) = plt.subplots(nrows=2,ncols=1, sharex=True)
+
+	# ax0 is for assimilation errors...Cumulative AVG and Pointwise, meas-only and all states
+	# ax1 is for prediction errors...Cumulative AVG and Pointwise, all states
+	t_plot = np.arange(0,round(len(y_clean[:,0])*model_params['delta_t'],8),model_params['delta_t'])
+
+	# these give the mean squared error
+	pw_assim_errors = np.linalg.norm(y_assim - y_clean, axis=1, ord=2)**2
+	pw_assim_errors_OBS = np.linalg.norm(np.matmul(H_obs_lowfi.numpy(),y_assim.T).T - y_clean_lowfi, axis=1, ord=2)**2
+	pw_pred_errors = np.linalg.norm(y_predictions - y_clean, axis=1, ord=2)**2
+	pw_pred_errors_OBS = np.linalg.norm(np.matmul(H_obs_lowfi.numpy(),y_predictions.T).T - y_clean_lowfi, axis=1, ord=2)**2
+
+	print('Mean(pw_assim_errors) = ', np.mean(pw_assim_errors))
+
+	running_pred_errors = np.zeros(pw_pred_errors.shape)
+	running_pred_errors_OBS = np.zeros(pw_pred_errors.shape)
+	running_assim_errors = np.zeros(pw_pred_errors.shape)
+	running_assim_errors_OBS = np.zeros(pw_pred_errors.shape)
+
+	for k in range(running_pred_errors.shape[0]):
+		running_pred_errors[k] = np.mean(pw_pred_errors[:(k+1)])
+		running_pred_errors_OBS[k] = np.mean(pw_pred_errors_OBS[:(k+1)])
+		running_assim_errors[k] = np.mean(pw_assim_errors[:(k+1)])
+		running_assim_errors_OBS[k] = np.mean(pw_assim_errors_OBS[:(k+1)])
+
+	ax0.plot(t_plot, pw_pred_errors, color='blue', label='Full-State Point-wise')
+	if eps:
+		ax0.plot(t_plot, [eps for _ in range(len(t_plot))], color = 'black', linestyle='--', label = r'$\epsilon$')
+	# ax0.scatter(t_plot, pw_pred_errors_OBS[:n_plt], color='blue', label='Observed-State Point-wise')
+	# ax0.plot(t_plot, running_pred_errors, linestyle='--', color='black', label='Full-State Cumulative')
+	# ax0.plot(t_plot, running_pred_errors_OBS[:n_plt], linestyle=':', color='black', label='Observed-State Cumulative')
+	ax0.set_ylabel('MSE')
+	ax0.legend()
+	ax0.set_title('1-step Prediction Errors')
+
+	ax1.plot(t_plot, pw_assim_errors, linestyle='--', color='blue', label='Full-State Point-wise')
+	if eps:
+		ax1.plot(t_plot, [eps for _ in range(len(t_plot))], color = 'black', linestyle='--', label = r'$\epsilon$')
+	# ax1.plot(t_plot, running_assim_errors, linestyle='--', color='black', label='Full-State Cumulative')
+	ax1.set_ylabel('MSE')
+	ax1.legend()
+	ax1.set_title('Assimilation Errors')
+	ax1.set_xlabel('time')
+
+	fig.suptitle('3DVAR error convergence')
+	fig.savefig(fname=output_dir+'/3DVAR_error_convergence')
+
+	ax0.set_yscale('log')
+	ax0.set_ylabel('log MSE')
+	ax1.set_yscale('log')
+	ax1.set_ylabel('log MSE')
+	fig.savefig(fname=output_dir+'/3DVAR_error_convergence_log')
+	plt.close(fig)
+
+	np.savez(output_dir+'/output.npz', G_assim_history=G_assim_history, G_assim_history_running_mean=G_assim_history_running_mean, y_assim=y_assim, y_predictions=y_predictions,
+		pw_assim_errors=pw_assim_errors, pw_assim_errors_OBS=pw_assim_errors_OBS, pw_pred_errors=pw_pred_errors, pw_pred_errors_OBS=pw_pred_errors_OBS,
+		model_params=model_params, eps=eps, loss_history=loss_history, dL_history=dL_history, h=h, lr_G=lr_G)
+
+	return G_assim

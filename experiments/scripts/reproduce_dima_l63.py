@@ -4,7 +4,9 @@ import numpy as np
 import argparse
 from time import time
 from utils import get_inds, phase_plot, kl4dummies, fname_append, all_kdes_plot
-from utils import setup_RNN, train_chaosRNN, forward_chaos_pureML, forward_chaos_hybrid_full
+# from utils import setup_RNN, train_chaosRNN, forward_chaos_pureML, forward_chaos_hybrid_full
+from rnn_models import setup_RNN
+from utils import traj_div_time
 from check_L96_chaos import make_traj_plots
 from scipy.integrate import solve_ivp
 from scipy.stats import gaussian_kde
@@ -128,16 +130,6 @@ def make_data(
 	return
 
 
-def traj_div_time(Xtrue, Xpred, delta_t, avg_output, thresh):
-	# avg_output = np.mean(Xtrue**2)**0.5
-	pw_loss = np.zeros((Xtrue.shape[0]))
-	for j in range(Xtrue.shape[0]):
-		pw_loss[j] = sum((Xtrue[j,:] - Xpred[j,:])**2)**0.5 / avg_output
-	t_valid = delta_t*np.argmax(pw_loss > thresh)
-	if t_valid==0 and pw_loss[-1] <= thresh:
-		t_valid = delta_t*(len(pw_loss)-1)
-	return t_valid
-
 def run_traintest(testing_fname,
 	training_fname,
 	master_output_fname,
@@ -163,8 +155,6 @@ def run_traintest(testing_fname,
 	rnn_hidden_size=50,
 	rnn_n_epochs=10,
 	**kwargs):
-
-
 
 	try:
 		foo = np.load(training_fname)
@@ -196,23 +186,22 @@ def run_traintest(testing_fname,
 					}
 
 	## Run vanilla residual RNN
-	foo_nm = 'pureRNN_vanilla'
-	rnn_settings['forward'] = forward_chaos_pureML
-	rnn_settings['learn_residuals'] = False
-	rnn_settings['stack_hidden'] = False
-	rnn_settings['stack_output'] = False
-	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
-	setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
-
-	## Run vanilla residual RNN
 	foo_nm = 'resRNN_vanilla'
-	rnn_settings['forward'] = forward_chaos_pureML
-	rnn_settings['learn_residuals'] = True
-	rnn_settings['stack_hidden'] = False
-	rnn_settings['stack_output'] = False
+	# rnn_settings['forward'] = forward_chaos_pureML
+	rnn_settings['use_physics_as_bias'] = True
+	# rnn_settings['stack_hidden'] = False
+	# rnn_settings['stack_output'] = False
 	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
 	setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
 
+	## Run vanilla whole RNN
+	foo_nm = 'pureRNN_vanilla'
+	# rnn_settings['forward'] = forward_chaos_pureML
+	rnn_settings['use_physics_as_bias'] = False
+	# rnn_settings['stack_hidden'] = False
+	# rnn_settings['stack_output'] = False
+	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
+	setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
 
 	### NOW DO THE REST OF THE STUFF (GP)
 	n_subsample_gp = int(n_subsample_gp)

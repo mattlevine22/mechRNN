@@ -4,7 +4,9 @@ import numpy as np
 import argparse
 from time import time
 from utils import get_inds, phase_plot, kl4dummies, fname_append, all_kdes_plot
-from utils import setup_RNN, train_chaosRNN, forward_chaos_pureML, forward_chaos_hybrid_full
+# from utils import setup_RNN, train_chaosRNN, forward_chaos_pureML, forward_chaos_hybrid_full
+from rnn_models import setup_RNN
+from utils import traj_div_time
 from check_L96_chaos import make_traj_plots
 from scipy.integrate import solve_ivp
 from scipy.stats import gaussian_kde
@@ -126,15 +128,6 @@ def make_data(
 
 
 	return
-
-
-def traj_div_time(Xtrue, Xpred, delta_t, avg_output, thresh):
-	# avg_output = np.mean(Xtrue**2)**0.5
-	pw_loss = np.zeros((Xtrue.shape[0]))
-	for j in range(Xtrue.shape[0]):
-		pw_loss[j] = sum((Xtrue[j,:] - Xpred[j,:])**2)**0.5 / avg_output
-	t_valid = delta_t*np.argmax(pw_loss > thresh)
-	return t_valid
 
 def run_traintest(testing_fname,
 	training_fname,
@@ -1203,5 +1196,3 @@ def run_traintest(testing_fname,
 if __name__ == '__main__':
 	continuous_fits()
 	run_traintest()
-
-
