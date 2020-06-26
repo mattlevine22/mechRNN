@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import random
-from utils import traj_div_time
+from utils import traj_div_time, train_chaosRNN
 from line_profiler import LineProfiler
 from scipy.integrate import solve_ivp
 
@@ -82,16 +82,38 @@ def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 		lp_wrapper(**setts)
 		lp.print_stats()
 	else:
-		train_RNN_new(**setts)
+		# setts['output_dir'] += '_old'
 		# train_chaosRNN(**setts)
+		# setts['output_dir'] = setts['output_dir'].replace('old','new')
+		setts['mode'] = 'fromfile'
+		train_RNN_new(**setts)
 
 	print('Ran training in:', time()-t0)
 	return
 
-class RNN_VANILLA(nn.Module):
+class RNN(nn.Module):
+	def __init__(self,
+			input_size,
+			hidden_size=50,
+			output_size=None,
+			cell_type='RNN',
+			embed_physics_prediction=False,
+			use_physics_as_bias=False,
+			dtype=torch.float,
+			t_synch=1000,
+			teacher_force_probability=0.0,
+			norm_dict=None,
+			ode_params=None,
+			ode=None,
+			output_path='default_output',
+			max_plot=None,
+			mode='original'):
 
-	def __init__(self, input_size, hidden_size, output_size, cell_type, embed_physics_prediction, use_physics_as_bias, dtype, t_synch, teacher_force_probability, norm_dict, ode_params, ode):
-		super(RNN_VANILLA, self).__init__()
+		super().__init__()
+		if output_size is None:
+			output_size = input_size
+		self.mode = mode
+		self.output_path = output_path
 		self.teacher_force_probability = teacher_force_probability
 		self.t_synch = t_synch
 		self.dtype = dtype
@@ -107,6 +129,11 @@ class RNN_VANILLA(nn.Module):
 		self.delta_t = ode_params['delta_t']
 		self.tspan = [0, self.delta_t]
 		self.t_eval = np.array([self.delta_t])
+		if max_plot is None:
+			self.max_plot = int(np.floor(30./self.delta_t))
+		else:
+			self.max_plot = max_plot
+
 		self.ode = ode
 
 		for key in norm_dict:
@@ -124,16 +151,147 @@ class RNN_VANILLA(nn.Module):
 		# Default is RNN w/ ReLU
 		if cell_type=='LSTM':
 			self.cell = nn.LSTMCell(input_size, hidden_size)
+			self.use_c_cell = True
 		elif cell_type=='GRU':
 			self.cell = nn.GRUCell(input_size, hidden_size)
+			self.use_c_cell = True
 		else:
-			try:
-				self.cell = nn.RNNCell(input_size, hidden_size, nonlinearity=cell_type)
-			except:
-				self.cell = nn.RNNCell(input_size, hidden_size, nonlinearity='relu')
+			self.use_c_cell = False
+			self.cell = nn.RNNCell(input_size, hidden_size, nonlinearity='relu')
+
 
 		# The linear layer that maps from hidden state space to tag space
 		self.hidden2pred = nn.Linear(hidden_size, output_size)
+
+		# maybe do manual weight initialization?
+		self.initialize_weights()
+
+		# Remember weights
+		self.weight_history = {}
+		self.remember_weights()
+
+		# Create empty hidden states
+		self.clear_hidden()
+
+
+	def initialize_weights(self):
+		if self.mode=='original':
+			for name, val in self.named_parameters(): #self.state_dict():
+				nn.init.normal_(val, mean=0.0, std=0.1)
+		elif self.mode=='fromfile':
+			lookup = {'cell.weight_hh': 'A_mat',
+						'cell.weight_ih': 'B_mat',
+						'hidden2pred.weight': 'C_mat',
+						'cell.bias_hh': 'a_vec',
+						'hidden2pred.bias': 'b_vec'}
+			for name, val in self.named_parameters():
+				# pdb.set_trace()
+				if name in lookup:
+					fname = os.path.join('/Users/matthewlevine/test_outputs/l63/rnn_output/10_epochs/pureRNN_vanilla_old', lookup[name] + '.txt')
+					val.data = torch.FloatTensor(np.loadtxt(fname=fname)).type(self.dtype)
+
+
+		# CUSTOM slight adjustment to parameterization
+		# for some reason, pytorch includes 2 redundant bias terms in the cell
+		self.cell.bias_ih.data = torch.zeros(self.cell.bias_ih.data.shape)
+		self.cell.bias_ih.requires_grad = False
+		return
+
+	def clear_hidden(self):
+		self.h_t = None
+		self.c_t = None
+
+	def make_traj_plots(self, Xtrue, Xpred, Xpred_residuals, hidden_states, name, epoch):
+		traj_dir = os.path.join(self.output_path, 'traj_state_{name}'.format(name=name))
+		hidden_dir = os.path.join(self.output_path, 'traj_hidden_{name}'.format(name=name))
+		os.makedirs(traj_dir, exist_ok=True)
+		os.makedirs(hidden_dir, exist_ok=True)
+
+		n_traj, n_steps, n_states = Xtrue.shape
+		n_plt = min(self.max_plot, n_steps)
+		t_plot = np.arange(0,n_plt*self.delta_t,self.delta_t)
+		for c in range(n_traj):
+			fig, ax_list = plt.subplots(n_states, 1, figsize=[12,10], sharex=True)
+			for s in range(n_states):
+				ax = ax_list[s]
+				ax.plot(t_plot, Xtrue[c,:n_plt,s].cpu().data.numpy(),linestyle='-', label='true')
+				ax.plot(t_plot, Xpred[c,:n_plt,s].cpu().data.numpy(),linestyle='--', label='learned')
+			ax.legend()
+			ax.set_xlabel('Time')
+			fig.suptitle('Trajectory Fit')
+			fig.savefig(fname=os.path.join(traj_dir,'trajfit{c}_epoch{epoch}'.format(c=c,epoch=epoch)))
+			plt.close(fig)
+
+			fig, ax = plt.subplots(1, 1, figsize=[12,10], sharex=True)
+			ax.plot(t_plot, hidden_states[c,:n_plt,:].cpu().data.numpy())
+			ax.set_xlabel('Time')
+			fig.suptitle('Hidden state dynamics')
+			fig.savefig(fname=os.path.join(hidden_dir,'hiddenstate{c}_epoch{epoch}'.format(c=c,epoch=epoch)))
+			plt.close(fig)
+		return
+
+	def remember_weights(self):
+		for name, val in self.named_parameters(): #self.state_dict():
+			norm_val = np.linalg.norm(val.data.numpy())
+			if name not in self.weight_history:
+				self.weight_history[name] = norm_val
+			else:
+				self.weight_history[name] = np.hstack((self.weight_history[name],norm_val))
+		return
+
+	def plot_weights(self, n_epochs):
+		n_params = len(self.weight_history.keys())
+
+		# plot param convergence
+		fig, (axrow0, axrow1) = plt.subplots(2, 3, sharex=True, figsize=[8,6])
+		axlist = np.concatenate((axrow0,axrow1))
+		c = -1
+		for key in self.weight_history:
+			c += 1
+			param_history = self.weight_history[key]
+			x_vals = np.linspace(0, n_epochs, param_history.shape[0])
+			if param_history.ndim==1:
+				param_vals = param_history
+			elif param_history.ndim==3:
+				param_vals = np.linalg.norm(param_history, axis=(1,2))
+			elif param_history.ndim==2:
+				param_vals = np.linalg.norm(param_history, axis=(1))
+			axlist[c].plot(x_vals, param_vals)
+			axlist[c].set_title(key, pad=15)
+			axlist[c].set_xlabel('Epochs')
+		fig.suptitle("Parameter convergence")
+		fig.subplots_adjust(wspace=0.3, hspace=0.3)
+		fig.savefig(fname=os.path.join(self.output_path,'rnn_parameter_convergence.png'), dpi=300)
+		plt.close(fig)
+
+		# plot matrix visualizations
+		param_path = os.path.join(self.output_path, 'params')
+		os.makedirs(param_path, exist_ok=True)
+		fig, (axrow0, axrow1) = plt.subplots(2, 3, sharex=True, figsize=[8,6])
+		axlist = np.concatenate((axrow0,axrow1))
+		c = -1
+		for name, val in self.named_parameters():
+			ax = axlist[c]
+			val = val.detach()
+			c += 1
+			if val.ndim==1:
+				val = val[None,:]
+			if val.ndim==3:
+				val = val.squeeze(0)
+			# pdb.set_trace()
+			foo = ax.matshow(val, vmin=torch.min(val), vmax=torch.max(val))
+			ax.axes.xaxis.set_visible(False)
+			ax.axes.yaxis.set_visible(False)
+			ax.set_title(name, pad=20)
+			fig.colorbar(foo, ax=ax)
+
+		# fig.suptitle("Parameter convergence")
+		fig.subplots_adjust(wspace=0.3, hspace=0.5)
+		fig.savefig(fname=os.path.join(param_path,'rnn_parameter_values_{n_epochs}.png'.format(n_epochs=n_epochs-1)), dpi=300)
+		plt.close(fig)
+
+
+		return
 
 	def normalize(self, y):
 		return normalize(norm_dict=self.norm_dict, y=y)
@@ -141,38 +299,39 @@ class RNN_VANILLA(nn.Module):
 	def unnormalize(self, y_norm):
 		return unnormalize(norm_dict=self.norm_dict, y_norm=y_norm)
 
-	def get_physics_prediction(self, ic, solver_failed=False):
+	def get_physics_prediction(self, ic):
 		#input and output are unnormalized
 		n_ics = ic.shape[0]
 
 		y_pred = np.zeros(ic.shape)
 		for c in range(n_ics):
-			# check if y0 is a bad initial condition
-			try:
-				if (any(abs(ic[c])>1000)):
-					print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',y0)
-					solver_failed = True
-			except:
-				pdb.set_trace()
+			# check if bad initial condition
+			if (any(abs(ic[c,:])>1000) or any(np.isnan(ic[c,:]))):
+				if not self.solver_failed[c]: # only print if it is new/recent news!
+					pdb.set_trace()
+					print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',ic[c,:])
+				self.solver_failed[c] = True
+			else:
+				self.solver_failed[c] = False
 
-			if not solver_failed:
-				sol = solve_ivp(fun=lambda t, y: self.ode.rhs(y, t), t_span=self.tspan, y0=ic[c], t_eval=self.t_eval, **self.ode_params)
+			if not self.solver_failed[c]:
+				sol = solve_ivp(fun=lambda t, y: self.ode.rhs(y, t), t_span=self.tspan, y0=ic[c,:], t_eval=self.t_eval, **self.ode_params)
 				# sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(self.tspan[0], self.tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=self.tspan)
 				y_out = sol.y.T
 				if not sol.success:
 					# solver failed
-					print('ODE solver has failed at ic=',ic[c])
-					solver_failed = True
+					print('ODE solver has failed at ic=',ic[c,:])
+					self.solver_failed[c] = True
 
-			if solver_failed:
-				y_pred[c] = np.copy(ic[c].numpy()) # persist previous solution
+			if self.solver_failed[c]:
+				y_pred[c,:] = np.copy(ic[c,:]) # persist previous solution
 			else:
 				# solver is OKAY--use the solution like a good boy!
-				y_pred[c] = y_out[-1,:]
+				y_pred[c,:] = y_out[-1,:]
 
 		return torch.FloatTensor(y_pred).type(self.dtype)
 
-	def forward(self, input_state_sequence, n_steps=None, physical_prediction_sequence=None, train=True, synch_mode=False, h_t=None, c_t=None):
+	def forward(self, input_state_sequence, n_steps=None, physical_prediction_sequence=None, train=True, synch_mode=False):
 		# input_state_sequence should be normalized
 		# physical_prediction_sequence should be normalized
 
@@ -181,15 +340,17 @@ class RNN_VANILLA(nn.Module):
 
 		rnn_preds = [] #output of the RNN (i.e. residual)
 		full_preds = [] #final output prediction (i.e. Psi0(x_t) + RNN(x_t,h_t))
+		hidden_preds = []
 
 		#useful link for teacher-forcing: https://towardsdatascience.com/lstm-for-time-series-prediction-de8aeb26f2ca
-		#
-
-		if h_t is None or c_t is None:
-			h_t = torch.zeros((input_state_sequence.size(0), self.hidden_size), dtype=self.dtype) # (batch, hidden_size)
-			c_t = torch.zeros((input_state_sequence.size(0), self.hidden_size), dtype=self.dtype) # (batch, hidden_size)
+		if self.h_t is None:
+			self.h_t = torch.zeros((input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
+		if self.c_t is None and self.use_c_cell:
+			self.c_t = torch.zeros((input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
 
 		full_rnn_pred = input_state_sequence[:,0] #normalized
+
+		self.solver_failed = [False for _ in range(full_rnn_pred.shape[0])]
 		# consider Scheduled Sampling (https://arxiv.org/abs/1506.03099) where probability of using RNN-output increases as you train.
 		for t in range(n_steps):
 			# get input to hidden state
@@ -203,15 +364,16 @@ class RNN_VANILLA(nn.Module):
 				if synch_mode:
 					input_t = input_state_sequence[:,t,:]
 				else:
-				    input_t = full_rnn_pred
+					input_t = full_rnn_pred
 
 			if self.use_physics_as_bias or self.embed_physics_prediction:
 				if physical_prediction_sequence is not None:
 					physics_pred = physical_prediction_sequence[:,t,:]
 				else:
-					# if np.isnan(input_t.detach().numpy()).any():
-					# 	pdb.set_trace()
-					physics_pred = self.normalize(self.get_physics_prediction(ic=self.unnormalize(input_t).detach().numpy()))
+					if input_t.ndim==1:
+						input_t = input_t[None,:]
+					ic = self.unnormalize(input_t).detach().numpy()
+					physics_pred = self.normalize(self.get_physics_prediction(ic=ic))
 
 				if self.embed_physics_prediction:
 					input_t = torch.stack(input_t, physics_pred)
@@ -219,22 +381,28 @@ class RNN_VANILLA(nn.Module):
 				physics_pred = 0
 
 			# evolve hidden state
-			h_t, c_t = self.cell(input_t, (h_t, c_t)) # input needs to be dim (batch, input_size)
-			rnn_pred = self.hidden2pred(h_t)
-			full_rnn_pred = self.use_physics_as_bias * physics_pred + rnn_pred # unnormalized
+			if self.use_c_cell: # LSTM / GRU
+				self.h_t, self.c_t = self.cell(input_t, (self.h_t, self.c_t)) # input needs to be dim (batch, input_size)
+			else: # standard RNN
+				self.h_t = self.cell(input_t, self.h_t) # input needs to be dim (batch, input_size)
+
+			rnn_pred = self.hidden2pred(self.h_t)
+			full_rnn_pred = self.use_physics_as_bias * physics_pred + rnn_pred # normalized
 			full_preds += [full_rnn_pred]
 			rnn_preds += [rnn_pred]
+			hidden_preds += [self.h_t]
 
 		full_preds = torch.stack(full_preds, 1).squeeze(2)
 		rnn_preds = torch.stack(rnn_preds, 1).squeeze(2)
+		hidden_preds = torch.stack(hidden_preds, 1).squeeze(2)
 
-		return full_preds, rnn_preds, h_t, c_t
+		return full_preds, rnn_preds, hidden_preds
 
 
 def get_optimizer(params, name='SGD', lr=None):
 	if name=='SGD':
 		if lr is None:
-			lr = 0.05
+			lr = 0.0005
 		return optim.SGD(params, lr=lr)
 	elif name=='Adam':
 		if lr is None:
@@ -257,41 +425,39 @@ def get_loss(name='nn.MSELoss', weight=None):
 	else:
 		raise('Loss name not recognized')
 
-def get_model(input_size, name='RNN_VANILLA', hidden_size=50, output_size=None, cell_type='LSTM', embed_physics_prediction=False, use_physics_as_bias=False, dtype=torch.float, t_synch=1000, teacher_force_probability=0.0, norm_dict=None, ode_params=None, ode=None):
-	if output_size is None:
-		output_size = input_size
-
-	if name=='RNN_VANILLA':
-		return RNN_VANILLA(ode_params=ode_params, input_size=input_size, hidden_size=hidden_size, output_size=output_size, cell_type=cell_type, dtype=dtype, embed_physics_prediction=embed_physics_prediction, use_physics_as_bias=use_physics_as_bias, t_synch=t_synch, teacher_force_probability=teacher_force_probability, norm_dict=norm_dict, ode=ode)
-	else:
-		return None
-
 def train_RNN_new(y_noisy_train,
 				y_noisy_test,
 				y_noisy_testSynch,
 				model_params=None,
 				output_dir='.',
-				num_frames=500,
-				num_epochs=10,
-				save_freq=1,
+				n_grad_steps=1,
+				num_frames=None,
+				n_epochs=10,
+				save_freq=None,
 				use_physics_as_bias=False,
 				use_gpu=False,
 				normz_info=None,
 				ODE=None,
+				mode='original',
 				**kwargs):
+
+	if not save_freq:
+		save_freq = int(n_epochs/10)
 
 	n_test_traj = y_noisy_test.shape[0]
 	n_train_traj = 1 #y_noisy_train.shape[0]
 
-	model_stats = {'Train': {'loss': np.zeros((num_epochs,n_train_traj)),
-							't_valid': np.zeros((num_epochs,n_train_traj))
+	model_stats = {'Train': {'loss': np.zeros((n_epochs,n_train_traj)),
+							't_valid': np.zeros((n_epochs,n_train_traj))
 							},
-					'Test': {'loss': np.zeros((num_epochs,n_test_traj)),
-							't_valid': np.zeros((num_epochs,n_test_traj))
+					'Test': {'loss': np.zeros((n_epochs,n_test_traj)),
+							't_valid': np.zeros((n_epochs,n_test_traj))
 							}
 						}
 
 	output_path = output_dir
+	os.makedirs(output_path, exist_ok=True)
+
 	if use_gpu and not torch.cuda.is_available():
 		# https://thedavidnguyenblog.xyz/installing-pytorch-1-0-stable-with-cuda-10-0-on-windows-10-using-anaconda/
 		print('Trying to use GPU, but cuda is NOT AVAILABLE. Running with CPU instead.')
@@ -304,9 +470,6 @@ def train_RNN_new(y_noisy_train,
 	else:
 		dtype = torch.float
 		inttype = torch.int
-
-	if not os.path.exists(output_path):
-		os.mkdir(output_path)
 
 	# get data
 	Xtrain = y_noisy_train[None,:-1,:]
@@ -326,7 +489,9 @@ def train_RNN_new(y_noisy_train,
 	ytest_synch_raw = unnormalize(norm_dict=normz_info, y_norm=ytest_synch)
 
 	# set up model
-	model = get_model(ode_params=model_params, input_size=Xtrain.shape[2], norm_dict=normz_info, use_physics_as_bias=use_physics_as_bias, ode=ODE)
+	model = RNN(ode_params=model_params, input_size=Xtrain.shape[2], norm_dict=normz_info, use_physics_as_bias=use_physics_as_bias, ode=ODE, output_path=output_path, mode=mode)
+	model.remember_weights()
+
 	if use_gpu:
 		model.cuda()
 	optimizer = get_optimizer(params=model.parameters())
@@ -335,122 +500,135 @@ def train_RNN_new(y_noisy_train,
 	best_model_dict = {}
 
 	# train the model
-	train_loss_vec = np.zeros((num_epochs,1))
-	test_loss_vec = np.zeros((num_epochs,1))
+	train_loss_vec = np.zeros((n_epochs,1))
+	test_loss_vec = np.zeros((n_epochs,1))
 
-	for epoch in range(num_epochs):  # again, normally you would NOT do 300 epochs, it is toy data
-		if (epoch % save_freq)==0:
-			do_saving = True
-			make_plots = True
-		else:
-			do_saving = False
-			make_plots = False
+	if num_frames is None:
+		num_frames = Xtrain.shape[1]
 
-		make_plots = False
-		do_saving = False
-
+	best_test_loss = np.inf
+	best_test_tvalid = 0
+	for epoch in range(n_epochs):  # again, normally you would NOT do 300 epochs, it is toy data
 		t0 = time()
 		# setence is our features, tags are INDICES of true label
 		all_predicted_states = []
 		all_target_states = []
+		all_rnn_predicted_residuals = []
+		all_hidden_states = []
+		if num_frames == Xtrain.shape[1]:
+			# 1 big chunk of the whole data set
+			offset = 0
+			chunk_list = [0]
+		elif num_frames == 1:
+			# don't reorder...just update gradient at each Step
+			offset = 0
+			chunk_list = np.arange(Xtrain.shape[1]-1)
+		else:
+			# chunk strategy
+			offset = np.random.randint(Xtrain.shape[1] % num_frames)
+			chunk_list = np.arange(int(Xtrain.shape[1] / num_frames)).tolist()
+			np.random.shuffle(chunk_list)
 
-		offset = np.random.randint(Xtrain.shape[1] % num_frames - 1)
-		permutations = list(range(int(Xtrain.shape[1] / num_frames)))
-		np.random.shuffle(permutations)
-		for permutation in permutations:
-			# sample a random chunk of video
-			start_ind = permutation * num_frames + offset
-			end_ind = start_ind + num_frames
+		for chunk_ind in chunk_list:
+			# identify a random chunk of data
+			start_chunk = chunk_ind * num_frames + offset
+			end_chunk = start_chunk + num_frames
 
-			if use_physics_as_bias:
-				bias_sequence = torch.FloatTensor(Xtrain[:,start_ind:end_ind,:]).type(dtype) #normalized
-			else:
-				bias_sequence = None
-			# Step 1. Remember that Pytorch accumulates gradients.
-			# We need to clear them out before each instance
-			model.zero_grad()
+			i_stop = start_chunk
+			model.clear_hidden() # set hidden state to 0
+			model.zero_grad() # reset gradients dL/dparam
+			model.remember_weights() # store history of parameter updates
+			while i_stop < end_chunk:
+				i_start = i_stop
+				i_stop = min(i_stop+n_grad_steps, end_chunk)
 
-			# Step 3. Run our forward pass.
-			full_predicted_states, rnn_predicted_residuals, h_t, c_t = model(input_state_sequence=torch.FloatTensor(Xtrain[:,start_ind:end_ind,:]).type(dtype),
-											physical_prediction_sequence=bias_sequence, train=True)
+				# get bias sequence
+				if use_physics_as_bias:
+					bias_sequence = torch.FloatTensor(Xtrain[:,i_start:i_stop,:]).type(dtype) #normalized
+				else:
+					bias_sequence = None
 
-			# unnormalize the data
-			target_sequence = torch.FloatTensor(ytrain_raw[:,start_ind:end_ind,:]).type(dtype)
-			full_predicted_states = model.unnormalize(full_predicted_states)
-			rnn_predicted_residuals = model.unnormalize(rnn_predicted_residuals)
+				# Run our forward pass. with normalized inputs
+				pdb.set_trace()
+				full_predicted_states, rnn_predicted_residuals, hidden_states = model(input_state_sequence=torch.FloatTensor(Xtrain[:,i_start:i_stop,:]).type(dtype),
+												physical_prediction_sequence=bias_sequence, train=True)
 
-			# Step 4: Plot training evaluation
-			# make_train_plot(target_sequence, full_predicted_states, rnn_predicted_residuals, h_t, c_t)
-			make_traj_plots(target_sequence, full_predicted_states, rnn_predicted_residuals, h_t, c_t, name='train', epoch=epoch)
+				# fit the RNN to normalized outputs
+				target_sequence = torch.FloatTensor(ytrain[:,i_start:i_stop,:]).type(dtype)
 
-			# Step 5. Compute the loss, gradients, and update the parameters by
-			#  calling optimizer.step()
-			loss = loss_function(full_predicted_states, target_sequence)
-			loss.backward()
-			optimizer.step()
+				# Compute the loss, gradients, and update the parameters by
+				#  calling optimizer.step()
 
-			all_predicted_states.append(full_predicted_states)
-			all_target_states.append(target_sequence)
+				loss = loss_function(full_predicted_states, target_sequence) #compute loss
+				loss.backward() # compute dL/dparam for each param via BPTT
+				optimizer.step() # update parameters using dL/dparam
+				model.zero_grad() # reset gradients dL/dparam
+				model.h_t.detach_() # remove hidden-state from graph so that gradients at next step are not dependent on previous step
+				model.remember_weights() # store history of parameter updates
 
-		all_predicted_states = torch.cat(all_predicted_states, 1)
-		all_target_states = torch.cat(all_target_states, 1)
+				# collect the data
+				all_predicted_states.append(full_predicted_states)
+				all_target_states.append(target_sequence)
+				all_rnn_predicted_residuals.append(rnn_predicted_residuals)
+				all_hidden_states.append(hidden_states)
+
+		# collect and nnormalize the data
+		all_target_states = model.unnormalize(torch.cat(all_target_states, 1))
+		all_predicted_states = model.unnormalize(torch.cat(all_predicted_states, 1))
+		all_rnn_predicted_residuals = model.unnormalize(torch.cat(all_rnn_predicted_residuals, 1))
+		all_hidden_states = torch.cat(all_hidden_states, 1) # no need to unnormalize hidden states
 
 		# Report Train losses after each epoch
-		train_loss = loss_function(all_predicted_states, all_target_states)
 		for c in range(n_train_traj):
-			model_stats['Test']['t_valid'][epoch,c] = traj_div_time(Xtrue=all_target_states[c,:,:], Xpred=all_predicted_states[c,:,:], delta_t=model.delta_t, avg_output=model.time_avg_norm)
-			model_stats['Train']['loss'][epoch,c] = loss_function(all_predicted_states[c,:,:], all_target_states[c,:,:]).cpu().data.numpy().item()
-
-		# print('Epoch',epoch,' Train Loss=', train_loss.cpu().data.numpy().item())
-		# print('Train Epoch Length:', epoch, tim	e()-t0)
-
-		# save data
-		# if do_saving:
-		# 	np.savetxt(output_path+'/train_loss_vec.txt',model_stats['Train']['loss'][:(epoch+1)])
+			model_stats['Train']['t_valid'][epoch,c] = traj_div_time(Xtrue=all_target_states[c,:,:], Xpred=all_predicted_states[c,:,:], delta_t=model.delta_t, avg_output=model.time_avg_norm, synch_length=Xtest_synch.shape[1])
+			model_stats['Train']['loss'][epoch,c] = loss_function(all_target_states[c,:,:], all_predicted_states[c,:,:]).cpu().data.numpy().item()
 
 		### Report TEST performance after each epoch
+		# Step 0. reset initial hidden states
+		model.clear_hidden()
 
-		# Step 1. Run forward pass with synchronization data
-		full_predicted_states, rnn_predicted_residuals, h_t, c_t = model(input_state_sequence=torch.FloatTensor(Xtest_synch).type(dtype),
+		# Step 1. Run forward pass with normalized synchronization data
+		full_predicted_states_synch, rnn_predicted_residuals_synch, hidden_states_synch = model(input_state_sequence=torch.FloatTensor(Xtest_synch).type(dtype),
 										physical_prediction_sequence=None, train=False, synch_mode=True)
-		# unnormalize the data
-		target_sequence = torch.FloatTensor(ytest_synch_raw).type(dtype)
-		full_predicted_states = model.unnormalize(full_predicted_states)
-		rnn_predicted_residuals = model.unnormalize(rnn_predicted_residuals)
-		make_traj_plots(target_sequence, full_predicted_states, rnn_predicted_residuals, h_t, c_t, name='test_synch', epoch=epoch)
+		# unnormalize the test_synch outputs
+		target_sequence_synch = torch.FloatTensor(ytest_synch_raw).type(dtype)
+		full_predicted_states_synch = model.unnormalize(full_predicted_states_synch)
+		rnn_predicted_residuals_synch = model.unnormalize(rnn_predicted_residuals_synch)
 
 		# Step 2. Run our forward pass with synchronized RNN
 		# Note that bias-terms and physical predictions must be computed on the fly
-		full_predicted_states, rnn_predicted_residuals, h_t, c_t = model(input_state_sequence=model.normalize(full_predicted_states[:,-1,:]),
+		full_predicted_states_test, rnn_predicted_residuals_test, hidden_states_test = model(input_state_sequence=model.normalize(full_predicted_states_synch[:,None,-1,:]),
 										n_steps = Xtest.shape[1],
-										physical_prediction_sequence=None, train=False, synch_mode=False,
-										h_t=h_t, c_t=c_t)
-
+										physical_prediction_sequence=None, train=False, synch_mode=False)
 		# unnormalize the data
-		target_sequence = torch.FloatTensor(ytest_raw).type(dtype)
-		full_predicted_states = model.unnormalize(full_predicted_states)
-		rnn_predicted_residuals = model.unnormalize(rnn_predicted_residuals)
-		make_traj_plots(target_sequence, full_predicted_states, rnn_predicted_residuals, h_t, c_t, name='test', epoch=epoch)
+		target_sequence_test = torch.FloatTensor(ytest_raw).type(dtype)
+		full_predicted_states_test = model.unnormalize(full_predicted_states_test)
+		rnn_predicted_residuals_test = model.unnormalize(rnn_predicted_residuals_test)
 
 		# Step 3. Compute the losses
-		test_loss = loss_function(full_predicted_states, target_sequence)
+		test_loss = loss_function(full_predicted_states_test, target_sequence_test).detach().numpy()
 		for c in range(n_test_traj):
-			model_stats['Test']['t_valid'][epoch,c] = traj_div_time(Xtrue=target_sequence[c,:,:], Xpred=full_predicted_states[c,:,:], delta_t=model.delta_t, avg_output=model.time_avg_norm)
-			model_stats['Test']['loss'][epoch,c] = loss_function(full_predicted_states[c,:,:], torch.FloatTensor(ytest[c,:,:]).type(dtype)).cpu().data.numpy().item()
+			model_stats['Test']['t_valid'][epoch,c] = traj_div_time(Xtrue=target_sequence_test[c,:,:], Xpred=full_predicted_states_test[c,:,:], delta_t=model.delta_t, avg_output=model.time_avg_norm)
+			model_stats['Test']['loss'][epoch,c] = loss_function(target_sequence_test[c,:,:], full_predicted_states_test[c,:,:]).cpu().data.numpy().item()
+		test_tvalid = np.median(model_stats['Test']['t_valid'][epoch,:])
 
+		# Print epoch summary after every epoch
 		print_epoch_status(model_stats, epoch)
 
-		# Step 4. Plot stats of Train/Test performance
-		plot_stats(model_stats, epoch=epoch+1, output_path=output_path)
+		# Plot intermittent stuff after 10% increments
+		has_improved_loss = test_loss < best_test_loss
+		has_improved_tvalid =  test_tvalid > best_test_tvalid
+		if has_improved_loss:
+			best_test_loss = test_loss
+		if has_improved_tvalid:
+			best_test_tvalid = test_tvalid
+		if has_improved_loss or has_improved_tvalid or (epoch % save_freq == 0):
+			plot_stats(model_stats, epoch=epoch+1, output_path=output_path)
+			model.plot_weights(n_epochs=epoch+1)
+			model.make_traj_plots(all_target_states, all_predicted_states, all_rnn_predicted_residuals, all_hidden_states, name='train', epoch=epoch)
+			model.make_traj_plots(target_sequence_synch, full_predicted_states_synch, rnn_predicted_residuals_synch, hidden_states_synch, name='test_synch', epoch=epoch)
+			model.make_traj_plots(target_sequence_test, full_predicted_states_test, rnn_predicted_residuals_test, hidden_states_test, name='test', epoch=epoch)
 
-		# Step 5. save data
-		# if do_saving:
-		# 	np.savetxt(output_path+'/test_loss_vec.txt',model_stats['Test']['loss'][:(epoch+1)])
-
-		# print('Test Epoch', epoch, time() - t0)
-
-def make_traj_plots(Xtrue, Xpred, Xpred_residuals, h_t, c_t, name, epoch):
-	return
 
 def print_epoch_status(model_stats, epoch=-1):
 	vals = {}
@@ -489,6 +667,6 @@ def plot_stats(model_stats, epoch=-1, output_path='.'):
 	ax.legend()
 
 	fig.suptitle('Train/Test Performance')
-	fig.savefig(fname=output_path+'/TrainTest_Performance')
+	fig.savefig(fname=os.path.join(output_path,'TrainTest_Performance'))
 	plt.close(fig)
 	return

@@ -45,13 +45,13 @@ from odelibrary import *
 
 LORENZ_DEFAULT_PARAMS = (10, 28, 8/3)
 
-def traj_div_time(Xtrue, Xpred, delta_t, avg_output, thresh=0.4):
+def traj_div_time(Xtrue, Xpred, delta_t, avg_output, thresh=0.4, synch_length=0):
 	# avg_output = np.mean(Xtrue**2)**0.5
-	pw_loss = np.zeros((Xtrue.shape[0]))
-	for j in range(Xtrue.shape[0]):
-		pw_loss[j] = sum((Xtrue[j,:] - Xpred[j,:])**2)**0.5 / avg_output
+	pw_loss = np.zeros((Xtrue.shape[0]-synch_length))
+	for j in range(synch_length, Xtrue.shape[0]):
+		pw_loss[j-synch_length] = sum((Xtrue[j,:] - Xpred[j,:])**2)**0.5 / avg_output
 	t_valid = delta_t*np.argmax(pw_loss > thresh)
-	if t_valid==0 and pw_loss[-1] <= thresh:
+	if t_valid==0 and pw_loss[0] <= thresh and pw_loss[-1] <= thresh:
 		t_valid = delta_t*(len(pw_loss)-1)
 	return t_valid
 
@@ -2083,7 +2083,9 @@ def train_chaosRNN(forward,
 			y_fast_test=None,
 			ODE=None,
 			use_ode_test_data=False,
-			gp_space_map='fulltofull'):
+			gp_space_map='fulltofull',
+			**kwargs):
+
 
 	model_params['smaller_delta_t'] = model_params['delta_t'] # later, need to remove smaller_delta_t as field
 
@@ -2574,6 +2576,7 @@ def train_chaosRNN(forward,
 				# hidden_state = hidden_state
 				saved_hidden_states[i+1,:] = hidden_state.data.numpy().ravel()
 				predictions[i+1,:] = pred.data.numpy().ravel()
+
 
 			y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
 			y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
