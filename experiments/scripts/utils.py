@@ -2363,7 +2363,7 @@ def train_chaosRNN(forward,
 			init.normal_(b, 0.0, sd_perturb)
 			C = C + torch.FloatTensor(sd_perturb*np.random.randn(C.shape[0], C.shape[1]))
 	else:
-		torch.manual_seed()
+		torch.manual_seed(0)
 		init.normal_(A, 0.0, 0.1)
 		init.normal_(B, 0.0, 0.1)
 		init.normal_(C, 0.0, 0.1)
