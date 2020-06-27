@@ -82,10 +82,10 @@ def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 		lp_wrapper(**setts)
 		lp.print_stats()
 	else:
-		# setts['output_dir'] += '_old'
-		# train_chaosRNN(**setts)
-		# setts['output_dir'] = setts['output_dir'].replace('old','new')
-		setts['mode'] = 'fromfile'
+		setts['output_dir'] += '_old'
+		train_chaosRNN(**setts)
+		setts['output_dir'] = setts['output_dir'].replace('old','new2')
+		setts['mode'] = 'original'
 		train_RNN_new(**setts)
 
 	print('Ran training in:', time()-t0)
@@ -176,6 +176,7 @@ class RNN(nn.Module):
 
 	def initialize_weights(self):
 		if self.mode=='original':
+			torch.manual_seed(0)
 			for name, val in self.named_parameters(): #self.state_dict():
 				nn.init.normal_(val, mean=0.0, std=0.1)
 		elif self.mode=='fromfile':
@@ -308,7 +309,7 @@ class RNN(nn.Module):
 			# check if bad initial condition
 			if (any(abs(ic[c,:])>1000) or any(np.isnan(ic[c,:]))):
 				if not self.solver_failed[c]: # only print if it is new/recent news!
-					pdb.set_trace()
+					# pdb.set_trace()
 					print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',ic[c,:])
 				self.solver_failed[c] = True
 			else:
@@ -345,9 +346,9 @@ class RNN(nn.Module):
 		#useful link for teacher-forcing: https://towardsdatascience.com/lstm-for-time-series-prediction-de8aeb26f2ca
 		if self.h_t is None:
 			self.h_t = torch.zeros((input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
+			nn.init.normal_(self.h_t,0.0,0.1)
 		if self.c_t is None and self.use_c_cell:
 			self.c_t = torch.zeros((input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
-
 		full_rnn_pred = input_state_sequence[:,0] #normalized
 
 		self.solver_failed = [False for _ in range(full_rnn_pred.shape[0])]
@@ -439,6 +440,7 @@ def train_RNN_new(y_noisy_train,
 				normz_info=None,
 				ODE=None,
 				mode='original',
+				lr=0.05,
 				**kwargs):
 
 	if not save_freq:
@@ -494,7 +496,7 @@ def train_RNN_new(y_noisy_train,
 
 	if use_gpu:
 		model.cuda()
-	optimizer = get_optimizer(params=model.parameters())
+	optimizer = get_optimizer(params=model.parameters(), lr=lr)
 	loss_function = get_loss()
 
 	best_model_dict = {}
@@ -549,22 +551,54 @@ def train_RNN_new(y_noisy_train,
 					bias_sequence = None
 
 				# Run our forward pass. with normalized inputs
-				pdb.set_trace()
 				full_predicted_states, rnn_predicted_residuals, hidden_states = model(input_state_sequence=torch.FloatTensor(Xtrain[:,i_start:i_stop,:]).type(dtype),
 												physical_prediction_sequence=bias_sequence, train=True)
 
 				# fit the RNN to normalized outputs
 				target_sequence = torch.FloatTensor(ytrain[:,i_start:i_stop,:]).type(dtype)
 
-				# Compute the loss, gradients, and update the parameters by
-				#  calling optimizer.step()
 
-				loss = loss_function(full_predicted_states, target_sequence) #compute loss
-				loss.backward() # compute dL/dparam for each param via BPTT
-				optimizer.step() # update parameters using dL/dparam
-				model.zero_grad() # reset gradients dL/dparam
+				### OLD style of updates
+				# pdb.set_trace()
+				# loss = loss_function(full_predicted_states, target_sequence) #compute loss
+				loss = (full_predicted_states.squeeze() - target_sequence.squeeze()).pow(2).sum()
+				loss.backward()
+
+				for name, val in model.named_parameters():
+					if val.requires_grad:
+						val.data -= lr* val.grad.data
+						val.grad.data.zero_()
+
+				# A.data -= lr * A.grad.data
+				# B.data -= lr * B.grad.data
+				# C.data -= lr * C.grad.data
+				# a.data -= lr * a.grad.data
+				# b.data -= lr * b.grad.data
+
+				# A.grad.data.zero_()
+				# B.grad.data.zero_()
+				# C.grad.data.zero_()
+				# a.grad.data.zero_()
+				# b.grad.data.zero_()
+
+				# hidden_state = hidden_state.detach()
 				model.h_t.detach_() # remove hidden-state from graph so that gradients at next step are not dependent on previous step
 				model.remember_weights() # store history of parameter updates
+				### end OLD style of updates
+
+				### NEW style of updates
+				# Compute the loss, gradients, and update the parameters by
+				#  calling optimizer.step()
+				# loss = 3*loss_function(full_predicted_states, target_sequence) #compute loss
+				# old_loss = (full_predicted_states.squeeze() - target_sequence.squeeze()).pow(2).sum()
+				# if not np.isclose(loss.detach().numpy(), old_loss.detach().numpy()):
+				# 	pdb.set_trace()
+				# loss.backward() # compute dL/dparam for each param via BPTT
+				# optimizer.step() # update parameters using dL/dparam
+				# model.zero_grad() # reset gradients dL/dparam
+				# model.h_t.detach_() # remove hidden-state from graph so that gradients at next step are not dependent on previous step
+				# model.remember_weights() # store history of parameter updates
+				### end NEW style of updates
 
 				# collect the data
 				all_predicted_states.append(full_predicted_states)
