@@ -2566,6 +2566,11 @@ def train_chaosRNN(forward,
 						str(timedelta(seconds=time()-t0)),
 						total_loss_train.data.item(),
 						np.mean(loss_vec_test[i_epoch,:])))
+			print("|B|:",np.linalg.norm(B.data))
+			print("|A|:",np.linalg.norm(A.data))
+			print("|a|:",np.linalg.norm(a.data))
+			print("|C|:",np.linalg.norm(C.data))
+			print("|b|:",np.linalg.norm(b.data))
 
 		if  (i_epoch==(n_epochs-1)) or (save_iterEpochs and (i_epoch % int( max(2, np.ceil(n_epochs/10)) ) == 0)):
 			 # plot predictions vs truth
@@ -2797,11 +2802,6 @@ def train_chaosRNN(forward,
 	# print('|grad_C| = {}'.format(np.linalg.norm(C.grad.data)))
 	# print('|grad_a| = {}'.format(np.linalg.norm(a.grad.data)))
 	# print('|grad_b| = {}'.format(np.linalg.norm(b.grad.data)))
-	print("|B|:",np.linalg.norm(B.data))
-	print("|A|:",np.linalg.norm(A.data))
-	print("|a|:",np.linalg.norm(a.data))
-	print("|C|:",np.linalg.norm(C.data))
-	print("|b|:",np.linalg.norm(b.data))
 
 
 

@@ -84,7 +84,7 @@ def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 	else:
 		setts['output_dir'] += '_old'
 		train_chaosRNN(**setts)
-		setts['output_dir'] = setts['output_dir'].replace('old','new2')
+		setts['output_dir'] = setts['output_dir'].replace('old','new')
 		setts['mode'] = 'original'
 		train_RNN_new(**setts)
 
@@ -345,7 +345,8 @@ class RNN(nn.Module):
 		#useful link for teacher-forcing: https://towardsdatascience.com/lstm-for-time-series-prediction-de8aeb26f2ca
 		if self.h_t is None:
 			self.h_t = torch.zeros((input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
-			nn.init.normal_(self.h_t,0.0,0.1)
+			if train:
+				nn.init.normal_(self.h_t,0.0,0.1)
 		if self.c_t is None and self.use_c_cell:
 			self.c_t = torch.zeros((input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
 		full_rnn_pred = input_state_sequence[:,0] #normalized
@@ -576,8 +577,37 @@ def train_RNN_new(y_noisy_train,
 							easy_name = model.lookup[name][0]
 							print('|grad_{0}|'.format(easy_name), np.linalg.norm(val.grad.data))
 
-				optimizer.step() # update parameters using dL/dparam
-				model.zero_grad() # reset gradients dL/dparam
+				# https://discuss.pytorch.org/t/losses-not-matching-when-training-using-hand-written-sgd-and-torch-optim-sgd/3467/3
+				# manual_new = {}
+				# manual2_new = {}
+				for name, val in model.named_parameters():
+					if val.requires_grad:
+						easy_name = model.lookup[name][0]
+						# manual_new[easy_name] = np.linalg.norm(val.data - lr*val.grad.data)
+						val.data -= lr* val.grad.data
+						# val.data.add_(val.grad, alpha=-lr)
+						# manual2_new[easy_name] = np.linalg.norm(val.data)
+						val.grad.data.zero_()
+						# if manual2_new[easy_name] != manual_new[easy_name]:
+						# 	pdb.set_trace()
+
+						# if do_printing:
+						# 	print('Manual New |{0}|'.format(easy_name), np.linalg.norm(val.data - lr*val.grad.data))
+
+				# optimizer.step() # update parameters using dL/dparam
+				# model.zero_grad() # reset gradients dL/dparam
+
+				# optim_new = {}
+				# for name, val in model.named_parameters():
+				# 	if val.requires_grad:
+				# 		easy_name = model.lookup[name][0]
+				# 		optim_new[easy_name] = np.linalg.norm(val.data)
+				# 		# val.data -= lr* val.grad.data
+				# 		# val.grad.data.zero_()
+				# 		# if do_printing:
+				# 		# 	print('Optim New |{0}|'.format(easy_name), np.linalg.norm(val.data))
+				# 		if optim_new[easy_name] != manual_new[easy_name]:
+				# 			pdb.set_trace()
 
 				if do_printing:
 					for name, val in model.named_parameters():
@@ -590,9 +620,36 @@ def train_RNN_new(y_noisy_train,
 					print('loss:', loss)
 					# pdb.set_trace()
 
+				# A.data -= lr * A.grad.data
+				# B.data -= lr * B.grad.data
+				# C.data -= lr * C.grad.data
+				# a.data -= lr * a.grad.data
+				# b.data -= lr * b.grad.data
+
+				# A.grad.data.zero_()
+				# B.grad.data.zero_()
+				# C.grad.data.zero_()
+				# a.grad.data.zero_()
+				# b.grad.data.zero_()
+
+				# hidden_state = hidden_state.detach()
 				model.h_t.detach_() # remove hidden-state from graph so that gradients at next step are not dependent on previous step
 				model.remember_weights() # store history of parameter updates
-				### end OLD style of updates #####
+				### end OLD style of updates
+
+				### NEW style of updates
+				# Compute the loss, gradients, and update the parameters by
+				#  calling optimizer.step()
+				# loss = 3*loss_function(full_predicted_states, target_sequence) #compute loss
+				# old_loss = (full_predicted_states.squeeze() - target_sequence.squeeze()).pow(2).sum()
+				# if not np.isclose(loss.detach().numpy(), old_loss.detach().numpy()):
+				# 	pdb.set_trace()
+				# loss.backward() # compute dL/dparam for each param via BPTT
+				# optimizer.step() # update parameters using dL/dparam
+				# model.zero_grad() # reset gradients dL/dparam
+				# model.h_t.detach_() # remove hidden-state from graph so that gradients at next step are not dependent on previous step
+				# model.remember_weights() # store history of parameter updates
+				### end NEW style of updates
 
 				# collect the data
 				all_predicted_states.append(full_predicted_states)
@@ -653,21 +710,23 @@ def train_RNN_new(y_noisy_train,
 		# Plot intermittent stuff after 10% increments
 		has_improved_loss = test_loss < best_test_loss
 		has_improved_tvalid =  test_tvalid > best_test_tvalid
+		is_save_interval = (epoch % save_freq == 0)
 		if has_improved_loss:
 			best_test_loss = test_loss
 		if has_improved_tvalid:
 			best_test_tvalid = test_tvalid
-		if has_improved_loss or has_improved_tvalid or (epoch % save_freq == 0):
+		if has_improved_loss or has_improved_tvalid or is_save_interval:
 			plot_stats(model_stats, epoch=epoch+1, output_path=output_path)
 			model.plot_weights(n_epochs=epoch+1)
 			model.make_traj_plots(all_target_states, all_predicted_states, all_rnn_predicted_residuals, all_hidden_states, name='train', epoch=epoch)
 			model.make_traj_plots(target_sequence_synch, full_predicted_states_synch, rnn_predicted_residuals_synch, hidden_states_synch, name='test_synch', epoch=epoch)
 			model.make_traj_plots(target_sequence_test, full_predicted_states_test, rnn_predicted_residuals_test, hidden_states_test, name='test', epoch=epoch)
 
-	for name, val in model.named_parameters():
-		if val.requires_grad:
-			easy_name = model.lookup[name][0]
-			print('|{0}|'.format(easy_name), np.linalg.norm(val.data))
+		if is_save_interval:
+			for name, val in model.named_parameters():
+				if val.requires_grad:
+					easy_name = model.lookup[name][0]
+					print('|{0}|'.format(easy_name), np.linalg.norm(val.data))
 
 	print('all done!')
 
