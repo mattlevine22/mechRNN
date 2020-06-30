@@ -83,8 +83,8 @@ def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 		lp.print_stats()
 	else:
 		setts['output_dir'] += '_old'
-		train_chaosRNN(**setts)
-		setts['output_dir'] = setts['output_dir'].replace('old','new')
+		# train_chaosRNN(**setts)
+		setts['output_dir'] = setts['output_dir'].replace('old','new_GRU')
 		setts['mode'] = 'original'
 		train_RNN_new(**setts)
 
@@ -96,7 +96,7 @@ class RNN(nn.Module):
 			input_size,
 			hidden_size=50,
 			output_size=None,
-			cell_type='RNN',
+			cell_type='GRU',
 			embed_physics_prediction=False,
 			use_physics_as_bias=False,
 			dtype=torch.float,
@@ -108,11 +108,13 @@ class RNN(nn.Module):
 			output_path='default_output',
 			max_plot=None,
 			mode='original',
-			use_manual_seed=False):
+			use_manual_seed=False,
+			component_wise=False):
 
 		super().__init__()
 		if output_size is None:
 			output_size = input_size
+		self.cell_type = cell_type
 		self.use_manual_seed = use_manual_seed
 		self.mode = mode
 		self.output_path = output_path
@@ -151,21 +153,21 @@ class RNN(nn.Module):
 		# self.w = nn.Parameter(scalar(0.1), requires_grad=True)
 
 		# Default is RNN w/ ReLU
+		self.lookup = {}
 		if cell_type=='LSTM':
 			self.cell = nn.LSTMCell(input_size, hidden_size)
 			self.use_c_cell = True
 		elif cell_type=='GRU':
 			self.cell = nn.GRUCell(input_size, hidden_size)
-			self.use_c_cell = True
+			self.use_c_cell = False
 		else:
 			self.use_c_cell = False
 			self.cell = nn.RNNCell(input_size, hidden_size, nonlinearity='relu')
-
-		self.lookup = {'cell.weight_hh': 'A_mat',
-					'cell.weight_ih': 'B_mat',
-					'hidden2pred.weight': 'C_mat',
-					'cell.bias_hh': 'a_vec',
-					'hidden2pred.bias': 'b_vec'}
+			self.lookup = {'cell.weight_hh': 'A_mat',
+						'cell.weight_ih': 'B_mat',
+						'hidden2pred.weight': 'C_mat',
+						'cell.bias_hh': 'a_vec',
+						'hidden2pred.bias': 'b_vec'}
 
 
 		# The linear layer that maps from hidden state space to tag space
@@ -182,28 +184,32 @@ class RNN(nn.Module):
 		self.clear_hidden()
 
 	def initialize_weights(self):
-		if self.mode=='original':
+		if self.mode=='original' and self.cell_type=='RNN':
 			for name, val in self.named_parameters(): #self.state_dict():
 				if self.use_manual_seed:
 					torch.manual_seed(0)
 				nn.init.normal_(val, mean=0.0, std=0.1)
+			# CUSTOM slight adjustment to parameterization
+			# for some reason, pytorch includes 2 redundant bias terms in the cell
+			self.cell.bias_ih.data = torch.zeros(self.cell.bias_ih.data.shape)
+			self.cell.bias_ih.requires_grad = False
 		elif self.mode=='fromfile':
 			for name, val in self.named_parameters():
 				# pdb.set_trace()
 				if name in self.lookup:
 					fname = os.path.join('/Users/matthewlevine/test_outputs/l63/rnn_output/10_epochs/pureRNN_vanilla_old', self.lookup[name] + '.txt')
 					val.data = torch.FloatTensor(np.loadtxt(fname=fname)).type(self.dtype)
-
-
-		# CUSTOM slight adjustment to parameterization
-		# for some reason, pytorch includes 2 redundant bias terms in the cell
-		self.cell.bias_ih.data = torch.zeros(self.cell.bias_ih.data.shape)
-		self.cell.bias_ih.requires_grad = False
-		return
+		else:
+			print('Using default parameter initialization from PyTorch. Godspeed!')
 
 	def clear_hidden(self):
 		self.h_t = None
 		self.c_t = None
+
+	def detach_hidden(self):
+		self.h_t.detach_()
+		if self.use_c_cell:
+			self.c_t.detach_()
 
 	def make_traj_plots(self, Xtrue, Xpred, Xpred_residuals, hidden_states, name, epoch):
 		traj_dir = os.path.join(self.output_path, 'traj_state_{name}'.format(name=name))
@@ -232,7 +238,6 @@ class RNN(nn.Module):
 			fig.suptitle('Hidden state dynamics')
 			fig.savefig(fname=os.path.join(hidden_dir,'hiddenstate{c}_epoch{epoch}'.format(c=c,epoch=epoch)))
 			plt.close(fig)
-		return
 
 	def remember_weights(self):
 		for name, val in self.named_parameters(): #self.state_dict():
@@ -241,7 +246,6 @@ class RNN(nn.Module):
 				self.weight_history[name] = norm_val
 			else:
 				self.weight_history[name] = np.hstack((self.weight_history[name],norm_val))
-		return
 
 	def plot_weights(self, n_epochs):
 		n_params = len(self.weight_history.keys())
@@ -294,9 +298,6 @@ class RNN(nn.Module):
 		fig.savefig(fname=os.path.join(param_path,'rnn_parameter_values_{n_epochs}.png'.format(n_epochs=n_epochs-1)), dpi=300)
 		plt.close(fig)
 
-
-		return
-
 	def normalize(self, y):
 		return normalize(norm_dict=self.norm_dict, y=y)
 
@@ -310,7 +311,6 @@ class RNN(nn.Module):
 			X = X[:,None,:]
 		else:
 			do_squeeze=False
-
 
 		y_pred = np.zeros(X.shape)
 		for i1 in range(X.shape[0]):
@@ -362,6 +362,8 @@ class RNN(nn.Module):
 				nn.init.normal_(self.h_t,0.0,0.1)
 		if self.c_t is None and self.use_c_cell:
 			self.c_t = torch.zeros((input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
+			if train:
+				nn.init.normal_(self.c_t,0.0,0.1)
 		full_rnn_pred = input_state_sequence[:,0] #normalized
 
 		self.solver_failed = [False for _ in range(full_rnn_pred.shape[0])]
@@ -599,7 +601,7 @@ def train_RNN_new(y_noisy_train,
 				# manual2_new = {}
 				for name, val in model.named_parameters():
 					if val.requires_grad:
-						easy_name = model.lookup[name][0]
+						# easy_name = model.lookup[name][0]
 						# manual_new[easy_name] = np.linalg.norm(val.data - lr*val.grad.data)
 						val.data -= lr* val.grad.data
 						# val.data.add_(val.grad, alpha=-lr)
@@ -650,7 +652,7 @@ def train_RNN_new(y_noisy_train,
 				# b.grad.data.zero_()
 
 				# hidden_state = hidden_state.detach()
-				model.h_t.detach_() # remove hidden-state from graph so that gradients at next step are not dependent on previous step
+				model.detach_hidden() # remove hidden-states from graph so that gradients at next step are not dependent on previous step
 				model.remember_weights() # store history of parameter updates
 				### end OLD style of updates
 
@@ -740,7 +742,10 @@ def train_RNN_new(y_noisy_train,
 		if is_save_interval:
 			for name, val in model.named_parameters():
 				if val.requires_grad:
-					easy_name = model.lookup[name][0]
+					try:
+						easy_name = model.lookup[name][0]
+					except:
+						easy_name = name
 					print('|{0}|'.format(easy_name), np.linalg.norm(val.data))
 
 	print('all done!')
