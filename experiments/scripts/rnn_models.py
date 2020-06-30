@@ -108,7 +108,7 @@ class RNN(nn.Module):
 			output_path='default_output',
 			max_plot=None,
 			mode='original',
-			use_manual_seed=True):
+			use_manual_seed=False):
 
 		super().__init__()
 		if output_size is None:
@@ -635,7 +635,7 @@ def train_RNN_new(y_noisy_train,
 					print('target:', target_sequence)
 					print('pred:', full_predicted_states)
 					print('loss:', loss)
-					# pdb.set_trace()
+					pdb.set_trace()
 
 				# A.data -= lr * A.grad.data
 				# B.data -= lr * B.grad.data

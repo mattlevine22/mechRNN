@@ -2085,7 +2085,7 @@ def train_chaosRNN(forward,
 			use_ode_test_data=False,
 			gp_space_map='fulltofull',
 			do_printing=False,
-			use_manual_seed=True,
+			use_manual_seed=False,
 			**kwargs):
 
 
@@ -2465,7 +2465,7 @@ def train_chaosRNN(forward,
 				print('target:', target)
 				print('pred:', pred)
 				print('loss:', loss)
-				# pdb.set_trace()
+				pdb.set_trace()
 
 			A.data -= lr * A.grad.data
 			B.data -= lr * B.grad.data
