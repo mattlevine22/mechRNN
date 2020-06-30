@@ -2085,6 +2085,7 @@ def train_chaosRNN(forward,
 			use_ode_test_data=False,
 			gp_space_map='fulltofull',
 			do_printing=False,
+			use_manual_seed=True,
 			**kwargs):
 
 
@@ -2364,11 +2365,20 @@ def train_chaosRNN(forward,
 			init.normal_(b, 0.0, sd_perturb)
 			C = C + torch.FloatTensor(sd_perturb*np.random.randn(C.shape[0], C.shape[1]))
 	else:
-		torch.manual_seed(0)
+		if use_manual_seed:
+			torch.manual_seed(0)
 		init.normal_(A, 0.0, 0.1)
+		if use_manual_seed:
+			torch.manual_seed(0)
 		init.normal_(B, 0.0, 0.1)
+		if use_manual_seed:
+			torch.manual_seed(0)
 		init.normal_(C, 0.0, 0.1)
+		if use_manual_seed:
+			torch.manual_seed(0)
 		init.normal_(a, 0.0, 0.1)
+		if use_manual_seed:
+			torch.manual_seed(0)
 		init.normal_(b, 0.0, 0.1)
 
 	# additional perturbation for trivial init case

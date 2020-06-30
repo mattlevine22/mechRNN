@@ -107,11 +107,13 @@ class RNN(nn.Module):
 			ode=None,
 			output_path='default_output',
 			max_plot=None,
-			mode='original'):
+			mode='original',
+			use_manual_seed=True):
 
 		super().__init__()
 		if output_size is None:
 			output_size = input_size
+		self.use_manual_seed = use_manual_seed
 		self.mode = mode
 		self.output_path = output_path
 		self.teacher_force_probability = teacher_force_probability
@@ -179,10 +181,11 @@ class RNN(nn.Module):
 		# Create empty hidden states
 		self.clear_hidden()
 
-
 	def initialize_weights(self):
 		if self.mode=='original':
 			for name, val in self.named_parameters(): #self.state_dict():
+				if self.use_manual_seed:
+					torch.manual_seed(0)
 				nn.init.normal_(val, mean=0.0, std=0.1)
 		elif self.mode=='fromfile':
 			for name, val in self.named_parameters():
