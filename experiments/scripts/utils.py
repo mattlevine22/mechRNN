@@ -2084,6 +2084,7 @@ def train_chaosRNN(forward,
 			ODE=None,
 			use_ode_test_data=False,
 			gp_space_map='fulltofull',
+			do_printing=False,
 			**kwargs):
 
 
@@ -2439,21 +2440,28 @@ def train_chaosRNN(forward,
 			running_epoch_loss_clean_train[j] = total_loss_clean_train/(j+1)
 			loss.backward()
 
+			if do_printing:
+				print("|B|:",np.linalg.norm(B.data))
+				print("|A|:",np.linalg.norm(A.data))
+				print("|a|:",np.linalg.norm(a.data))
+				print("|C|:",np.linalg.norm(C.data))
+				print("|b|:",np.linalg.norm(b.data))
+				print('|grad_B| = {}'.format(np.linalg.norm(B.grad.data)))
+				print('|grad_A| = {}'.format(np.linalg.norm(A.grad.data)))
+				print('|grad_a| = {}'.format(np.linalg.norm(a.grad.data)))
+				print('|grad_C| = {}'.format(np.linalg.norm(C.grad.data)))
+				print('|grad_b| = {}'.format(np.linalg.norm(b.grad.data)))
+				print('hidden state:', hidden_state)
+				print('target:', target)
+				print('pred:', pred)
+				print('loss:', loss)
+				# pdb.set_trace()
+
 			A.data -= lr * A.grad.data
 			B.data -= lr * B.grad.data
 			C.data -= lr * C.grad.data
 			a.data -= lr * a.grad.data
 			b.data -= lr * b.grad.data
-
-			# print('|grad_A| = {}'.format(np.linalg.norm(A.grad.data)))
-			# print('|grad_B| = {}'.format(np.linalg.norm(B.grad.data)))
-			# print('|grad_C| = {}'.format(np.linalg.norm(C.grad.data)))
-			# print('|grad_a| = {}'.format(np.linalg.norm(a.grad.data)))
-			# print('|grad_b| = {}'.format(np.linalg.norm(b.grad.data)))
-			# print("A:",A)
-			# print("C:",C)
-			# print("a:",a)
-			# print("b:",b)
 
 			A.grad.data.zero_()
 			B.grad.data.zero_()
@@ -2784,6 +2792,19 @@ def train_chaosRNN(forward,
 	# print("c:",c)
 	# print("v:",v)
 
+	# print('|grad_A| = {}'.format(np.linalg.norm(A.grad.data)))
+	# print('|grad_B| = {}'.format(np.linalg.norm(B.grad.data)))
+	# print('|grad_C| = {}'.format(np.linalg.norm(C.grad.data)))
+	# print('|grad_a| = {}'.format(np.linalg.norm(a.grad.data)))
+	# print('|grad_b| = {}'.format(np.linalg.norm(b.grad.data)))
+	print("|B|:",np.linalg.norm(B.data))
+	print("|A|:",np.linalg.norm(A.data))
+	print("|a|:",np.linalg.norm(a.data))
+	print("|C|:",np.linalg.norm(C.data))
+	print("|b|:",np.linalg.norm(b.data))
+
+
+
 	# plot parameter convergence
 	# if keep_param_history:
 	fig, my_axes = plt.subplots(2, 3, sharex=True, figsize=[8,6])
@@ -3003,6 +3024,8 @@ def train_chaosRNN(forward,
 		ax3.set_ylabel('Valid Time')
 		fig.savefig(fname=output_dir+'/TrainTest_log'+'_win'+str(win))
 		plt.close(fig)
+
+	print('all done!')
 
 
 def train_RNN(forward,

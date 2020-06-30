@@ -159,6 +159,12 @@ class RNN(nn.Module):
 			self.use_c_cell = False
 			self.cell = nn.RNNCell(input_size, hidden_size, nonlinearity='relu')
 
+		self.lookup = {'cell.weight_hh': 'A_mat',
+					'cell.weight_ih': 'B_mat',
+					'hidden2pred.weight': 'C_mat',
+					'cell.bias_hh': 'a_vec',
+					'hidden2pred.bias': 'b_vec'}
+
 
 		# The linear layer that maps from hidden state space to tag space
 		self.hidden2pred = nn.Linear(hidden_size, output_size)
@@ -176,19 +182,13 @@ class RNN(nn.Module):
 
 	def initialize_weights(self):
 		if self.mode=='original':
-			torch.manual_seed(0)
 			for name, val in self.named_parameters(): #self.state_dict():
 				nn.init.normal_(val, mean=0.0, std=0.1)
 		elif self.mode=='fromfile':
-			lookup = {'cell.weight_hh': 'A_mat',
-						'cell.weight_ih': 'B_mat',
-						'hidden2pred.weight': 'C_mat',
-						'cell.bias_hh': 'a_vec',
-						'hidden2pred.bias': 'b_vec'}
 			for name, val in self.named_parameters():
 				# pdb.set_trace()
-				if name in lookup:
-					fname = os.path.join('/Users/matthewlevine/test_outputs/l63/rnn_output/10_epochs/pureRNN_vanilla_old', lookup[name] + '.txt')
+				if name in self.lookup:
+					fname = os.path.join('/Users/matthewlevine/test_outputs/l63/rnn_output/10_epochs/pureRNN_vanilla_old', self.lookup[name] + '.txt')
 					val.data = torch.FloatTensor(np.loadtxt(fname=fname)).type(self.dtype)
 
 
@@ -210,7 +210,7 @@ class RNN(nn.Module):
 
 		n_traj, n_steps, n_states = Xtrue.shape
 		n_plt = min(self.max_plot, n_steps)
-		t_plot = np.arange(0,n_plt*self.delta_t,self.delta_t)
+		t_plot = np.linspace(0,self.delta_t, n_plt)
 		for c in range(n_traj):
 			fig, ax_list = plt.subplots(n_states, 1, figsize=[12,10], sharex=True)
 			for s in range(n_states):
@@ -335,7 +335,6 @@ class RNN(nn.Module):
 	def forward(self, input_state_sequence, n_steps=None, physical_prediction_sequence=None, train=True, synch_mode=False):
 		# input_state_sequence should be normalized
 		# physical_prediction_sequence should be normalized
-
 		if n_steps is None:
 			n_steps = input_state_sequence.shape[1]
 
@@ -441,6 +440,7 @@ def train_RNN_new(y_noisy_train,
 				ODE=None,
 				mode='original',
 				lr=0.05,
+				do_printing=False,
 				**kwargs):
 
 	if not save_freq:
@@ -476,16 +476,17 @@ def train_RNN_new(y_noisy_train,
 	# get data
 	Xtrain = y_noisy_train[None,:-1,:]
 	ytrain = y_noisy_train[None,1:,:]
-	Xtest = y_noisy_test[:,:-1,:]
-	ytest = y_noisy_test[:,1:,:]
+	Xtest = y_noisy_test
+	# ytest = y_noisy_test[:,1:,:]
 	Xtest_synch = y_noisy_testSynch[:,:-1,:]
 	ytest_synch = y_noisy_testSynch[:,1:,:]
+	Xtest_init = y_noisy_testSynch[:,None,-1,:]
 
 	# get unnormalized data
 	Xtrain_raw = unnormalize(norm_dict=normz_info, y_norm=Xtrain)
 	ytrain_raw = unnormalize(norm_dict=normz_info, y_norm=ytrain)
 	Xtest_raw = unnormalize(norm_dict=normz_info, y_norm=Xtest)
-	ytest_raw = unnormalize(norm_dict=normz_info, y_norm=ytest)
+	# ytest_raw = unnormalize(norm_dict=normz_info, y_norm=ytest)
 
 	Xtest_synch_raw = unnormalize(norm_dict=normz_info, y_norm=Xtest_synch)
 	ytest_synch_raw = unnormalize(norm_dict=normz_info, y_norm=ytest_synch)
@@ -545,12 +546,14 @@ def train_RNN_new(y_noisy_train,
 				i_stop = min(i_stop+n_grad_steps, end_chunk)
 
 				# get bias sequence
+				# print('This bias sequence should be coming from Psi_epsilon, not the real data! Maybe think about doing teacher forcing here.')
 				if use_physics_as_bias:
-					bias_sequence = torch.FloatTensor(Xtrain[:,i_start:i_stop,:]).type(dtype) #normalized
+					bias_sequence = None #torch.FloatTensor(Xtrain[:,i_start:i_stop,:]).type(dtype) #normalized
 				else:
 					bias_sequence = None
 
 				# Run our forward pass. with normalized inputs
+				# pdb.set_trace()
 				full_predicted_states, rnn_predicted_residuals, hidden_states = model(input_state_sequence=torch.FloatTensor(Xtrain[:,i_start:i_stop,:]).type(dtype),
 												physical_prediction_sequence=bias_sequence, train=True)
 
@@ -558,47 +561,38 @@ def train_RNN_new(y_noisy_train,
 				target_sequence = torch.FloatTensor(ytrain[:,i_start:i_stop,:]).type(dtype)
 
 
-				### OLD style of updates
-				# pdb.set_trace()
+				### OLD style of updates #####
 				# loss = loss_function(full_predicted_states, target_sequence) #compute loss
 				loss = (full_predicted_states.squeeze() - target_sequence.squeeze()).pow(2).sum()
 				loss.backward()
 
-				for name, val in model.named_parameters():
-					if val.requires_grad:
-						val.data -= lr* val.grad.data
-						val.grad.data.zero_()
+				if do_printing:
+					for name, val in model.named_parameters():
+						if val.requires_grad:
+							easy_name = model.lookup[name][0]
+							print('|{0}|'.format(easy_name), np.linalg.norm(val.data))
+					for name, val in model.named_parameters():
+						if val.requires_grad:
+							easy_name = model.lookup[name][0]
+							print('|grad_{0}|'.format(easy_name), np.linalg.norm(val.grad.data))
 
-				# A.data -= lr * A.grad.data
-				# B.data -= lr * B.grad.data
-				# C.data -= lr * C.grad.data
-				# a.data -= lr * a.grad.data
-				# b.data -= lr * b.grad.data
+				optimizer.step() # update parameters using dL/dparam
+				model.zero_grad() # reset gradients dL/dparam
 
-				# A.grad.data.zero_()
-				# B.grad.data.zero_()
-				# C.grad.data.zero_()
-				# a.grad.data.zero_()
-				# b.grad.data.zero_()
+				if do_printing:
+					for name, val in model.named_parameters():
+						if val.requires_grad:
+							easy_name = model.lookup[name][0]
+							# print('|{0}|'.format(easy_name), np.linalg.norm(val.data))
+					print('hidden state:', model.h_t)
+					print('target:', target_sequence)
+					print('pred:', full_predicted_states)
+					print('loss:', loss)
+					# pdb.set_trace()
 
-				# hidden_state = hidden_state.detach()
 				model.h_t.detach_() # remove hidden-state from graph so that gradients at next step are not dependent on previous step
 				model.remember_weights() # store history of parameter updates
-				### end OLD style of updates
-
-				### NEW style of updates
-				# Compute the loss, gradients, and update the parameters by
-				#  calling optimizer.step()
-				# loss = 3*loss_function(full_predicted_states, target_sequence) #compute loss
-				# old_loss = (full_predicted_states.squeeze() - target_sequence.squeeze()).pow(2).sum()
-				# if not np.isclose(loss.detach().numpy(), old_loss.detach().numpy()):
-				# 	pdb.set_trace()
-				# loss.backward() # compute dL/dparam for each param via BPTT
-				# optimizer.step() # update parameters using dL/dparam
-				# model.zero_grad() # reset gradients dL/dparam
-				# model.h_t.detach_() # remove hidden-state from graph so that gradients at next step are not dependent on previous step
-				# model.remember_weights() # store history of parameter updates
-				### end NEW style of updates
+				### end OLD style of updates #####
 
 				# collect the data
 				all_predicted_states.append(full_predicted_states)
@@ -624,23 +618,30 @@ def train_RNN_new(y_noisy_train,
 		# Step 1. Run forward pass with normalized synchronization data
 		full_predicted_states_synch, rnn_predicted_residuals_synch, hidden_states_synch = model(input_state_sequence=torch.FloatTensor(Xtest_synch).type(dtype),
 										physical_prediction_sequence=None, train=False, synch_mode=True)
+		# pdb.set_trace()
+
+		# Step 2. Run our forward pass with synchronized RNN
+		# Note that bias-terms and physical predictions must be computed on the fly
+		full_predicted_states_test, rnn_predicted_residuals_test, hidden_states_test = model(input_state_sequence=torch.FloatTensor(Xtest_init).type(dtype),
+										n_steps = Xtest.shape[1],
+										physical_prediction_sequence=None, train=False, synch_mode=False)
+
+		# Step 3. Compute the losses
+		test_loss = (full_predicted_states_test.squeeze() - torch.FloatTensor(Xtest).type(dtype).squeeze()).pow(2).sum()
+		# test_loss = loss_function(full_predicted_states_test, torch.FloatTensor(ytest).type(dtype)).detach().numpy()
+		# print('Test Loss:', test_loss)
+		# pdb.set_trace()
+
+		# unnormalize the test outputs
+		target_sequence_test = torch.FloatTensor(Xtest_raw).type(dtype)
+		full_predicted_states_test = model.unnormalize(full_predicted_states_test)
+		rnn_predicted_residuals_test = model.unnormalize(rnn_predicted_residuals_test)
 		# unnormalize the test_synch outputs
 		target_sequence_synch = torch.FloatTensor(ytest_synch_raw).type(dtype)
 		full_predicted_states_synch = model.unnormalize(full_predicted_states_synch)
 		rnn_predicted_residuals_synch = model.unnormalize(rnn_predicted_residuals_synch)
 
-		# Step 2. Run our forward pass with synchronized RNN
-		# Note that bias-terms and physical predictions must be computed on the fly
-		full_predicted_states_test, rnn_predicted_residuals_test, hidden_states_test = model(input_state_sequence=model.normalize(full_predicted_states_synch[:,None,-1,:]),
-										n_steps = Xtest.shape[1],
-										physical_prediction_sequence=None, train=False, synch_mode=False)
-		# unnormalize the data
-		target_sequence_test = torch.FloatTensor(ytest_raw).type(dtype)
-		full_predicted_states_test = model.unnormalize(full_predicted_states_test)
-		rnn_predicted_residuals_test = model.unnormalize(rnn_predicted_residuals_test)
 
-		# Step 3. Compute the losses
-		test_loss = loss_function(full_predicted_states_test, target_sequence_test).detach().numpy()
 		for c in range(n_test_traj):
 			model_stats['Test']['t_valid'][epoch,c] = traj_div_time(Xtrue=target_sequence_test[c,:,:], Xpred=full_predicted_states_test[c,:,:], delta_t=model.delta_t, avg_output=model.time_avg_norm)
 			model_stats['Test']['loss'][epoch,c] = loss_function(target_sequence_test[c,:,:], full_predicted_states_test[c,:,:]).cpu().data.numpy().item()
@@ -663,6 +664,12 @@ def train_RNN_new(y_noisy_train,
 			model.make_traj_plots(target_sequence_synch, full_predicted_states_synch, rnn_predicted_residuals_synch, hidden_states_synch, name='test_synch', epoch=epoch)
 			model.make_traj_plots(target_sequence_test, full_predicted_states_test, rnn_predicted_residuals_test, hidden_states_test, name='test', epoch=epoch)
 
+	for name, val in model.named_parameters():
+		if val.requires_grad:
+			easy_name = model.lookup[name][0]
+			print('|{0}|'.format(easy_name), np.linalg.norm(val.data))
+
+	print('all done!')
 
 def print_epoch_status(model_stats, epoch=-1):
 	vals = {}
