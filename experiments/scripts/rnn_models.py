@@ -210,7 +210,7 @@ class RNN(nn.Module):
 
 		n_traj, n_steps, n_states = Xtrue.shape
 		n_plt = min(self.max_plot, n_steps)
-		t_plot = np.linspace(0,self.delta_t, n_plt)
+		t_plot = np.linspace(0, n_plt*self.delta_t, n_plt)
 		for c in range(n_traj):
 			fig, ax_list = plt.subplots(n_states, 1, figsize=[12,10], sharex=True)
 			for s in range(n_states):
@@ -300,37 +300,47 @@ class RNN(nn.Module):
 	def unnormalize(self, y_norm):
 		return unnormalize(norm_dict=self.norm_dict, y_norm=y_norm)
 
-	def get_physics_prediction(self, ic):
+	def get_physics_prediction(self, X):
 		#input and output are unnormalized
-		n_ics = ic.shape[0]
+		if X.ndim==2:
+			do_squeeze=True
+			X = X[:,None,:]
+		else:
+			do_squeeze=False
 
-		y_pred = np.zeros(ic.shape)
-		for c in range(n_ics):
-			# check if bad initial condition
-			if (any(abs(ic[c,:])>1000) or any(np.isnan(ic[c,:]))):
-				if not self.solver_failed[c]: # only print if it is new/recent news!
-					# pdb.set_trace()
-					print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',ic[c,:])
-				self.solver_failed[c] = True
-			else:
-				self.solver_failed[c] = False
 
-			if not self.solver_failed[c]:
-				sol = solve_ivp(fun=lambda t, y: self.ode.rhs(y, t), t_span=self.tspan, y0=ic[c,:], t_eval=self.t_eval, **self.ode_params)
-				# sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(self.tspan[0], self.tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=self.tspan)
-				y_out = sol.y.T
-				if not sol.success:
-					# solver failed
-					print('ODE solver has failed at ic=',ic[c,:])
-					self.solver_failed[c] = True
+		y_pred = np.zeros(X.shape)
+		for i1 in range(X.shape[0]):
+			for i2 in range(X.shape[1]):
+				# check if bad initial condition
+				if (any(abs(X[i1,i2,:])>1000) or any(np.isnan(X[i1,i2,:]))):
+					if not self.solver_failed[i1]: # only print if it is new/recent news!
+						# pdb.set_trace()
+						print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',X[i1,i2,:])
+					self.solver_failed[i1] = True
+				else:
+					self.solver_failed[i1] = False
 
-			if self.solver_failed[c]:
-				y_pred[c,:] = np.copy(ic[c,:]) # persist previous solution
-			else:
-				# solver is OKAY--use the solution like a good boy!
-				y_pred[c,:] = y_out[-1,:]
+				if not self.solver_failed[i1]:
+					sol = solve_ivp(fun=lambda t, y: self.ode.rhs(y, t), t_span=self.tspan, y0=X[i1,i2,:], t_eval=self.t_eval, **self.ode_params)
+					# sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(self.tspan[0], self.tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=self.tspan)
+					y_out = sol.y.T
+					if not sol.success:
+						# solver failed
+						print('ODE solver has failed at ic=',X[i1,i2,:])
+						self.solver_failed[i1] = True
 
-		return torch.FloatTensor(y_pred).type(self.dtype)
+				if self.solver_failed[i1]:
+					y_pred[i1,i2,:] = np.copy(X[i1,i2,:]) # persist previous solution
+				else:
+					# solver is OKAY--use the solution like a good boy!
+					y_pred[i1,i2,:] = y_out[-1,:]
+
+		foo_out = torch.FloatTensor(y_pred).type(self.dtype)
+		if do_squeeze:
+			foo_out = foo_out.squeeze(1)
+
+		return foo_out
 
 	def forward(self, input_state_sequence, n_steps=None, physical_prediction_sequence=None, train=True, synch_mode=False):
 		# input_state_sequence should be normalized
@@ -374,7 +384,7 @@ class RNN(nn.Module):
 					if input_t.ndim==1:
 						input_t = input_t[None,:]
 					ic = self.unnormalize(input_t).detach().numpy()
-					physics_pred = self.normalize(self.get_physics_prediction(ic=ic))
+					physics_pred = self.normalize(self.get_physics_prediction(X=ic))
 
 				if self.embed_physics_prediction:
 					input_t = torch.stack(input_t, physics_pred)
@@ -496,6 +506,11 @@ def train_RNN_new(y_noisy_train,
 	model = RNN(ode_params=model_params, input_size=Xtrain.shape[2], norm_dict=normz_info, use_physics_as_bias=use_physics_as_bias, ode=ODE, output_path=output_path, mode=mode)
 	model.remember_weights()
 
+	# generate bias sequences
+	if use_physics_as_bias:
+		model.solver_failed = [False]
+		Xtrain_pred = model.normalize(model.get_physics_prediction(X=model.unnormalize(torch.FloatTensor(Xtrain).type(dtype))))
+
 	if use_gpu:
 		model.cuda()
 	optimizer = get_optimizer(params=model.parameters(), lr=lr)
@@ -549,12 +564,11 @@ def train_RNN_new(y_noisy_train,
 				# get bias sequence
 				# print('This bias sequence should be coming from Psi_epsilon, not the real data! Maybe think about doing teacher forcing here.')
 				if use_physics_as_bias:
-					bias_sequence = None #torch.FloatTensor(Xtrain[:,i_start:i_stop,:]).type(dtype) #normalized
+					bias_sequence = Xtrain_pred[:,i_start:i_stop,:] #normalized
 				else:
 					bias_sequence = None
 
 				# Run our forward pass. with normalized inputs
-				# pdb.set_trace()
 				full_predicted_states, rnn_predicted_residuals, hidden_states = model(input_state_sequence=torch.FloatTensor(Xtrain[:,i_start:i_stop,:]).type(dtype),
 												physical_prediction_sequence=bias_sequence, train=True)
 
@@ -562,7 +576,7 @@ def train_RNN_new(y_noisy_train,
 				target_sequence = torch.FloatTensor(ytrain[:,i_start:i_stop,:]).type(dtype)
 
 
-				### OLD style of updates #####
+				### OLD style of updates
 				# loss = loss_function(full_predicted_states, target_sequence) #compute loss
 				loss = (full_predicted_states.squeeze() - target_sequence.squeeze()).pow(2).sum()
 				loss.backward()
@@ -675,7 +689,6 @@ def train_RNN_new(y_noisy_train,
 		# Step 1. Run forward pass with normalized synchronization data
 		full_predicted_states_synch, rnn_predicted_residuals_synch, hidden_states_synch = model(input_state_sequence=torch.FloatTensor(Xtest_synch).type(dtype),
 										physical_prediction_sequence=None, train=False, synch_mode=True)
-		# pdb.set_trace()
 
 		# Step 2. Run our forward pass with synchronized RNN
 		# Note that bias-terms and physical predictions must be computed on the fly
@@ -687,7 +700,6 @@ def train_RNN_new(y_noisy_train,
 		test_loss = (full_predicted_states_test.squeeze() - torch.FloatTensor(Xtest).type(dtype).squeeze()).pow(2).sum()
 		# test_loss = loss_function(full_predicted_states_test, torch.FloatTensor(ytest).type(dtype)).detach().numpy()
 		# print('Test Loss:', test_loss)
-		# pdb.set_trace()
 
 		# unnormalize the test outputs
 		target_sequence_test = torch.FloatTensor(Xtest_raw).type(dtype)
