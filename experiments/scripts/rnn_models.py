@@ -123,8 +123,8 @@ class RNN(nn.Module):
 		self.t_synch = t_synch
 		self.dtype = dtype
 		self.hidden_size = hidden_size
+		self.n_components = output_size
 		if self.component_wise:
-			self.n_components = output_size
 			self.input_size = 1
 			self.output_size = 1
 		else:
@@ -238,12 +238,16 @@ class RNN(nn.Module):
 			fig.savefig(fname=os.path.join(traj_dir,'trajfit{c}_epoch{epoch}'.format(c=c,epoch=epoch)))
 			plt.close(fig)
 
-			fig, ax = plt.subplots(1, 1, figsize=[12,10], sharex=True)
-			ax.plot(t_plot, hidden_states[c,:n_plt,:].cpu().data.numpy())
-			ax.set_xlabel('Time')
-			fig.suptitle('Hidden state dynamics')
-			fig.savefig(fname=os.path.join(hidden_dir,'hiddenstate{c}_epoch{epoch}'.format(c=c,epoch=epoch)))
-			plt.close(fig)
+			for comp in range(self.n_components):
+				fig, ax = plt.subplots(1, 1, figsize=[12,10], sharex=True)
+				try:
+					ax.plot(t_plot, hidden_states[c,comp,:n_plt,:].cpu().data.numpy())
+				except:
+					pdb.set_trace()
+				ax.set_xlabel('Time')
+				fig.suptitle('Hidden state dynamics')
+				fig.savefig(fname=os.path.join(hidden_dir,'hiddenstate{c}_component{comp}_epoch{epoch}'.format(c=c, comp=comp, epoch=epoch)))
+				plt.close(fig)
 
 	def remember_weights(self):
 		for name, val in self.named_parameters(): #self.state_dict():
@@ -394,6 +398,8 @@ class RNN(nn.Module):
 				else:
 					input_t = full_rnn_pred
 
+			input_t = input_t.view((input_state_sequence[:,0].shape))
+
 			if self.use_physics_as_bias or self.embed_physics_prediction:
 				if physical_prediction_sequence is not None:
 					physics_pred = physical_prediction_sequence[:,t,:]
@@ -409,20 +415,27 @@ class RNN(nn.Module):
 				physics_pred = 0
 
 			# evolve hidden state(s)
+			h_t_new = self.h_t.clone()
 			if self.use_c_cell: # LSTM / GRU
+				c_t_new = self.c_t.clone()
 				if self.component_wise:
 					for n in range(self.n_components):
-						self.h_t[n], self.c_t[n] = self.cell(input_t[None,:,n], (self.h_t[n], self.c_t[n])) # input needs to be dim (batch, input_size)
+						h_t_new[n], c_t_new[n] = self.cell(input_t[None,:,n], (self.h_t[n], self.c_t[n])) # input needs to be dim (batch, input_size)
 				else:
-					self.h_t, self.c_t = self.cell(input_t, (self.h_t, self.c_t)) # input needs to be dim (batch, input_size)
+					h_t_new, c_t_new = self.cell(input_t, (self.h_t, self.c_t)) # input needs to be dim (batch, input_size)
+				self.c_t = c_t_new
 			else: # standard RNN
 				if self.component_wise:
 					for n in range(self.n_components):
-						self.h_t[n] = self.cell(input_t[None,:,n], self.h_t[n]) # input needs to be dim (batch, input_size)
+						h_t_new[n] = self.cell(input_t[:,n].view((input_t.shape[0],1)), self.h_t[n,:].view((self.h_t.shape[1], self.h_t.shape[2])))
 				else:
-					self.h_t = self.cell(input_t, self.h_t) # input needs to be dim (batch, input_size)
+					h_t_new = self.cell(input_t, self.h_t) # input needs to be dim (batch, input_size)
 
-			rnn_pred = self.hidden2pred(self.h_t).view(physics_pred.shape)
+			self.h_t = h_t_new
+			rnn_pred = self.hidden2pred(self.h_t).view(input_t.shape[0], 1, self.n_components) # (batch, n_steps, input_size)
+			# print(rnn_pred.shape)
+			if self.use_physics_as_bias:
+				rnn_pred = rnn_pred.view(physics_pred.shape)
 
 			full_rnn_pred = self.use_physics_as_bias * physics_pred + rnn_pred # normalized
 			full_preds += [full_rnn_pred]
@@ -432,7 +445,7 @@ class RNN(nn.Module):
 		# pdb.set_trace()
 		full_preds = torch.stack(full_preds, 1).squeeze(2)
 		rnn_preds = torch.stack(rnn_preds, 1).squeeze(2)
-		hidden_preds = torch.stack(hidden_preds, 1).squeeze(2)
+		hidden_preds = torch.stack(hidden_preds, 0).view(input_t.shape[0], self.n_components, n_steps, self.hidden_size)
 
 		return full_preds, rnn_preds, hidden_preds
 
@@ -702,7 +715,7 @@ def train_RNN_new(y_noisy_train,
 		all_target_states = model.unnormalize(torch.cat(all_target_states, 1))
 		all_predicted_states = model.unnormalize(torch.cat(all_predicted_states, 1))
 		all_rnn_predicted_residuals = model.unnormalize(torch.cat(all_rnn_predicted_residuals, 1))
-		all_hidden_states = torch.cat(all_hidden_states, 1) # no need to unnormalize hidden states
+		all_hidden_states = torch.cat(all_hidden_states, 2) # no need to unnormalize hidden states
 
 		# Report Train losses after each epoch
 		for c in range(n_train_traj):
