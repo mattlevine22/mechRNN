@@ -82,7 +82,7 @@ def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 		lp_wrapper(**setts)
 		lp.print_stats()
 	else:
-		setts['output_dir'] += '_old'
+		setts['output_dir'] += '_old_componentwise'
 		# train_chaosRNN(**setts)
 		setts['output_dir'] = setts['output_dir'].replace('old','new')
 		setts['mode'] = 'original'
@@ -109,11 +109,12 @@ class RNN(nn.Module):
 			max_plot=None,
 			mode='original',
 			use_manual_seed=False,
-			component_wise=False):
+			component_wise=True):
 
 		super().__init__()
 		if output_size is None:
 			output_size = input_size
+		self.component_wise = component_wise
 		self.cell_type = cell_type
 		self.use_manual_seed = use_manual_seed
 		self.mode = mode
@@ -122,7 +123,13 @@ class RNN(nn.Module):
 		self.t_synch = t_synch
 		self.dtype = dtype
 		self.hidden_size = hidden_size
-		self.output_size = output_size
+		if self.component_wise:
+			self.n_components = output_size
+			self.input_size = 1
+			self.output_size = 1
+		else:
+			self.input_size = input_size
+			self.output_size = output_size
 		self.embed_physics_prediction = embed_physics_prediction
 		self.use_physics_as_bias = use_physics_as_bias
 		self.ode_params = {'method': ode_params['ode_int_method'],
@@ -145,9 +152,8 @@ class RNN(nn.Module):
 		self.norm_dict = norm_dict
 
 		if self.embed_physics_prediction:
-			self.input_size = 2*input_size
-		else:
-			self.input_size = input_size
+			self.input_size = 2*self.input_size
+
 
 		#This is how to add a parameter
 		# self.w = nn.Parameter(scalar(0.1), requires_grad=True)
@@ -155,14 +161,14 @@ class RNN(nn.Module):
 		# Default is RNN w/ ReLU
 		self.lookup = {}
 		if cell_type=='LSTM':
-			self.cell = nn.LSTMCell(input_size, hidden_size)
+			self.cell = nn.LSTMCell(self.input_size, self.hidden_size)
 			self.use_c_cell = True
 		elif cell_type=='GRU':
-			self.cell = nn.GRUCell(input_size, hidden_size)
+			self.cell = nn.GRUCell(self.input_size, self.hidden_size)
 			self.use_c_cell = False
 		else:
 			self.use_c_cell = False
-			self.cell = nn.RNNCell(input_size, hidden_size, nonlinearity='relu')
+			self.cell = nn.RNNCell(self.input_size, self.hidden_size, nonlinearity='relu')
 			self.lookup = {'cell.weight_hh': 'A_mat',
 						'cell.weight_ih': 'B_mat',
 						'hidden2pred.weight': 'C_mat',
@@ -171,7 +177,7 @@ class RNN(nn.Module):
 
 
 		# The linear layer that maps from hidden state space to tag space
-		self.hidden2pred = nn.Linear(hidden_size, output_size)
+		self.hidden2pred = nn.Linear(self.hidden_size, self.output_size)
 
 		# maybe do manual weight initialization?
 		self.initialize_weights()
@@ -357,11 +363,17 @@ class RNN(nn.Module):
 
 		#useful link for teacher-forcing: https://towardsdatascience.com/lstm-for-time-series-prediction-de8aeb26f2ca
 		if self.h_t is None:
-			self.h_t = torch.zeros((input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
+			if self.component_wise:
+				self.h_t = torch.zeros((self.n_components, input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
+			else:
+				self.h_t = torch.zeros((input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
 			if train:
 				nn.init.normal_(self.h_t,0.0,0.1)
 		if self.c_t is None and self.use_c_cell:
-			self.c_t = torch.zeros((input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
+			if self.component_wise:
+				self.c_t = torch.zeros((self.n_components, 1, self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
+			else:
+				self.c_t = torch.zeros((input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
 			if train:
 				nn.init.normal_(self.c_t,0.0,0.1)
 		full_rnn_pred = input_state_sequence[:,0] #normalized
@@ -396,18 +408,28 @@ class RNN(nn.Module):
 			else:
 				physics_pred = 0
 
-			# evolve hidden state
+			# evolve hidden state(s)
 			if self.use_c_cell: # LSTM / GRU
-				self.h_t, self.c_t = self.cell(input_t, (self.h_t, self.c_t)) # input needs to be dim (batch, input_size)
+				if self.component_wise:
+					for n in range(self.n_components):
+						self.h_t[n], self.c_t[n] = self.cell(input_t[None,:,n], (self.h_t[n], self.c_t[n])) # input needs to be dim (batch, input_size)
+				else:
+					self.h_t, self.c_t = self.cell(input_t, (self.h_t, self.c_t)) # input needs to be dim (batch, input_size)
 			else: # standard RNN
-				self.h_t = self.cell(input_t, self.h_t) # input needs to be dim (batch, input_size)
+				if self.component_wise:
+					for n in range(self.n_components):
+						self.h_t[n] = self.cell(input_t[None,:,n], self.h_t[n]) # input needs to be dim (batch, input_size)
+				else:
+					self.h_t = self.cell(input_t, self.h_t) # input needs to be dim (batch, input_size)
 
-			rnn_pred = self.hidden2pred(self.h_t)
+			rnn_pred = self.hidden2pred(self.h_t).view(physics_pred.shape)
+
 			full_rnn_pred = self.use_physics_as_bias * physics_pred + rnn_pred # normalized
 			full_preds += [full_rnn_pred]
 			rnn_preds += [rnn_pred]
 			hidden_preds += [self.h_t]
 
+		# pdb.set_trace()
 		full_preds = torch.stack(full_preds, 1).squeeze(2)
 		rnn_preds = torch.stack(rnn_preds, 1).squeeze(2)
 		hidden_preds = torch.stack(hidden_preds, 1).squeeze(2)
