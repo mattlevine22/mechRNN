@@ -84,7 +84,7 @@ def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 	else:
 		setts['output_dir'] += '_old'
 		# train_chaosRNN(**setts)
-		setts['output_dir'] = setts['output_dir'].replace('old','new_GRU')
+		setts['output_dir'] = setts['output_dir'].replace('old','new')
 		setts['mode'] = 'original'
 		train_RNN_new(**setts)
 
@@ -96,7 +96,7 @@ class RNN(nn.Module):
 			input_size,
 			hidden_size=50,
 			output_size=None,
-			cell_type='GRU',
+			cell_type='RNN',
 			embed_physics_prediction=False,
 			use_physics_as_bias=False,
 			dtype=torch.float,

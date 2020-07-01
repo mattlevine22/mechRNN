@@ -3,12 +3,12 @@ import numpy as np
 import json
 from time import time
 from utils import str2bool
-from reproduce_dima import make_data, run_traintest
+from reproduce_dima_l96 import make_data, run_traintest
 import pdb
 from line_profiler import LineProfiler
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--settings_path', type=str, default='/Users/matthewlevine/test_outputs/l63/settings.json', help='pathname of numpy settings dictionary')
+parser.add_argument('--settings_path', type=str, default='/Users/matthewlevine/test_outputs/l96/settings.json', help='pathname of numpy settings dictionary')
 parser.add_argument('--profile', type=str2bool, default=False, help='option for profiling card')
 parser.add_argument('--skip_datagen', type=str2bool, default=False, help='skipping the make-data step')
 FLAGS = parser.parse_args()
