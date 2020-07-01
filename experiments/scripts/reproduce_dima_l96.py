@@ -190,24 +190,27 @@ def run_traintest(testing_fname,
 
 
 	## Run vanilla whole RNN
-	foo_nm = 'pureRNN_vanilla'
-	rnn_settings['forward'] = forward_chaos_pureML
-	rnn_settings['use_physics_as_bias'] = False
-	rnn_settings['learn_residuals'] = False
-	rnn_settings['stack_hidden'] = False
-	rnn_settings['stack_output'] = False
-	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
-	# setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
+	for do_component_wise in [False,True]:
+		rnn_settings['component_wise'] = do_component_wise
 
-	## Run vanilla residual RNN
-	foo_nm = 'resRNN_vanilla'
-	rnn_settings['forward'] = forward_chaos_pureML
-	rnn_settings['use_physics_as_bias'] = True
-	rnn_settings['learn_residuals'] = True
-	rnn_settings['stack_hidden'] = False
-	rnn_settings['stack_output'] = False
-	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
-	setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
+		foo_nm = 'pureRNN_vanilla' + do_component_wise*'_componentwise'
+		rnn_settings['forward'] = forward_chaos_pureML
+		rnn_settings['use_physics_as_bias'] = False
+		rnn_settings['learn_residuals'] = False
+		rnn_settings['stack_hidden'] = False
+		rnn_settings['stack_output'] = False
+		rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
+		setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
+
+		## Run vanilla residual RNN
+		foo_nm = 'resRNN_vanilla' + do_component_wise*'_componentwise'
+		rnn_settings['forward'] = forward_chaos_pureML
+		rnn_settings['use_physics_as_bias'] = True
+		rnn_settings['learn_residuals'] = True
+		rnn_settings['stack_hidden'] = False
+		rnn_settings['stack_output'] = False
+		rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
+		setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
 
 	### NOW DO THE REST OF THE STUFF (GP)
 	n_subsample_gp = int(n_subsample_gp)

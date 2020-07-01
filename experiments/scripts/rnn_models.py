@@ -82,7 +82,7 @@ def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 		lp_wrapper(**setts)
 		lp.print_stats()
 	else:
-		setts['output_dir'] += '_old_componentwise'
+		setts['output_dir'] += '_old'
 		# train_chaosRNN(**setts)
 		setts['output_dir'] = setts['output_dir'].replace('old','new')
 		setts['mode'] = 'original'
@@ -109,7 +109,7 @@ class RNN(nn.Module):
 			max_plot=None,
 			mode='original',
 			use_manual_seed=False,
-			component_wise=True):
+			component_wise=False):
 
 		super().__init__()
 		if output_size is None:
@@ -123,11 +123,13 @@ class RNN(nn.Module):
 		self.t_synch = t_synch
 		self.dtype = dtype
 		self.hidden_size = hidden_size
-		self.n_components = output_size
+
 		if self.component_wise:
+			self.n_components = output_size
 			self.input_size = 1
 			self.output_size = 1
 		else:
+			self.n_components = 1
 			self.input_size = input_size
 			self.output_size = output_size
 		self.embed_physics_prediction = embed_physics_prediction
@@ -432,7 +434,7 @@ class RNN(nn.Module):
 					h_t_new = self.cell(input_t, self.h_t) # input needs to be dim (batch, input_size)
 
 			self.h_t = h_t_new
-			rnn_pred = self.hidden2pred(self.h_t).view(input_t.shape[0], 1, self.n_components) # (batch, n_steps, input_size)
+			rnn_pred = self.hidden2pred(self.h_t).view(input_t.shape[0], 1, self.input_size*self.n_components) # (batch, n_steps, input_size)
 			# print(rnn_pred.shape)
 			if self.use_physics_as_bias:
 				rnn_pred = rnn_pred.view(physics_pred.shape)
@@ -492,6 +494,9 @@ def train_RNN_new(y_noisy_train,
 				mode='original',
 				lr=0.05,
 				do_printing=False,
+				component_wise=False,
+				cell_type='RNN',
+				hidden_size=50,
 				**kwargs):
 
 	if not save_freq:
@@ -543,7 +548,16 @@ def train_RNN_new(y_noisy_train,
 	ytest_synch_raw = unnormalize(norm_dict=normz_info, y_norm=ytest_synch)
 
 	# set up model
-	model = RNN(ode_params=model_params, input_size=Xtrain.shape[2], norm_dict=normz_info, use_physics_as_bias=use_physics_as_bias, ode=ODE, output_path=output_path, mode=mode)
+	model = RNN(ode_params=model_params,
+				input_size=Xtrain.shape[2],
+				norm_dict=normz_info,
+				use_physics_as_bias=use_physics_as_bias,
+				ode=ODE,
+				output_path=output_path,
+				mode=mode,
+				component_wise=component_wise,
+				cell_type=cell_type,
+				hidden_size=hidden_size)
 	model.remember_weights()
 
 	# generate bias sequences
