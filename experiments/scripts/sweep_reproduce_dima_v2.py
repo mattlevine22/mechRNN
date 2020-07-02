@@ -121,8 +121,8 @@ def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.expe
 		foo_nm = 'res_'*settings['use_physics_as_bias'] + goo_str + '_componentwise'*settings['component_wise'] + '_' + settings['run_style']
 		last_nm = goo_str + foo_nm
 
-		run_nm = 'dt{delta_t}/eps{eps}_hx{hx}_F{F}/datagen{datagen_fidelity}_traintest{traintest_fidelity}'.format(**settings)
-		run_path = os.path.join(experiment_dir, run_nm, last_nm)
+		run_nm = 'dt{delta_t}/eps{eps}_hx{hx}_F{F}/datagen{datagen_fidelity}_traintest{traintest_fidelity}/{last_name}'.format(**settings, last_name=last_name)
+		run_path = os.path.join(experiment_dir, run_nm)
 
 		# now create a settings path and write settings dict to that path
 		os.makedirs(run_path, exist_ok=True)
