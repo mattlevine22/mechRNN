@@ -19,7 +19,7 @@ ODE_INT_MAX_STEP = 1e-3
 
 DEFAULT_SETTINGS = {'rng_seed': 63,
 			't_synch': 5,
-			't_train': 20,
+			't_train': 100,
 			't_invariant_measure': 20,
 			't_test_traj_synch': 10,
 			't_test_traj': 10,

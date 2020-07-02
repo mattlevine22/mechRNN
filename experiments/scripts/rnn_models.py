@@ -785,8 +785,8 @@ def train_RNN_new(y_noisy_train,
 			plot_stats(model_stats, epoch=epoch+1, output_path=output_path)
 			model.plot_weights(n_epochs=epoch+1)
 			model.make_traj_plots(all_target_states, all_predicted_states, all_rnn_predicted_residuals, all_hidden_states, name='train', epoch=epoch)
-			model.make_traj_plots(target_sequence_synch, full_predicted_states_synch, rnn_predicted_residuals_synch, hidden_states_synch, name='test_synch', epoch=epoch)
 			model.make_traj_plots(target_sequence_test, full_predicted_states_test, rnn_predicted_residuals_test, hidden_states_test, name='test', epoch=epoch)
+			model.make_traj_plots(target_sequence_synch, full_predicted_states_synch, rnn_predicted_residuals_synch, hidden_states_synch, name='test_synch', epoch=epoch)
 
 		if is_save_interval:
 			for name, val in model.named_parameters():
