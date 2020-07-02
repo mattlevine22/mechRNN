@@ -118,8 +118,8 @@ def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.expe
 
 		# create the run-name
 		goo_str = '{cell_type}_hs{rnn_hidden_size}_lr{lr}'.format(**settings)
-		foo_nm = 'res_'*rnn_settings['use_physics_as_bias'] + goo_str + '_componentwise'*rnn_settings['component_wise'] + '_' + rnn_settings['run_style']
-		last_nm = goo_str + foo_nm + '_' + run_style
+		foo_nm = 'res_'*settings['use_physics_as_bias'] + goo_str + '_componentwise'*settings['component_wise'] + '_' + settings['run_style']
+		last_nm = goo_str + foo_nm
 
 		run_nm = 'dt{delta_t}/eps{eps}_hx{hx}_F{F}/datagen{datagen_fidelity}_traintest{traintest_fidelity}'.format(**settings)
 		run_path = os.path.join(experiment_dir, run_nm, last_nm)
