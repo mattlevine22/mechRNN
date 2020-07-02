@@ -200,7 +200,6 @@ def run_traintest(testing_fname,
 
 
 	## Run a specific RNN scheme
-	pdb.set_trace()
 	goo_str = '{cell_type}_hs{hidden_size}_lr{lr}'.format(**rnn_settings)
 	foo_nm = 'res_'*rnn_settings['use_physics_as_bias'] + goo_str + '_componentwise'*rnn_settings['component_wise'] + '_' + rnn_settings['run_style']
 	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
