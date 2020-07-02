@@ -121,16 +121,18 @@ def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.expe
 		foo_nm = 'res_'*settings['use_physics_as_bias'] + goo_str + '_componentwise'*settings['component_wise'] + '_' + settings['run_style']
 		last_nm = goo_str + foo_nm
 
-		run_nm = 'dt{delta_t}/eps{eps}_hx{hx}_F{F}/datagen{datagen_fidelity}_traintest{traintest_fidelity}/{last_nm}'.format(**settings, last_nm=last_nm)
-		run_path = os.path.join(experiment_dir, run_nm)
+		data_nm = 'dt{delta_t}/eps{eps}_hx{hx}_F{F}/datagen{datagen_fidelity}_traintest{traintest_fidelity}'.format(**settings)
+		data_path = os.path.join(experiment_dir, data_nm)
+		run_nm = os.path.join(data_nm, last_nm)
+		run_path = os.path.join(data_path, last_nm)
 
 		# now create a settings path and write settings dict to that path
-		os.makedirs(run_path, exist_ok=True)
+		os.makedirs(data_path, exist_ok=True)
 
-		settings['output_dir'] = run_path
-		settings['testing_fname'] = os.path.join(run_path, 'testing.npz')
-		settings['training_fname'] = os.path.join(run_path, 'training.npz')
-		settings['master_output_fname'] = os.path.join(run_path, 'master_output.npz')
+		settings['output_dir'] = data_path
+		settings['testing_fname'] = os.path.join(data_path, 'testing.npz')
+		settings['training_fname'] = os.path.join(data_path, 'training.npz')
+		settings['master_output_fname'] = os.path.join(data_path, 'master_output.npz')
 		settings_path = os.path.join(run_path, 'settings.json')
 		dict_to_file(mydict=settings, fname=settings_path)
 		command_flag_dict = {'settings_path': settings_path}
