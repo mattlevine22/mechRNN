@@ -85,6 +85,8 @@ EXP_LIST = dict_combiner({'run_style': ['short','long','longest'],
 			'cell_type': ['RNN','LSTM','GRU'],
 			'component_wise': [True, False],
 			'use_physics_as_bias': [True, False],
+			'datagen_fidelity': ['defaultfi'],
+			'traintest_fidelity': ['defaultfi']
 			})
 
 def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.experiment_dir, no_submit=FLAGS.no_submit):
