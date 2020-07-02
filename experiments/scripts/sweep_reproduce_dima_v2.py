@@ -128,6 +128,7 @@ def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.expe
 
 		# now create a settings path and write settings dict to that path
 		os.makedirs(data_path, exist_ok=True)
+		os.makedirs(run_path, exist_ok=True)
 
 		settings['output_dir'] = data_path
 		settings['testing_fname'] = os.path.join(data_path, 'testing.npz')
