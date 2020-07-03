@@ -3,7 +3,7 @@ import numpy as np
 import json
 from time import time
 from utils import str2bool
-from reproduce_dima_l63 import make_data, run_traintest
+from reproduce_dima_l63_v2 import make_data, run_traintest
 import pdb
 from line_profiler import LineProfiler
 

@@ -12,7 +12,7 @@ from scipy.integrate import solve_ivp
 from scipy.stats import gaussian_kde
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, Matern, WhiteKernel, ConstantKernel
-from odelibrary import L96M
+from odelibrary import L63
 from integratorlibrary import get_custom_solver
 import matplotlib
 matplotlib.use('Agg')
@@ -31,11 +31,8 @@ def make_data(
 	testing_fname,
 	training_fname,
 	output_dir,
-	K,
-	J,
-	F,
-	eps,
-	hx,
+	a,
+	b,
 	ode_int_method,
 	ode_int_atol,
 	ode_int_rtol,
@@ -59,11 +56,12 @@ def make_data(
 					'ode_int_atol':1e-6,
 					'ode_int_rtol':1e-3,
 					'ode_int_max_step':1e-3}
-	make_traj_plots(n_inits=4, sd_perturb=0.01, sim_model_params=sim_model_params, output_dir=output_dir, K=K, J=J, F=F, eps=eps, hx=hx, delta_t=delta_t, T=15, decoupled=False)
+	# make_traj_plots(n_inits=4, sd_perturb=0.01, sim_model_params=sim_model_params, output_dir=output_dir, K=K, J=J, F=F, eps=eps, hx=hx, delta_t=delta_t, T=15, decoupled=False)
 
 
 	# initialize ode object
-	ODE = L96M(K=K, J=J, F=F, eps=eps, hx=hx)
+	ODE = L63()
+	K = ODE.K
 	ODE.set_stencil() # this is a default, empty usage that is required
 
 	# Get training data:
@@ -78,22 +76,24 @@ def make_data(
 	# Take last T-traj as training data
 	ntsynch = int(t_synch/delta_t)
 	X_train = y_clean[ntsynch:,:K] 	# Take :K as slow-training
-	y_fast = y_clean[ntsynch:-1,K:] # Use fast K: to compute Ybar-true (skipping last time-index since we can't use data to infer that)
+	# y_fast = y_clean[ntsynch:-1,K:] # Use fast K: to compute Ybar-true (skipping last time-index since we can't use data to infer that)
 	# Compute Ybar-true directly
-	Ybar_true = y_fast.reshape( (y_fast.shape[0], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
+	# Ybar_true = y_fast.reshape( (y_fast.shape[0], ODE.J, ODE.K), order = 'F').sum(axis = 1) / ODE.J
 	# Use slow-training to compute Ybar-infer (note we can't get Ybar_k for the last time index)
 	Ybar_data_inferred = ODE.implied_Ybar(X_in=X_train[:-1,:], X_out=X_train[1:,:], delta_t=delta_t)
 
-	np.savez(training_fname, X_train=X_train, y_fast=y_fast, Ybar_true=Ybar_true, Ybar_data_inferred=Ybar_data_inferred)
+	Ybar_true = Ybar_data_inferred
+
+	np.savez(training_fname, X_train=X_train, y_fast=np.array([]), Ybar_true=Ybar_true, Ybar_data_inferred=Ybar_data_inferred)
 
 	phase_plot(data=X_train, output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35)
 	phase_plot(data=X_train, output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='scatter')
 	# phase_plot(data=X_train, output_fname=os.path.join(output_dir,'phase_plot_training_data_SLOW.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='density', n_subsample_kde=n_subsample_kde)
-	phase_plot(data=y_fast[:,:J], state_names=[r'$Y_{{{ind},1}}$'.format(ind=j+1) for j in range(J)], output_fname=os.path.join(output_dir,'phase_plot_training_data_FAST.png'), delta_t=delta_t, wspace=0.35, hspace=0.35)
-	phase_plot(data=y_fast[:,:J], state_names=[r'$Y_{{{ind},1}}$'.format(ind=j+1) for j in range(J)], output_fname=os.path.join(output_dir,'phase_plot_training_data_FAST.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='scatter')
+	# phase_plot(data=y_fast[:,:J], state_names=[r'$Y_{{{ind},1}}$'.format(ind=j+1) for j in range(J)], output_fname=os.path.join(output_dir,'phase_plot_training_data_FAST.png'), delta_t=delta_t, wspace=0.35, hspace=0.35)
+	# phase_plot(data=y_fast[:,:J], state_names=[r'$Y_{{{ind},1}}$'.format(ind=j+1) for j in range(J)], output_fname=os.path.join(output_dir,'phase_plot_training_data_FAST.png'), delta_t=delta_t, wspace=0.35, hspace=0.35, mode='scatter')
 
 	all_kdes_plot(data=X_train, output_fname=os.path.join(output_dir,'all_kdes_train_SLOW.png'))
-	all_kdes_plot(data=y_fast[:,:J], output_fname=os.path.join(output_dir,'all_kdes_train_FAST.png'))
+	# all_kdes_plot(data=y_fast[:,:J], output_fname=os.path.join(output_dir,'all_kdes_train_FAST.png'))
 
 	# Get data for estimating the true invariant measure:
 	# Run for 5k and output solutions at dT
@@ -129,6 +129,7 @@ def make_data(
 
 	return
 
+
 def run_traintest(testing_fname,
 	training_fname,
 	master_output_fname,
@@ -136,11 +137,8 @@ def run_traintest(testing_fname,
 	n_subsample_gp,
 	n_subsample_kde,
 	n_restarts_optimizer,
-	K,
-	J,
-	F,
-	eps,
-	hx,
+	a,
+	b,
 	psi0_ode_int_method,
 	psi0_ode_int_atol,
 	psi0_ode_int_rtol,
@@ -155,29 +153,23 @@ def run_traintest(testing_fname,
 	alpha = 1e-10,
 	t_valid_thresh=0.4,
 	rnn_hidden_size=50,
-	rnn_n_epochs=100,
-	cell_type='LSTM',
-	lr=0.05,
-	component_wise=None,
-	use_physics_as_bias=None,
-	run_style=None,
+	rnn_n_epochs=10,
 	**kwargs):
-
-
 
 	try:
 		foo = np.load(training_fname)
 		goo = np.load(testing_fname)
 		# compute time-avg-norm
-		# avg_output = np.mean(goo['X_test']**2)**0.5
 		avg_output = ( np.mean(goo['X_test']**2) * goo['X_test'].shape[1])**0.5
+		# same as
+		# np.sqrt(np.mean(np.sum(goo['X_test']**2,axis=1)))
 	except:
 		print('Unable to load training data---no plots were made!')
 		return
 
 
 	######## RNN fits! #######
-	ODEinst = L96M(K=K, J=J, F=F, eps=eps, hx=hx, slow_only=True)
+	ODEinst = L63(a=a, b=b)
 
 	# update some custom settings
 	rnn_settings = {'max_plot': goo['X_test_traj'].shape[1],
@@ -207,6 +199,8 @@ def run_traintest(testing_fname,
 	setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
 	print('done with RNN so quitting...no GP stuff this time!')
 	return
+
+
 
 	### NOW DO THE REST OF THE STUFF (GP)
 	n_subsample_gp = int(n_subsample_gp)
@@ -247,7 +241,7 @@ def run_traintest(testing_fname,
 	output_fname = os.path.join(output_dir,'continuous_fits.png')
 
 	# initialize ode object
-	ODE = L96M(K=K, J=J, F=F, eps=eps, hx=hx, dima_style=False)
+	ODE = L63(a=a, b=b)
 
 	# First, check settings for chaos
 	sim_model_params = {'ode_params': (),
@@ -255,7 +249,7 @@ def run_traintest(testing_fname,
 					'ode_int_atol': testcontinuous_ode_int_atol,
 					'ode_int_rtol': testcontinuous_ode_int_rtol,
 					'ode_int_max_step': testcontinuous_ode_int_max_step}
-	make_traj_plots(n_inits=4, sd_perturb=0.01, sim_model_params=sim_model_params, output_dir=output_dir, K=K, J=J, F=F, eps=eps, hx=hx, delta_t=delta_t, T=15, decoupled=False)
+	# make_traj_plots(n_inits=4, sd_perturb=0.01, sim_model_params=sim_model_params, output_dir=output_dir, K=K, J=J, F=F, eps=eps, hx=hx, delta_t=delta_t, T=15, decoupled=False)
 
 
 	ODE.set_stencil() # this is a default, empty usage that is required
@@ -362,7 +356,7 @@ def run_traintest(testing_fname,
 
 
 
-	def plot_traj(X_learned, plot_fname, t_plot=t_plot, X_true=goo['X_test'][:n_plot,:K], state_limits=state_limits):
+	def plot_traj(X_learned, plot_fname, t_plot=t_plot, X_true=goo['X_test'][:n_plot,:K], state_limits=state_limits, title='Testing Trajectories'):
 		K = X_true.shape[1]
 		fig_traj, (ax_test) = plt.subplots(K,1,figsize=[8,10])
 		for k in range(K):
@@ -372,7 +366,7 @@ def run_traintest(testing_fname,
 			ax_test[k].set_ylim(state_limits)
 		ax_test[-1].set_xlabel('time')
 		ax_test[0].legend(loc='center right')
-		fig_traj.suptitle('Testing Trajectories')
+		fig_traj.suptitle(title)
 		fig_traj.savefig(fname=plot_fname, dip=300)
 		plt.close(fig_traj)
 		return
@@ -440,6 +434,7 @@ def run_traintest(testing_fname,
 		# compute traj error
 		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
 		t_valid['RHS = Slow'][t] = tval_foo
+		plot_traj(X_true=X_test_traj[t,:n_plot,:], X_learned=test_traj_preds[t,:n_plot,:], plot_fname=os.path.join(output_dir,'trajectory_slow_plus_zero_{0}.png'.format(t)), title='Validity Time = {0}'.format(tval_foo))
 
 	for ax in [ax_tvalid_discrete, ax_tvalid]:
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
@@ -605,6 +600,8 @@ def run_traintest(testing_fname,
 		# compute traj error
 		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
 		t_valid['Discrete Full'][t] = tval_foo
+		plot_traj(X_true=X_test_traj[t,:n_plot,:], X_learned=test_traj_preds[t,:n_plot,:], plot_fname=os.path.join(output_dir,'trajectory_discrete_fullGP_{0}.png'.format(t)), title='Validity Time = {0}'.format(tval_foo))
+
 	for ax in [ax_tvalid_discrete, ax_tvalid]:
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
 		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
@@ -687,6 +684,7 @@ def run_traintest(testing_fname,
 		# compute traj error
 		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
 		t_valid['Discrete Share'][t] = tval_foo
+		plot_traj(X_true=X_test_traj[t,:n_plot,:], X_learned=test_traj_preds[t,:n_plot,:], plot_fname=os.path.join(output_dir,'trajectory_discrete_shareGP_{0}.png'.format(t)), title='Validity Time = {0}'.format(tval_foo))
 	for ax in [ax_tvalid_discrete, ax_tvalid]:
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
 		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
@@ -755,7 +753,7 @@ def run_traintest(testing_fname,
 	X_test_gpr_true_share = y_clean[ntsynch:,:K].reshape(-1, 1)
 	T_test_gpr_true_share_acf = acf(y_clean[ntsynch:,0], fft=True, nlags=nlags) #look at first component
 	print('Generated invariant measure for GP-true-share:', (time()-t0)/60,'minutes')
-	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_YbarTrue_alpha{alpha}.png'.format(alpha=alpha)))
+	plot_traj(X_learned=y_clean[:n_plot,:K], plot_fname=os.path.join(output_dir,'trajectory_YbarTrue_shareGP_alpha{alpha}.png'.format(alpha=alpha)))
 	sns.kdeplot(X_test_gpr_true_share[test_inds].squeeze(), ax=ax_kde, color=color, linestyle='-', label='RHS = Slow + share-GP (True Y-avg)')
 	ax_gp.plot(X_pred, gpr_true_mean, color=color, linestyle='-', label='share-GP (True Y-avg) ({kernel})'.format(kernel=my_kernel))
 	ax_acf.plot(t_acf_plot, T_test_gpr_true_share_acf, color=color, label='RHS = Slow + share-GP (True Y-avg)')
@@ -783,6 +781,7 @@ def run_traintest(testing_fname,
 		# compute traj error
 		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
 		t_valid['Continuous Share Y-True'][t] = tval_foo
+		plot_traj(X_true=X_test_traj[t,:n_plot,:], X_learned=test_traj_preds[t,:n_plot,:], plot_fname=os.path.join(output_dir,'trajectory_YbarTrue_shareGP_{0}.png'.format(t)), title='Validity Time = {0}'.format(tval_foo))
 	for ax in [ax_tvalid_discrete, ax_tvalid]:
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
 		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
@@ -860,6 +859,7 @@ def run_traintest(testing_fname,
 		# compute traj error
 		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
 		t_valid['Continuous Full Y-True'][t] = tval_foo
+		plot_traj(X_true=X_test_traj[t,:n_plot,:], X_learned=test_traj_preds[t,:n_plot,:], plot_fname=os.path.join(output_dir,'trajectory_YbarTrue_fullGP_{0}.png'.format(t)), title='Validity Time = {0}'.format(tval_foo))
 	for ax in [ax_tvalid_discrete, ax_tvalid]:
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
 		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
@@ -927,6 +927,7 @@ def run_traintest(testing_fname,
 		# compute traj error
 		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
 		t_valid['Continuous Share Y-Approx'][t] = tval_foo
+		plot_traj(X_true=X_test_traj[t,:n_plot,:], X_learned=test_traj_preds[t,:n_plot,:], plot_fname=os.path.join(output_dir,'trajectory_YbarInfer_shareGP_{0}.png'.format(t)), title='Validity Time = {0}'.format(tval_foo))
 	for ax in [ax_tvalid_discrete, ax_tvalid]:
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
 		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')
@@ -1005,6 +1006,7 @@ def run_traintest(testing_fname,
 		# compute traj error
 		tval_foo = traj_div_time(Xtrue=X_test_traj[t,:,:], Xpred=test_traj_preds[t,:,:], delta_t=delta_t, avg_output=avg_output, thresh=t_valid_thresh)
 		t_valid['Continuous Full Y-Approx'][t] = tval_foo
+		plot_traj(X_true=X_test_traj[t,:n_plot,:], X_learned=test_traj_preds[t,:n_plot,:], plot_fname=os.path.join(output_dir,'trajectory_YbarInfer_fullGP_{0}.png'.format(t)), title='Validity Time = {0}'.format(tval_foo))
 	for ax in [ax_tvalid_discrete, ax_tvalid]:
 		sns.boxplot(ax=ax, data=pd.DataFrame(t_valid), color='orchid')
 		ax.set_xticklabels(ax.get_xticklabels(), rotation=20, horizontalalignment='right', fontsize='small')

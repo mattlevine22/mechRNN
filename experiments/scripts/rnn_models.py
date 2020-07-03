@@ -82,11 +82,15 @@ def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 		lp_wrapper(**setts)
 		lp.print_stats()
 	else:
+		setts['mode'] = 'original'
 		# setts['output_dir'] += '_old'
 		# train_chaosRNN(**setts)
 		# setts['output_dir'] = setts['output_dir'].replace('old','new')
-		setts['mode'] = 'original'
-		train_RNN_new(**setts)
+		if setts['old']=True:
+			setts['output_dir'] += '_old'
+			train_chaosRNN(**setts)
+		else:
+			train_RNN_new(**setts)
 
 	print('Ran training in:', time()-t0)
 	return
