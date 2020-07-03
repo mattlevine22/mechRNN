@@ -119,7 +119,7 @@ def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.expe
 		foo_nm = 'res_'*settings['use_physics_as_bias'] + goo_str + '_componentwise'*settings['component_wise'] + '_' + settings['run_style']
 		last_nm = goo_str + foo_nm
 
-		data_nm = 'dt{delta_t}/eps{eps}_hx{hx}_F{F}/datagen{datagen_fidelity}_traintest{traintest_fidelity}'.format(**settings)
+		data_nm = 'dt{delta_t}'.format(**settings)
 		data_path = os.path.join(experiment_dir, data_nm)
 		run_nm = os.path.join(data_nm, last_nm)
 		run_path = os.path.join(data_path, last_nm)
