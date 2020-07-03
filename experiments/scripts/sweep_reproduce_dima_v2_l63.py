@@ -116,7 +116,7 @@ def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.expe
 
 		# create the run-name
 		goo_str = '{cell_type}_hs{rnn_hidden_size}_lr{lr}'.format(**settings)
-		foo_nm = 'res_'*settings['use_physics_as_bias'] + goo_str + '_componentwise'*settings['component_wise'] + '_' + settings['run_style'] + '_old'*settings['old']
+		foo_nm = 'res_'*settings['use_physics_as_bias'] + '_componentwise'*settings['component_wise'] + '_' + settings['run_style'] + '_old'*settings['old']
 		last_nm = goo_str + foo_nm
 
 		data_nm = 'dt{delta_t}'.format(**settings)
