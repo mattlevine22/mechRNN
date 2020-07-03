@@ -2,11 +2,11 @@ import argparse
 import os
 from utils import dict_combiner, dict_to_file, make_and_deploy, str2bool
 
-CMD_run_fits = 'python3 $HOME/mechRNN/experiments/scripts/reproduce_dima_wrapper_l96.py'
+CMD_run_fits = 'python3 $HOME/mechRNN/experiments/scripts/reproduce_dima_wrapper_l63.py'
 
-OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/reproduce_dima_sweep/l96'
+OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/reproduce_dima_sweep/l63'
 
-parser = argparse.ArgumentParser(description='L96 Job Submission script')
+parser = argparse.ArgumentParser()
 parser.add_argument('--experiment_dir', type=str, default=OUTPUT_DIR, help='output directory')
 parser.add_argument('--no_submit', type=str2bool, default=True, help='whether or not to actually submit the jobs generated. Default is to submit.')
 FLAGS = parser.parse_args()
