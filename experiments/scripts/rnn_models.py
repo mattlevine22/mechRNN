@@ -86,8 +86,7 @@ def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 		# setts['output_dir'] += '_old'
 		# train_chaosRNN(**setts)
 		# setts['output_dir'] = setts['output_dir'].replace('old','new')
-		if setts['old']=True:
-			setts['output_dir'] += '_old'
+		if setts['old']:
 			train_chaosRNN(**setts)
 		else:
 			train_RNN_new(**setts)
