@@ -153,7 +153,12 @@ def run_traintest(testing_fname,
 	alpha = 1e-10,
 	t_valid_thresh=0.4,
 	rnn_hidden_size=50,
-	rnn_n_epochs=10,
+	rnn_n_epochs=100,
+	cell_type='LSTM',
+	lr=0.05,
+	component_wise=None,
+	use_physics_as_bias=None,
+	run_style=None,
 	**kwargs):
 
 	try:
