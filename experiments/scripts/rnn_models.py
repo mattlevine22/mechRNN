@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import random
-from utils import traj_div_time, train_chaosRNN
+from utils import traj_div_time, train_chaosRNN, forward_chaos_hybrid_full, forward_chaos_pureML
 from line_profiler import LineProfiler
 from scipy.integrate import solve_ivp
 
