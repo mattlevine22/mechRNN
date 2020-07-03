@@ -159,6 +159,7 @@ def run_traintest(testing_fname,
 	component_wise=None,
 	use_physics_as_bias=None,
 	run_style=None,
+	old=False,
 	**kwargs):
 
 	try:
@@ -192,7 +193,8 @@ def run_traintest(testing_fname,
 					'lr': lr,
 					'component_wise': component_wise,
 					'use_physics_as_bias': use_physics_as_bias,
-					'run_style': run_style
+					'run_style': run_style,
+					'old': old,
 					}
 
 
