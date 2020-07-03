@@ -83,7 +83,7 @@ def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 		lp.print_stats()
 	else:
 		setts['mode'] = 'original'
-		rnn_settings['learn_residuals'] = rnn_settings['use_physics_as_bias']
+		setts['learn_residuals'] = setts['use_physics_as_bias']
 		# setts['output_dir'] += '_old'
 		# train_chaosRNN(**setts)
 		# setts['output_dir'] = setts['output_dir'].replace('old','new')
