@@ -791,7 +791,7 @@ def train_RNN_new(y_noisy_train,
 			best_test_loss = test_loss
 		if has_improved_tvalid:
 			best_test_tvalid = test_tvalid
-		if has_improved_loss or has_improved_tvalid or is_save_interval:
+		if has_improved_loss or has_improved_tvalid or is_save_interval or (epoch==n_epochs-1):
 			plot_stats(model_stats, epoch=epoch+1, output_path=output_path)
 			model.plot_weights(n_epochs=epoch+1)
 			model.make_traj_plots(all_target_states, all_predicted_states, all_rnn_predicted_residuals, all_hidden_states, name='train', epoch=epoch)
