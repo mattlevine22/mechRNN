@@ -2063,7 +2063,7 @@ def train_chaosRNN(forward,
 			model_params, hidden_size=6, n_epochs=100, lr=0.05,
 			output_dir='.', normz_info=None, model=None,
 			trivial_init=False, perturb_trivial_init=True, sd_perturb = 0.001,
-			stack_hidden=True, stack_output=True,
+			stack_hidden=False, stack_output=False,
 			x_train=None, x_test=None,
 			f_normalize_Y=f_normalize_minmax,
 			f_unNormalize_Y=f_unNormalize_minmax,
@@ -2087,7 +2087,6 @@ def train_chaosRNN(forward,
 			do_printing=False,
 			use_manual_seed=False,
 			**kwargs):
-
 
 	model_params['smaller_delta_t'] = model_params['delta_t'] # later, need to remove smaller_delta_t as field
 

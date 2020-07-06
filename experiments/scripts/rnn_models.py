@@ -245,7 +245,7 @@ class RNN(nn.Module):
 			ax.legend()
 			ax.set_xlabel('Time')
 			fig.suptitle('Trajectory Fit')
-			fig.savefig(fname=os.path.join(traj_dir,'trajfit{c}_epoch{epoch}'.format(c=c,epoch=epoch)))
+			fig.savefig(fname=os.path.join(traj_dir,'traj{c}_epoch{epoch}'.format(c=c,epoch=epoch)))
 			plt.close(fig)
 
 			for comp in range(self.n_components):
@@ -256,7 +256,7 @@ class RNN(nn.Module):
 					pdb.set_trace()
 				ax.set_xlabel('Time')
 				fig.suptitle('Hidden state dynamics')
-				fig.savefig(fname=os.path.join(hidden_dir,'hiddenstate{c}_component{comp}_epoch{epoch}'.format(c=c, comp=comp, epoch=epoch)))
+				fig.savefig(fname=os.path.join(hidden_dir,'traj{c}_component{comp}_epoch{epoch}'.format(c=c, comp=comp, epoch=epoch)))
 				plt.close(fig)
 
 	def remember_weights(self):
@@ -289,7 +289,7 @@ class RNN(nn.Module):
 			axlist[c].set_xlabel('Epochs')
 		fig.suptitle("Parameter convergence")
 		fig.subplots_adjust(wspace=0.3, hspace=0.3)
-		fig.savefig(fname=os.path.join(self.output_path,'rnn_parameter_convergence.png'), dpi=300)
+		fig.savefig(fname=os.path.join(self.output_path,'rnn_parameter_convergence_new.png'), dpi=300)
 		plt.close(fig)
 
 		# plot matrix visualizations
@@ -505,6 +505,7 @@ def train_RNN_new(y_noisy_train,
 				component_wise=False,
 				cell_type='RNN',
 				hidden_size=50,
+				use_manual_seed=False,
 				**kwargs):
 
 	if not save_freq:
@@ -565,7 +566,8 @@ def train_RNN_new(y_noisy_train,
 				mode=mode,
 				component_wise=component_wise,
 				cell_type=cell_type,
-				hidden_size=hidden_size)
+				hidden_size=hidden_size,
+				use_manual_seed=use_manual_seed)
 	model.remember_weights()
 
 	# generate bias sequences

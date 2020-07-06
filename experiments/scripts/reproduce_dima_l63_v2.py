@@ -156,10 +156,11 @@ def run_traintest(testing_fname,
 	rnn_n_epochs=100,
 	cell_type='LSTM',
 	lr=0.05,
-	component_wise=None,
-	use_physics_as_bias=None,
-	run_style=None,
+	component_wise=False,
+	use_physics_as_bias=False,
+	run_style='short',
 	old=False,
+	use_manual_seed=False,
 	**kwargs):
 
 	try:
@@ -195,6 +196,7 @@ def run_traintest(testing_fname,
 					'use_physics_as_bias': use_physics_as_bias,
 					'run_style': run_style,
 					'old': old,
+					'use_manual_seed': use_manual_seed
 					}
 
 
