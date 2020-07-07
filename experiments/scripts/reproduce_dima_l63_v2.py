@@ -162,6 +162,7 @@ def run_traintest(testing_fname,
 	old=False,
 	use_manual_seed=False,
 	omit_z=False,
+	n_grad_steps=1,
 	**kwargs):
 
 	try:
