@@ -84,7 +84,8 @@ EXP_LIST = dict_combiner({'run_style': ['short','long','longest'],
 			'component_wise': [False],
 			'use_physics_as_bias': [True, False],
 			'datagen_fidelity': ['defaultfi'],
-			'traintest_fidelity': ['defaultfi']
+			'traintest_fidelity': ['defaultfi'],
+			'omit_z': [True,False]
 			})
 
 def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.experiment_dir, no_submit=FLAGS.no_submit):
@@ -116,7 +117,7 @@ def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.expe
 
 		# create the run-name
 		goo_str = '{cell_type}_hs{rnn_hidden_size}_lr{lr}'.format(**settings)
-		foo_nm = '_res'*settings['use_physics_as_bias'] + '_componentwise'*settings['component_wise'] + '_' + settings['run_style'] + '_old'*settings['old']
+		foo_nm = '_res'*settings['use_physics_as_bias'] + '_componentwise'*settings['component_wise'] + '_' + settings['run_style'] + '_old'*settings['old'] + '_omitZ'*settings['omit_z']
 		last_nm = goo_str + foo_nm
 
 		data_nm = 'dt{delta_t}'.format(**settings)

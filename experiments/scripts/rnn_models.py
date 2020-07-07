@@ -27,10 +27,18 @@ def unnormalize(y_norm, norm_dict):
 def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 	t0 = time()
 
+	if setts['omit_z']:
+		keep_inds = np.arange(odeInst.K-1)
+	else:
+		keep_inds = np.arange(odeInst.K)
+
+
 	# read TRAIN data
 	train_set = np.load(training_fname)
-	y_clean_train = train_set['X_train']
-	y_noisy_train = train_set['X_train']
+	y_clean_train = train_set['X_train'][:,keep_inds]
+	y_noisy_train = train_set['X_train'][:,keep_inds]
+
+
 
 	normz_info = {
 				'Ymax': np.max(y_noisy_train, axis=0),
@@ -54,10 +62,10 @@ def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 	y_clean_testSynch = []
 	y_noisy_testSynch = []
 	for c in range(test_set['X_test_traj'].shape[0]):
-		y_clean_test.append(normalize(norm_dict=normz_info, y=test_set['X_test_traj'][c,:,:]))
-		y_noisy_test.append(normalize(norm_dict=normz_info, y=test_set['X_test_traj'][c,:,:]))
-		y_clean_testSynch.append(normalize(norm_dict=normz_info, y=test_set['X_test_traj_synch'][c,:,:]))
-		y_noisy_testSynch.append(normalize(norm_dict=normz_info, y=test_set['X_test_traj_synch'][c,:,:]))
+		y_clean_test.append(normalize(norm_dict=normz_info, y=test_set['X_test_traj'][c,:,keep_inds].transpose()))
+		y_noisy_test.append(normalize(norm_dict=normz_info, y=test_set['X_test_traj'][c,:,keep_inds].transpose()))
+		y_clean_testSynch.append(normalize(norm_dict=normz_info, y=test_set['X_test_traj_synch'][c,:,keep_inds].transpose()))
+		y_noisy_testSynch.append(normalize(norm_dict=normz_info, y=test_set['X_test_traj_synch'][c,:,keep_inds].transpose()))
 
 	setts['y_clean_test'] = np.stack(y_clean_test)
 	setts['y_noisy_test'] = np.stack(y_noisy_test)
