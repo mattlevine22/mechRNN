@@ -674,7 +674,7 @@ def train_RNN_new(y_noisy_train,
 					if val.requires_grad:
 						# easy_name = model.lookup[name][0]
 						# manual_new[easy_name] = np.linalg.norm(val.data - lr*val.grad.data)
-						val.data -= lr* val.grad.data
+						val.data -= lr* val.grad.data / n_grad_steps # use avg gradient per step
 						# val.data.add_(val.grad, alpha=-lr)
 						# manual2_new[easy_name] = np.linalg.norm(val.data)
 						val.grad.data.zero_()
@@ -708,7 +708,7 @@ def train_RNN_new(y_noisy_train,
 					print('target:', target_sequence)
 					print('pred:', full_predicted_states)
 					print('loss:', loss)
-					pdb.set_trace()
+					# pdb.set_trace()
 
 				# A.data -= lr * A.grad.data
 				# B.data -= lr * B.grad.data

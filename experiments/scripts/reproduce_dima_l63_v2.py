@@ -198,13 +198,14 @@ def run_traintest(testing_fname,
 					'run_style': run_style,
 					'old': old,
 					'use_manual_seed': use_manual_seed,
-					'omit_z': omit_z
+					'omit_z': omit_z,
+					'n_grad_steps': n_grad_steps
 					}
 
 
 	## Run a specific RNN scheme
 	goo_str = '{cell_type}_hs{hidden_size}_lr{lr}'.format(**rnn_settings)
-	foo_nm = 'res_'*rnn_settings['use_physics_as_bias'] + goo_str + '_componentwise'*rnn_settings['component_wise'] + '_' + rnn_settings['run_style'] + '_omitZ'*rnn_settings['omit_z']
+	foo_nm = 'res_'*rnn_settings['use_physics_as_bias'] + goo_str + '_componentwise'*rnn_settings['component_wise'] + '_' + rnn_settings['run_style'] + '_omitZ'*rnn_settings['omit_z'] + '_{0}gradsteps'.format(n_grad_steps)
 	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
 	setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
 	print('done with RNN so quitting...no GP stuff this time!')
