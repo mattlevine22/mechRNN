@@ -385,7 +385,7 @@ class RNN(nn.Module):
 				nn.init.normal_(self.h_t,0.0,0.1)
 		if self.c_t is None and self.use_c_cell:
 			if self.component_wise:
-				self.c_t = torch.zeros((self.n_components, 1, self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
+				self.c_t = torch.zeros((self.n_components, input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
 			else:
 				self.c_t = torch.zeros((input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
 			if train:
@@ -447,15 +447,20 @@ class RNN(nn.Module):
 			if self.use_physics_as_bias:
 				rnn_pred = rnn_pred.view(physics_pred.shape)
 
+			if not self.component_wise:
+				h_t_new = h_t_new[None,:,:]
+
 			full_rnn_pred = self.use_physics_as_bias * physics_pred + rnn_pred # normalized
 			full_preds += [full_rnn_pred]
 			rnn_preds += [rnn_pred]
-			hidden_preds += [self.h_t]
+			hidden_preds += [h_t_new]
 
-		# pdb.set_trace()
 		full_preds = torch.stack(full_preds, 1).squeeze(2)
 		rnn_preds = torch.stack(rnn_preds, 1).squeeze(2)
-		hidden_preds = torch.stack(hidden_preds, 0).view(input_t.shape[0], self.n_components, n_steps, self.hidden_size)
+		hidden_preds = torch.stack(hidden_preds, 0) #regular: (1,2,50)
+		hidden_preds.transpose_(0,2)
+		# hidden_preds = hidden_preds.reshape(input_t.shape[0], self.n_components, n_steps, self.hidden_size)
+		# check these hidden_preds under component-wise situation
 
 		return full_preds, rnn_preds, hidden_preds
 
@@ -744,7 +749,7 @@ def train_RNN_new(y_noisy_train,
 		# Report Train losses after each epoch
 		for c in range(n_train_traj):
 			model_stats['Train']['t_valid'][epoch,c] = traj_div_time(Xtrue=all_target_states[c,:,:], Xpred=all_predicted_states[c,:,:], delta_t=model.delta_t, avg_output=model.time_avg_norm, synch_length=Xtest_synch.shape[1])
-			model_stats['Train']['loss'][epoch,c] = loss_function(all_target_states[c,:,:], all_predicted_states[c,:,:]).cpu().data.numpy().item()
+			model_stats['Train']['loss'][epoch,c] = all_target_states.shape[2]*loss_function(model.normalize(all_target_states[c,:,:]), model.normalize(all_predicted_states[c,:,:])).cpu().data.numpy().item()
 
 		### Report TEST performance after each epoch
 		# Step 0. reset initial hidden states
@@ -777,7 +782,7 @@ def train_RNN_new(y_noisy_train,
 
 		for c in range(n_test_traj):
 			model_stats['Test']['t_valid'][epoch,c] = traj_div_time(Xtrue=target_sequence_test[c,:,:], Xpred=full_predicted_states_test[c,:,:], delta_t=model.delta_t, avg_output=model.time_avg_norm)
-			model_stats['Test']['loss'][epoch,c] = loss_function(target_sequence_test[c,:,:], full_predicted_states_test[c,:,:]).cpu().data.numpy().item()
+			model_stats['Test']['loss'][epoch,c] = target_sequence_test.shape[2]*loss_function(model.normalize(target_sequence_test[c,:,:]), model.normalize(full_predicted_states_test[c,:,:])).cpu().data.numpy().item()
 		test_tvalid = np.median(model_stats['Test']['t_valid'][epoch,:])
 
 		# Print epoch summary after every epoch
@@ -812,8 +817,8 @@ def train_RNN_new(y_noisy_train,
 def print_epoch_status(model_stats, epoch=-1):
 	vals = {}
 	vals['epoch'] = epoch
-	vals['ltrain'] = np.median(model_stats['Train']['loss'][epoch,:])
-	vals['ltest'] = np.median(model_stats['Test']['loss'][epoch,:])
+	vals['ltrain'] = np.mean(model_stats['Train']['loss'][epoch,:])
+	vals['ltest'] = np.mean(model_stats['Test']['loss'][epoch,:])
 	vals['ttrain'] = np.median(model_stats['Train']['t_valid'][epoch,:])
 	vals['ttest'] = np.median(model_stats['Test']['t_valid'][epoch,:])
 	status_string = 'Epoch {epoch}. l-train={ltrain}, l-test={ltest}, t-train={ttrain}, t-test={ttest}'.format(**vals)

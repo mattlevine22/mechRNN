@@ -1243,7 +1243,8 @@ def run_ode_test(y_clean_test, y_noisy_test,
 		# NOW, show testing fit
 		for kk in range(len(ax_list)):
 			ax3 = ax_list[kk]
-			t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+			t_plot = np.linspace(0, n_plttest*model_params['delta_t'], n_plttest)
+			# t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
 			# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
 			ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
 			ax3.plot(t_plot, gpr_test_predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='Available ODE fit')
@@ -1532,7 +1533,8 @@ def run_GP(y_clean_train, y_noisy_train,
 
 	for kk in range(len(ax_list)):
 		ax1 = ax_list[kk]
-		t_plot = np.arange(0,round(len(y_noisy_train[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+		t_plot = np.linspace(0, n_plttrain*model_params['delta_t'], n_plttrain)
+		# t_plot = np.arange(0,round(len(y_noisy_train[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
 		ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
 		ax1.plot(t_plot, y_clean_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', label='clean data')
 		ax1.plot(t_plot[1:], gpr_train_predictions_orig_raw[:n_plttrain-1,plot_state_indices[kk]], color='black', label='GP orig')
@@ -1709,7 +1711,8 @@ def run_GP(y_clean_train, y_noisy_train,
 		# NOW, show testing fit
 		for kk in range(len(ax_list)):
 			ax3 = ax_list[kk]
-			t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+			t_plot = np.linspace(0, n_plttest*model_params['delta_t'], n_plttest)
+			# t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
 			# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
 			ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
 			ax3.plot(t_plot, gpr_test_predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
@@ -2319,9 +2322,11 @@ def train_chaosRNN(forward,
 
 			for kk in range(len(ax_list)):
 				ax1 = ax_list[kk]
-				ax1.scatter(np.arange(len(y_noisy_test[kkt,:n_plttest,plot_state_indices[kk]])), y_noisy_test[kkt,:n_plttest,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
-				ax1.plot(y_clean_test[kkt,:n_plttest,kk], color='red', label='true model')
-				ax1.plot(predictions[:n_plttest,kk], ':' ,color='red', label='perturbed model')
+				t_plot = np.linspace(0, n_plttest*model_params['delta_t'], n_plttest)
+				# t_plot = np.arange(0,len(y_noisy_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+				ax1.scatter(t_plot, y_noisy_test[kkt,:n_plttest,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
+				ax1.plot(t_plot, y_clean_test[kkt,:n_plttest,plot_state_indices[kk]], color='red', label='true model')
+				ax1.plot(t_plot, predictions[:n_plttest,plot_state_indices[kk]], ':' ,color='red', label='perturbed model')
 				ax1.set_xlabel('time')
 				ax1.set_ylabel(model_params['state_names'][kk] + '(t)', color='red')
 				ax1.tick_params(axis='y', labelcolor='red')
@@ -2542,6 +2547,7 @@ def train_chaosRNN(forward,
 				pred = pred.detach()
 				long_predictions[j,:] = pred.data.numpy().ravel()
 				hidden_state = hidden_state.detach()
+
 			#normalize losses
 			total_loss_test = total_loss_test / test_seq_length
 			total_loss_clean_test = total_loss_clean_test / test_seq_length
@@ -2600,7 +2606,6 @@ def train_chaosRNN(forward,
 				saved_hidden_states[i+1,:] = hidden_state.data.numpy().ravel()
 				predictions[i+1,:] = pred.data.numpy().ravel()
 
-
 			y_noisy_train_raw = f_unNormalize_Y(normz_info,y_noisy_train)
 			y_clean_train_raw = f_unNormalize_Y(normz_info,y_clean_train)
 			predictions_raw = f_unNormalize_Y(normz_info,predictions)
@@ -2615,7 +2620,8 @@ def train_chaosRNN(forward,
 				ax_list = [ax_list]
 			for kk in range(len(ax_list)):
 				ax1 = ax_list[kk]
-				t_plot = np.arange(0,round(len(y_noisy_train[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+				t_plot = np.linspace(0, n_plttrain*model_params['delta_t'], n_plttrain)
+				# t_plot = np.arange(0,round(len(y_noisy_train[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
 				# ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
 				ax1.plot(t_plot, y_clean_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', label='clean data')
 				ax1.plot(t_plot, predictions_raw[:n_plttrain,plot_state_indices[kk]], color='black', label='NN fit')
@@ -2633,7 +2639,8 @@ def train_chaosRNN(forward,
 				ax_list = [ax_list]
 			for kk in range(len(ax_list)):
 				ax1 = ax_list[kk]
-				t_plot = np.arange(0,round(len(y_noisy_train[-n_plttrain:,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+				t_plot = np.linspace(0, n_plttrain*model_params['delta_t'], n_plttrain)
+				# t_plot = np.arange(0,round(len(y_noisy_train[-n_plttrain:,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
 				# ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
 				ax1.plot(t_plot, y_clean_train_raw[-n_plttrain:,plot_state_indices[kk]], color='red', label='clean data')
 				ax1.plot(t_plot, predictions_raw[-n_plttrain:,plot_state_indices[kk]], color='black', label='NN fit')
@@ -2654,7 +2661,8 @@ def train_chaosRNN(forward,
 				ax_list = [ax_list]
 			for kk in range(len(ax_list)):
 				ax1 = ax_list[kk]
-				t_plot = np.arange(0,round(len(saved_hidden_states[:n_plttrain,kk])*model_params['delta_t'],8),model_params['delta_t'])
+				t_plot = np.linspace(0, n_plttrain*model_params['delta_t'], n_plttrain)
+				# t_plot = np.arange(0,round(len(saved_hidden_states[:n_plttrain,kk])*model_params['delta_t'],8),model_params['delta_t'])
 				ax1.plot(t_plot, saved_hidden_states[:n_plttrain,kk], color='red', label='clean data')
 				ax1.set_xlabel('time')
 				ax1.set_ylabel('h_{}'.format(kk), color='red')
@@ -2690,7 +2698,8 @@ def train_chaosRNN(forward,
 					synch_predictions_raw = f_unNormalize_Y(normz_info,synch_predictions)
 					for kk in range(len(ax_list_synch)):
 						ax3 = ax_list_synch[kk]
-						t_plot = np.arange(0,len(test_synch_clean[kkt,:,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+						t_plot = np.linspace(0, test_synch_clean.shape[1]*model_params['delta_t'], test_synch_clean.shape[1])
+						# t_plot = np.arange(0,len(test_synch_clean[kkt,:,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
 						# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
 						ax3.plot(t_plot, test_synch_clean_raw[:,plot_state_indices[kk]], color='red', label='clean synch data')
 						ax3.plot(t_plot, synch_predictions_raw[:,plot_state_indices[kk]], color='black', label='NN fit')
@@ -2714,10 +2723,12 @@ def train_chaosRNN(forward,
 					predictions[i,:] = pred.data.numpy().ravel()
 					saved_hidden_states[i,:] = hidden_state.data.numpy().ravel()
 
+
 				predictions_raw = f_unNormalize_Y(normz_info,predictions)
 				for kk in range(len(ax_list)):
 					ax3 = ax_list[kk]
-					t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+					t_plot = np.linspace(0, n_plttest*model_params['delta_t'], n_plttest)
+					# t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
 					# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
 					ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
 					ax3.plot(t_plot, predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
@@ -2749,7 +2760,8 @@ def train_chaosRNN(forward,
 					ax_list = [ax_list]
 				for kk in range(len(ax_list)):
 					ax1 = ax_list[kk]
-					t_plot = np.arange(0,round(len(saved_hidden_states[:n_plttest,kk])*model_params['delta_t'],8),model_params['delta_t'])
+					t_plot = np.linspace(0, n_plttest*model_params['delta_t'], n_plttest)
+					# t_plot = np.arange(0,round(len(saved_hidden_states[:n_plttest,kk])*model_params['delta_t'],8),model_params['delta_t'])
 					ax1.plot(t_plot, saved_hidden_states[:n_plttest,kk], color='red', label='clean data')
 					ax1.set_xlabel('time')
 					ax1.set_ylabel('h_{}'.format(kk), color='red')
@@ -2876,7 +2888,8 @@ def train_chaosRNN(forward,
 	predictions_raw = f_unNormalize_Y(normz_info,predictions)
 	for kk in range(len(ax_list)):
 		ax1 = ax_list[kk]
-		t_plot = np.arange(0,round(len(y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
+		t_plot = np.linspace(0, n_plttrain*model_params['delta_t'], n_plttrain)
+		# t_plot = np.arange(0,round(len(y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]])*model_params['delta_t'],8),model_params['delta_t'])
 		# ax1.scatter(t_plot, y_noisy_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', s=10, alpha=0.3, label='noisy data')
 		ax1.plot(t_plot, y_clean_train_raw[:n_plttrain,plot_state_indices[kk]], color='red', label='clean data')
 		ax1.plot(t_plot, predictions_raw[:n_plttrain,plot_state_indices[kk]], color='black', label='NN fit')
@@ -2925,7 +2938,8 @@ def train_chaosRNN(forward,
 		predictions_raw = f_unNormalize_Y(normz_info,predictions)
 		for kk in range(len(ax_list)):
 			ax3 = ax_list[kk]
-			t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
+			t_plot = np.linspace(0, n_plttest*model_params['delta_t'], n_plttest)
+			# t_plot = np.arange(0,len(y_clean_test[kkt,:n_plttest,plot_state_indices[kk]])*model_params['delta_t'],model_params['delta_t'])
 			# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
 			ax3.plot(t_plot, y_clean_test_raw[:n_plttest,plot_state_indices[kk]], color='red', label='clean data')
 			ax3.plot(t_plot, predictions_raw[:n_plttest,plot_state_indices[kk]], color='black', label='NN fit')
@@ -3035,381 +3049,6 @@ def train_chaosRNN(forward,
 		plt.close(fig)
 
 	print('all done!')
-
-
-def train_RNN(forward,
-			y_clean_train, y_noisy_train, x_train,
-			y_clean_test, y_noisy_test, x_test,
-			model_params, hidden_size=6, n_epochs=100, lr=0.05,
-			output_dir='.', normz_info=None, model=None,
-			trivial_init=False, drive_system=True):
-
-	if not os.path.exists(output_dir):
-		os.makedirs(output_dir)
-
-	print('Starting RNN training for: ', output_dir)
-
-	if drive_system:
-		x_train = torch.FloatTensor(x_train)
-		x_test = torch.FloatTensor(x_test)
-		input_size = x_train.shape[0]
-
-	output_train = torch.FloatTensor(y_noisy_train)
-	output_clean_train = torch.FloatTensor(y_clean_train)
-	output_test = torch.FloatTensor(y_noisy_test)
-	output_clean_test = torch.FloatTensor(y_clean_test)
-
-	dtype = torch.FloatTensor
-	output_size = output_train.shape[1]
-	train_seq_length = output_train.size(0)
-	test_seq_length = output_test.size(0)
-
-	# first, SHOW that a simple mechRNN can fit the data perfectly
-	# now, TRAIN to fit the output from the previous model
-	if drive_system:
-		w2 = torch.zeros(hidden_size, input_size).type(dtype)
-	w1 = torch.zeros(hidden_size, hidden_size).type(dtype)
-	w1[0,0] = 1.
-	b = torch.zeros(hidden_size, 1).type(dtype)
-	c = torch.zeros(output_size, 1).type(dtype)
-	v = torch.zeros(output_size, hidden_size).type(dtype)
-	v[0] = 1.
-	hidden_state = torch.zeros((hidden_size, 1)).type(dtype)
-	predictions = []
-	# yb_normalized = (yb - YMIN)/(YMAX - YMIN)
-	# initializing y0 of hidden state to the true initial condition from the clean signal
-
-	hidden_state[0] = float(y_clean_test[0])
-	for i in range(test_seq_length):
-		(pred, hidden_state) = forward(x_test[:,i:i+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
-		hidden_state = hidden_state
-		predictions.append(pred.data.numpy().ravel()[0])
-	# plot predictions vs truth
-	fig, ax1 = plt.subplots()
-
-	ax1.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-	ax1.plot(y_clean_test, color='red', label='clean data')
-	ax1.plot(predictions, ':' ,color='red', label='NN trivial fit')
-	ax1.set_xlabel('time')
-	ax1.set_ylabel('y(t)', color='red')
-	ax1.tick_params(axis='y', labelcolor='red')
-
-	if drive_system:
-		ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-		color = 'tab:blue'
-		ax2.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
-		ax2.plot((x_test[0,:].numpy()), ':', color=color, linestyle='--', label='input/driver data')
-		ax2.tick_params(axis='y', labelcolor=color)
-
-	fig.legend()
-	fig.suptitle('RNN w/ just mechanism fit to ODE simulation TEST SET')
-	fig.savefig(fname=output_dir+'/PERFECT_MechRnn_fit_ode')
-	plt.close(fig)
-
-	# Initilize parameters for training
-	if drive_system:
-		w2 = torch.FloatTensor(hidden_size, input_size).type(dtype)
-	w1 = torch.FloatTensor(hidden_size, hidden_size).type(dtype)
-	b = torch.FloatTensor(hidden_size, 1).type(dtype)
-	c = torch.FloatTensor(output_size, 1).type(dtype)
-	v = torch.FloatTensor(output_size, hidden_size).type(dtype)
-
-	# trivial_init trains the mechRNN starting from parameters (specified above)
-	# that trivialize the RNN to the forward ODE model
-	# now, TRAIN to fit the output from the previous model
-	if trivial_init:
-		if drive_system:
-			init.zeros_(w2)
-		init.zeros_(w1)
-		init.zeros_(b)
-		init.zeros_(c)
-		init.zeros_(v)
-		w1[0,0] = 1.
-		v[0] = 1.
-	else:
-		if drive_system:
-			init.normal_(w2, 0.0, 0.1)
-		init.normal_(w1, 0.0, 0.1)
-		init.normal_(b, 0.0, 0.1)
-		init.normal_(c, 0.0, 0.1)
-		init.normal_(v, 0.0, 0.1)
-
-	if drive_system:
-		w2 = Variable(w2, requires_grad=True)
-	w1 =  Variable(w1, requires_grad=True)
-	b =  Variable(b, requires_grad=True)
-	c =  Variable(c, requires_grad=True)
-	v =  Variable(v, requires_grad=True)
-
-	if drive_system:
-		w2_history = np.zeros((n_epochs*train_seq_length,w2.shape[0],w2.shape[1]))
-	w1_history = np.zeros((n_epochs*train_seq_length,w1.shape[0],w1.shape[1]))
-	b_history = np.zeros((n_epochs*train_seq_length,b.shape[0],b.shape[1]))
-	c_history = np.zeros((n_epochs*train_seq_length,c.shape[0],c.shape[1]))
-	v_history = np.zeros((n_epochs*train_seq_length,v.shape[0],v.shape[1]))
-
-	loss_vec_train = np.zeros(n_epochs)
-	loss_vec_clean_train = np.zeros(n_epochs)
-	loss_vec_test = np.zeros(n_epochs)
-	loss_vec_clean_test = np.zeros(n_epochs)
-	cc = -1 # iteration counter for saving weight updates
-	for i_epoch in range(n_epochs):
-		total_loss_train = 0
-		total_loss_clean_train = 0
-		#init.normal_(hidden_state, 0.0, 1)
-		#hidden_state = Variable(hidden_state, requires_grad=True)
-		hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-		for j in range(train_seq_length):
-			cc += 1
-			target = output_train[j:(j+1)]
-			target_clean = output_clean_train[j:(j+1)]
-			if drive_system:
-				(pred, hidden_state) = forward(x_train[:,j:j+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
-			else:
-				(pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
-			loss = (pred.squeeze() - target.squeeze()).pow(2).sum()
-			total_loss_train += loss
-			total_loss_clean_train += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()
-			loss.backward()
-
-			if drive_system:
-				w2.data -= lr * w2.grad.data
-			w1.data -= lr * w1.grad.data
-			b.data -= lr * b.grad.data
-			c.data -= lr * c.grad.data
-			v.data -= lr * v.grad.data
-
-			if drive_system:
-				w2.grad.data.zero_()
-			w1.grad.data.zero_()
-			b.grad.data.zero_()
-			c.grad.data.zero_()
-			v.grad.data.zero_()
-
-			hidden_state = hidden_state.detach()
-
-			# save updated parameters
-			if drive_system:
-				w2_history[cc,:] = w2.detach().numpy()
-			w1_history[cc,:] = w1.detach().numpy()
-			b_history[cc,:] = b.detach().numpy()
-			c_history[cc,:] = c.detach().numpy()
-			v_history[cc,:] = v.detach().numpy()
-
-		#normalize losses
-		total_loss_train = total_loss_train / train_seq_length
-		total_loss_clean_train = total_loss_clean_train / train_seq_length
-		#store losses
-		loss_vec_train[i_epoch] = total_loss_train
-		loss_vec_clean_train[i_epoch] = total_loss_clean_train
-
-		total_loss_test = 0
-		total_loss_clean_test = 0
-		hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-		for j in range(test_seq_length):
-			target = output_test[j:(j+1)]
-			target_clean = output_clean_test[j:(j+1)]
-			if drive_system:
-				(pred, hidden_state) = forward(x_test[:,j:j+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
-			else:
-				(pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
-			total_loss_test += (pred.squeeze() - target.squeeze()).pow(2).sum()
-			total_loss_clean_test += (pred.squeeze() - target_clean.squeeze()).pow(2).sum()
-
-			hidden_state = hidden_state.detach()
-		#normalize losses
-		total_loss_test = total_loss_test / test_seq_length
-		total_loss_clean_test = total_loss_clean_test / test_seq_length
-		#store losses
-		loss_vec_test[i_epoch] = total_loss_test
-		loss_vec_clean_test[i_epoch] = total_loss_clean_test
-
-		# print updates every 10 iterations or in 10% incrememnts
-		if i_epoch % int( max(10, np.ceil(n_epochs/10)) ) == 0:
-			print("Epoch: {}\nTraining Loss = {}\nTesting Loss = {}".format(
-						i_epoch,
-						total_loss_train.data.item(),
-						total_loss_test.data.item()))
-				 # plot predictions vs truth
-			fig, (ax1, ax3) = plt.subplots(1, 2)
-
-			# first run and plot training fits
-			hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-			predictions = []
-			for i in range(train_seq_length):
-				if drive_system:
-					(pred, hidden_state) = forward(x_train[:,i:i+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
-				else:
-					(pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
-				hidden_state = hidden_state
-				predictions.append(pred.data.numpy().ravel()[0])
-
-			ax1.scatter(np.arange(len(y_noisy_train[:,0])), y_noisy_train[:,0], color='red', s=10, alpha=0.3, label='noisy data')
-			ax1.plot(y_clean_train[:,0], color='red', label='clean data')
-			ax1.plot(predictions, color='black', label='NN fit')
-			ax1.set_xlabel('time')
-			ax1.set_ylabel('y(t)', color='red')
-			ax1.tick_params(axis='y', labelcolor='red')
-
-
-			if drive_system:
-				ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-				color = 'tab:blue'
-				ax2.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
-				ax2.plot((x_train[0,:].numpy()), ':', color=color, linestyle='--', label='driver/input data')
-				ax2.tick_params(axis='y', labelcolor=color)
-
-			ax1.set_title('Training Fit')
-
-			# NOW, show testing fit
-			hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-			predictions = []
-			for i in range(test_seq_length):
-				if drive_system:
-					(pred, hidden_state) = forward(x_test[:,i:i+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
-				else:
-					(pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
-				hidden_state = hidden_state
-				predictions.append(pred.data.numpy().ravel()[0])
-
-			# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-			ax3.plot(y_clean_test[:,0], color='red', label='clean data')
-			ax3.plot(predictions, color='black', label='NN fit')
-			ax3.set_xlabel('time')
-			ax3.set_ylabel('y(t)', color='red')
-			ax3.tick_params(axis='y', labelcolor='red')
-
-			if drive_system:
-				ax4 = ax3.twinx()  # instantiate a second axes that shares the same x-axis
-				color = 'tab:blue'
-				ax4.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
-				ax4.plot((x_test[0,:].numpy()), ':', color=color, linestyle='--', label='driver/input data')
-				ax4.tick_params(axis='y', labelcolor=color)
-
-			ax3.set_title('Testing Fit')
-
-			ax3.legend()
-			ax2.legend()
-
-			fig.suptitle('RNN fit to ODE simulation--' + str(i_epoch) + 'training epochs')
-			fig.savefig(fname=output_dir+'/rnn_fit_ode_iterEpochs'+str(i_epoch))
-			plt.close(fig)
-
-			# Plot parameter convergence
-
-
-	## save loss_vec
-	np.savetxt(output_dir+'/loss_vec_train.txt',loss_vec_train)
-	np.savetxt(output_dir+'/loss_vec_clean_train.txt',loss_vec_clean_train)
-	np.savetxt(output_dir+'/loss_vec_test.txt',loss_vec_test)
-	np.savetxt(output_dir+'/loss_vec_clean_test.txt',loss_vec_clean_test)
-	np.savetxt(output_dir+'/w1.txt',w1.detach().numpy())
-	if drive_system:
-		np.savetxt(output_dir+'/w2.txt',w2.detach().numpy())
-	np.savetxt(output_dir+'/b.txt',b.detach().numpy())
-	np.savetxt(output_dir+'/c.txt',c.detach().numpy())
-	np.savetxt(output_dir+'/v.txt',v.detach().numpy())
-
-	# print("W1:",w1)
-	# print("W2:",w2)
-	# print("b:",b)
-	# print("c:",c)
-	# print("v:",v)
-
-	# plot parameter convergence
-	fig, my_axes = plt.subplots(2, 3, sharex=True, figsize=[8,6])
-
-	x_vals = np.linspace(0,n_epochs,len(w1_history))
-	my_axes[0,0].plot(x_vals, np.linalg.norm(w1.detach().numpy() - w1_history, ord='fro', axis=(1,2)))
-	my_axes[0,0].set_title('W_1')
-	my_axes[0,0].set_xlabel('Epochs')
-
-	if drive_system:
-		my_axes[0,1].plot(x_vals, np.linalg.norm(w2.detach().numpy() - w2_history, ord='fro', axis=(1,2)))
-		my_axes[0,1].set_title('W_2')
-		my_axes[0,1].set_xlabel('Epochs')
-
-	my_axes[1,0].plot(x_vals, np.linalg.norm(v.detach().numpy() - v_history, ord='fro', axis=(1,2)))
-	my_axes[1,0].set_title('v')
-	my_axes[1,0].set_xlabel('Epochs')
-
-	my_axes[1,1].plot(x_vals, np.linalg.norm(b.detach().numpy() - b_history, ord='fro', axis=(1,2)))
-	my_axes[1,1].set_title('b')
-	my_axes[1,1].set_xlabel('Epochs')
-
-	my_axes[1,2].plot(x_vals, np.linalg.norm(c.detach().numpy() - c_history, ord='fro', axis=(1,2)))
-	my_axes[1,2].set_title('c')
-	my_axes[1,2].set_xlabel('Epochs')
-
-
-	fig.suptitle("Parameter convergence")
-	fig.savefig(fname=output_dir+'/rnn_parameter_convergence')
-	plt.close(fig)
-
-	## now, inspect the quality of the learned model
-	# plot predictions vs truth
-	fig, (ax1, ax3) = plt.subplots(1, 2)
-
-	# first run and plot training fits
-	hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-	predictions = []
-	for i in range(train_seq_length):
-		if drive_system:
-			(pred, hidden_state) = forward(x_train[:,i:i+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
-		else:
-			(pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
-		hidden_state = hidden_state
-		predictions.append(pred.data.numpy().ravel()[0])
-
-	ax1.scatter(np.arange(len(y_noisy_train[:,0])), y_noisy_train[:,0], color='red', s=10, alpha=0.3, label='noisy data')
-	ax1.plot(y_clean_train[:,0], color='red', label='clean data')
-	ax1.plot(predictions, color='black', label='NN fit')
-	ax1.set_xlabel('time')
-	ax1.set_ylabel('y(t)', color='red')
-	ax1.tick_params(axis='y', labelcolor='red')
-
-	if drive_system:
-		ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-		color = 'tab:blue'
-		ax2.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
-		ax2.plot((x_train[0,:].numpy()), ':', color=color, linestyle='--', label='driver/input data')
-		ax2.tick_params(axis='y', labelcolor=color)
-
-	ax1.set_title('Training Fit')
-
-	# NOW, show testing fit
-	hidden_state = Variable(torch.zeros((hidden_size, 1)).type(dtype), requires_grad=False)
-	predictions = []
-	for i in range(test_seq_length):
-		if drive_system:
-			(pred, hidden_state) = forward(x_test[:,i:i+1], hidden_state, w1, w2, b, c, v, normz_info, model, model_params)
-		else:
-			(pred, hidden_state) = forward(hidden_state, w1, b, c, v, normz_info, model, model_params)
-		hidden_state = hidden_state
-		predictions.append(pred.data.numpy().ravel()[0])
-
-	# ax3.scatter(np.arange(len(y_noisy_test)), y_noisy_test, color='red', s=10, alpha=0.3, label='noisy data')
-	ax3.plot(y_clean_test[:,0], color='red', label='clean data')
-	ax3.plot(predictions[:,0], color='black', label='NN fit')
-	ax3.set_xlabel('time')
-	ax3.set_ylabel('y(t)', color='red')
-	ax3.tick_params(axis='y', labelcolor='red')
-
-	if drive_system:
-		ax4 = ax3.twinx()  # instantiate a second axes that shares the same x-axis
-		color = 'tab:blue'
-		ax4.set_ylabel('x(t)', color=color)  # we already handled the x-label with ax1
-		ax4.plot((x_test[0,:].numpy()), ':', color=color, linestyle='--', label='driver/input data')
-		ax4.tick_params(axis='y', labelcolor=color)
-
-	ax3.set_title('Testing Fit')
-
-	ax3.legend()
-	ax2.legend()
-
-	fig.suptitle('RNN fit to ODE simulation')
-	fig.savefig(fname=output_dir+'/rnn_fit_ode')
-	plt.close(fig)
 
 
 def compare_fits(my_dirs, output_fname="./training_comparisons", plot_state_indices=None):
