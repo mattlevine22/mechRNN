@@ -2091,6 +2091,9 @@ def train_chaosRNN(forward,
 			use_manual_seed=False,
 			**kwargs):
 
+	if not (stack_hidden or stack_output or learn_residuals or ode_only or gp_only):
+		precompute_model = False
+
 	model_params['smaller_delta_t'] = model_params['delta_t'] # later, need to remove smaller_delta_t as field
 
 	t0 = time()
