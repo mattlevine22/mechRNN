@@ -31,6 +31,7 @@ def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 		keep_inds = np.arange(odeInst.K-1)
 	else:
 		keep_inds = np.arange(odeInst.K)
+		setts['plot_state_indices'] = odeInst.plot_state_indices()
 
 
 	# read TRAIN data
@@ -76,8 +77,6 @@ def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 	setts['model_params']['state_names'] = odeInst.get_state_names()
 
 	setts['model'] = odeInst.rhs
-
-	setts['plot_state_indices'] = odeInst.plot_state_indices()
 
 	setts['ODE'] = odeInst
 
