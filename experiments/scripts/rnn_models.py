@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import random
-from utils import traj_div_time, train_chaosRNN, forward_chaos_hybrid_full, forward_chaos_pureML
+from utils import phase_plot, traj_div_time, train_chaosRNN, forward_chaos_hybrid_full, forward_chaos_pureML
 from line_profiler import LineProfiler
 from scipy.integrate import solve_ivp
 
@@ -237,6 +237,8 @@ class RNN(nn.Module):
 	def make_traj_plots(self, Xtrue, Xpred, Xpred_residuals, hidden_states, name, epoch):
 		traj_dir = os.path.join(self.output_path, 'traj_state_{name}'.format(name=name))
 		hidden_dir = os.path.join(self.output_path, 'traj_hidden_{name}'.format(name=name))
+		phase_dir = os.path.join(self.output_path, 'traj_phase_{name}'.format(name=name))
+		os.makedirs(phase_dir, exist_ok=True)
 		os.makedirs(traj_dir, exist_ok=True)
 		os.makedirs(hidden_dir, exist_ok=True)
 
@@ -254,6 +256,9 @@ class RNN(nn.Module):
 			fig.suptitle('Trajectory Fit')
 			fig.savefig(fname=os.path.join(traj_dir,'traj{c}_epoch{epoch}'.format(c=c,epoch=epoch)))
 			plt.close(fig)
+
+			output_fname = os.path.join(phase_dir,'traj{c}_epoch{epoch}_'.format(c=c,epoch=epoch))
+			phase_plot(data=Xpred[c,:,:].cpu().data.numpy(), output_fname=output_fname, delta_t=self.delta_t, wspace=0.35, hspace=0.35)
 
 			for comp in range(self.n_components):
 				fig, ax = plt.subplots(1, 1, figsize=[12,10], sharex=True)
