@@ -78,7 +78,7 @@ RUN_STYLES = {'short': {'rnn_n_epochs': 100,
 
 EXP_LIST = dict_combiner({'run_style': ['short','long','longest'],
 			'old': [True, False],
-			'rnn_hidden_size': [50],
+			'rnn_hidden_size': [50, 200],
 			'lr': [0.05, 0.01, 0.1, 0.005],
 			'optimizer_name': ['SGD','Adam'],
 			'cell_type': ['RNN','LSTM','GRU'],
