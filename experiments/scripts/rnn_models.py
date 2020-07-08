@@ -809,25 +809,30 @@ def plot_stats(model_stats, epoch=-1, output_path='.'):
 	test_loss_vec = model_stats['Test']['loss']
 	test_t_valid_vec = model_stats['Test']['t_valid']
 
-	fig, ax_list = plt.subplots(2,1, figsize=[12,10], sharex=True)
+	fig, ax_list = plt.subplots(2,2, figsize=[12,10], sharex=True)
 
 	# loss function
-	ax = ax_list[0]
+	ax = ax_list[0,0]
 	ax.errorbar(x=np.arange(epoch), y=np.mean(train_loss_vec[:epoch,:], axis=1), yerr=np.std(train_loss_vec[:epoch,:], axis=1), label='Training Loss', linestyle='-')
-	ax.errorbar(x=np.arange(epoch), y=np.mean(test_loss_vec[:epoch,:], axis=1), yerr=np.std(test_loss_vec[:epoch,:], axis=1), label='Testing Loss', linestyle='--')
+	ax.set_title('Training Error')
 	ax.set_ylabel('Loss')
-	# ax.set_xlabel('Epochs')
-	ax.legend()
+
+	ax = ax_list[0,1]
+	ax.errorbar(x=np.arange(epoch), y=np.mean(test_loss_vec[:epoch,:], axis=1), yerr=np.std(test_loss_vec[:epoch,:], axis=1), label='Testing Loss', linestyle='--')
+	ax.set_title('Testing Error')
+	ax.set_ylabel('Loss')
 
 	# validity time
-	ax = ax_list[1]
+	ax = ax_list[1,0]
 	ax.errorbar(x=np.arange(epoch), y=np.mean(train_t_valid_vec[:epoch,:], axis=1), yerr=np.std(train_t_valid_vec[:epoch,:], axis=1), label=' Train', linestyle='-')
-	ax.errorbar(x=np.arange(epoch), y=np.mean(test_t_valid_vec[:epoch,:], axis=1), yerr=np.std(test_t_valid_vec[:epoch,:], axis=1), label=' Test', linestyle='--')
+	ax.set_title('Training Validity Time')
 	ax.set_ylabel('Validity Time')
-	ax.set_title('Validity Time')
-	ax.legend()
 
-	fig.suptitle('Train/Test Performance')
+	ax = ax_list[1,1]
+	ax.errorbar(x=np.arange(epoch), y=np.mean(test_t_valid_vec[:epoch,:], axis=1), yerr=np.std(test_t_valid_vec[:epoch,:], axis=1), label=' Test', linestyle='--')
+	ax.set_title('Testing Validity Time')
+	ax.set_ylabel('Validity Time')
+
 	fig.savefig(fname=os.path.join(output_path,'TrainTest_Performance'))
 	plt.close(fig)
 	return
