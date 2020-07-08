@@ -155,7 +155,6 @@ def run_traintest(testing_fname,
 	rnn_hidden_size=50,
 	rnn_n_epochs=100,
 	cell_type='LSTM',
-	lr=0.05,
 	component_wise=False,
 	use_physics_as_bias=False,
 	run_style='short',
@@ -163,6 +162,8 @@ def run_traintest(testing_fname,
 	use_manual_seed=False,
 	omit_z=False,
 	n_grad_steps=1,
+	lr=0.05,
+	optimizer_name='SGD',
 	**kwargs):
 
 	try:
@@ -194,6 +195,7 @@ def run_traintest(testing_fname,
 								},
 					'cell_type': cell_type,
 					'lr': lr,
+					'optimizer_name': optimizer_name,
 					'component_wise': component_wise,
 					'use_physics_as_bias': use_physics_as_bias,
 					'run_style': run_style,
@@ -206,7 +208,7 @@ def run_traintest(testing_fname,
 
 	## Run a specific RNN scheme
 	goo_str = '{cell_type}_hs{hidden_size}_lr{lr}'.format(**rnn_settings)
-	foo_nm = 'res_'*rnn_settings['use_physics_as_bias'] + goo_str + '_componentwise'*rnn_settings['component_wise'] + '_' + rnn_settings['run_style'] + '_omitZ'*rnn_settings['omit_z'] + '_{0}gradsteps'.format(n_grad_steps)
+	foo_nm = 'res_'*rnn_settings['use_physics_as_bias'] + goo_str + '_componentwise'*rnn_settings['component_wise'] + '_' + rnn_settings['run_style'] + '_omitZ'*rnn_settings['omit_z'] + '_{0}gradsteps'.format(n_grad_steps) +'_{0}'.format(optimizer_name)
 	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
 	setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
 	print('done with RNN so quitting...no GP stuff this time!')

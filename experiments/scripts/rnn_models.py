@@ -475,12 +475,14 @@ class RNN(nn.Module):
 def get_optimizer(params, name='SGD', lr=None):
 	if name=='SGD':
 		if lr is None:
-			lr = 0.0005
+			lr = 0.05
 		return optim.SGD(params, lr=lr)
 	elif name=='Adam':
-		if lr is None:
-			lr = 0.01
-		return optim.Adam(params, lr=lr)
+		# if lr is None:
+		# 	lr = lr=0.001
+		# return optim.Adam(params, lr=lr)
+		print('Ignoring learning rate and using Adam defaults')
+		return optim.Adam(params)
 	elif name=='LBFGS':
 		if lr is None:
 			lr = 1
@@ -512,12 +514,14 @@ def train_RNN_new(y_noisy_train,
 				normz_info=None,
 				ODE=None,
 				mode='original',
-				lr=0.05,
 				do_printing=False,
 				component_wise=False,
 				cell_type='RNN',
 				hidden_size=50,
 				use_manual_seed=False,
+				old_optim=False,
+				optimizer_name='SGD',
+				lr=0.05,
 				**kwargs):
 
 	if not save_freq:
@@ -589,7 +593,7 @@ def train_RNN_new(y_noisy_train,
 
 	if use_gpu:
 		model.cuda()
-	optimizer = get_optimizer(params=model.parameters(), lr=lr)
+	optimizer = get_optimizer(name=optimizer_name, params=model.parameters(), lr=lr)
 	loss_function = get_loss()
 
 	best_model_dict = {}
@@ -668,36 +672,15 @@ def train_RNN_new(y_noisy_train,
 							print('|grad_{0}|'.format(easy_name), np.linalg.norm(val.grad.data))
 
 				# https://discuss.pytorch.org/t/losses-not-matching-when-training-using-hand-written-sgd-and-torch-optim-sgd/3467/3
-				# manual_new = {}
-				# manual2_new = {}
-				for name, val in model.named_parameters():
-					if val.requires_grad:
-						# easy_name = model.lookup[name][0]
-						# manual_new[easy_name] = np.linalg.norm(val.data - lr*val.grad.data)
-						val.data -= lr* val.grad.data / n_grad_steps # use avg gradient per step
-						# val.data.add_(val.grad, alpha=-lr)
-						# manual2_new[easy_name] = np.linalg.norm(val.data)
-						val.grad.data.zero_()
-						# if manual2_new[easy_name] != manual_new[easy_name]:
-						# 	pdb.set_trace()
-
-						# if do_printing:
-						# 	print('Manual New |{0}|'.format(easy_name), np.linalg.norm(val.data - lr*val.grad.data))
-
-				# optimizer.step() # update parameters using dL/dparam
-				# model.zero_grad() # reset gradients dL/dparam
-
-				# optim_new = {}
-				# for name, val in model.named_parameters():
-				# 	if val.requires_grad:
-				# 		easy_name = model.lookup[name][0]
-				# 		optim_new[easy_name] = np.linalg.norm(val.data)
-				# 		# val.data -= lr* val.grad.data
-				# 		# val.grad.data.zero_()
-				# 		# if do_printing:
-				# 		# 	print('Optim New |{0}|'.format(easy_name), np.linalg.norm(val.data))
-				# 		if optim_new[easy_name] != manual_new[easy_name]:
-				# 			pdb.set_trace()
+				if old_optim:
+					for name, val in model.named_parameters():
+						if val.requires_grad:
+							val.data -= lr* val.grad.data / n_grad_steps # use avg gradient per step
+							# val.data.add_(val.grad, alpha=-lr)
+							val.grad.data.zero_()
+				else:
+					optimizer.step() # update parameters using dL/dparam
+					model.zero_grad() # reset gradients dL/dparam
 
 				if do_printing:
 					for name, val in model.named_parameters():
@@ -710,19 +693,6 @@ def train_RNN_new(y_noisy_train,
 					print('loss:', loss)
 					# pdb.set_trace()
 
-				# A.data -= lr * A.grad.data
-				# B.data -= lr * B.grad.data
-				# C.data -= lr * C.grad.data
-				# a.data -= lr * a.grad.data
-				# b.data -= lr * b.grad.data
-
-				# A.grad.data.zero_()
-				# B.grad.data.zero_()
-				# C.grad.data.zero_()
-				# a.grad.data.zero_()
-				# b.grad.data.zero_()
-
-				# hidden_state = hidden_state.detach()
 				model.detach_hidden() # remove hidden-states from graph so that gradients at next step are not dependent on previous step
 				model.remember_weights() # store history of parameter updates
 				### end OLD style of updates

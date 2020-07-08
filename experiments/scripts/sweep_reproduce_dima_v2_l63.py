@@ -80,6 +80,7 @@ EXP_LIST = dict_combiner({'run_style': ['short','long','longest'],
 			'old': [True, False],
 			'rnn_hidden_size': [50],
 			'lr': [0.05, 0.01, 0.1, 0.005],
+			'optimizer_name': ['SGD','Adam'],
 			'cell_type': ['RNN','LSTM','GRU'],
 			'component_wise': [False],
 			'use_physics_as_bias': [True, False],
@@ -118,7 +119,7 @@ def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.expe
 
 		# create the run-name
 		goo_str = '{cell_type}_hs{rnn_hidden_size}_lr{lr}'.format(**settings)
-		foo_nm = '_res'*settings['use_physics_as_bias'] + '_componentwise'*settings['component_wise'] + '_' + settings['run_style'] + '_old'*settings['old'] + '_omitZ'*settings['omit_z'] + '_{0}gradsteps'.format(settings['n_grad_steps'])
+		foo_nm = '_res'*settings['use_physics_as_bias'] + '_componentwise'*settings['component_wise'] + '_' + settings['run_style'] + '_old'*settings['old'] + '_omitZ'*settings['omit_z'] + '_{0}gradsteps'.format(settings['n_grad_steps']) +'_{0}'.format(optimizer_name)
 		last_nm = goo_str + foo_nm
 
 		data_nm = 'dt{delta_t}'.format(**settings)
