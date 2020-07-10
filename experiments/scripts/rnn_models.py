@@ -234,118 +234,6 @@ class RNN(nn.Module):
 		if self.use_c_cell:
 			self.c_t.detach_()
 
-	def make_traj_plots(self, Xtrue, Xpred, Xpred_residuals, hidden_states, name, epoch):
-		hidden_inv_dir = os.path.join(self.output_path, 'inv_hidden_{name}'.format(name=name))
-		traj_dir = os.path.join(self.output_path, 'traj_state_{name}'.format(name=name))
-		hidden_dir = os.path.join(self.output_path, 'traj_hidden_{name}'.format(name=name))
-		phase_dir = os.path.join(self.output_path, 'traj_phase_{name}'.format(name=name))
-		os.makedirs(phase_dir, exist_ok=True)
-		os.makedirs(traj_dir, exist_ok=True)
-		os.makedirs(hidden_dir, exist_ok=True)
-		os.makedirs(hidden_inv_dir, exist_ok=True)
-
-		n_hidden_states = hidden_states.shape[-1]
-		n_traj, n_steps, n_states = Xtrue.shape
-		n_plt = min(self.max_plot, n_steps)
-		t_plot = np.linspace(0, n_plt*self.delta_t, n_plt)
-		fig_h, ax_h = plt.subplots(1, 1, figsize=[12,10])
-		for c in range(n_traj):
-			fig, ax_list = plt.subplots(n_states, 1, figsize=[12,10], sharex=True)
-			for s in range(n_states):
-				ax = ax_list[s]
-				ax.plot(t_plot, Xtrue[c,:n_plt,s].cpu().data.numpy(),linestyle='-', label='true')
-				ax.plot(t_plot, Xpred[c,:n_plt,s].cpu().data.numpy(),linestyle='--', label='learned')
-			ax.legend()
-			ax.set_xlabel('Time')
-			fig.suptitle('Trajectory Fit')
-			fig.savefig(fname=os.path.join(traj_dir,'traj{c}_epoch{epoch}'.format(c=c,epoch=epoch)))
-			plt.close(fig)
-
-			output_fname = os.path.join(phase_dir,'traj{c}_epoch{epoch}_'.format(c=c,epoch=epoch))
-			phase_plot(data=Xpred[c,:,:].cpu().data.numpy(), output_fname=output_fname, delta_t=self.delta_t, wspace=0.35, hspace=0.35)
-
-			for comp in range(self.n_components):
-				# first plot hidden inv-density
-				h_norm = np.linalg.norm(hidden_states[c,comp,:,:].cpu().data.numpy(), ord=2, axis=1) / np.sqrt(n_hidden_states)
-				sns.kdeplot(h_norm, ax=ax_h, label='traj-{c} component-{comp}'.format(c=c, comp=comp))
-
-				# now plot hidden dynamics
-				fig, ax = plt.subplots(1, 1, figsize=[12,10], sharex=True)
-				try:
-					ax.plot(t_plot, hidden_states[c,comp,:n_plt,:].cpu().data.numpy())
-				except:
-					pdb.set_trace()
-				ax.set_xlabel('Time')
-				fig.suptitle('Hidden state dynamics')
-				fig.savefig(fname=os.path.join(hidden_dir,'traj{c}_component{comp}_epoch{epoch}'.format(c=c, comp=comp, epoch=epoch)))
-				plt.close(fig)
-
-		ax_h.set_xlabel('||h|| / sqrt(hidden-dimension)')
-		ax_h.set_title('Invariant Density of Hidden State Norm')
-		fig_h.savefig(fname=os.path.join(hidden_inv_dir,'epoch{epoch}'.format(epoch=epoch)))
-		plt.close(fig_h)
-
-		return
-
-	def remember_weights(self):
-		for name, val in self.named_parameters(): #self.state_dict():
-			norm_val = np.linalg.norm(val.data.numpy())
-			if name not in self.weight_history:
-				self.weight_history[name] = norm_val
-			else:
-				self.weight_history[name] = np.hstack((self.weight_history[name],norm_val))
-
-	def plot_weights(self, n_epochs):
-		n_params = len(self.weight_history.keys())
-
-		# plot param convergence
-		fig, (axrow0, axrow1) = plt.subplots(2, 3, sharex=True, figsize=[8,6])
-		axlist = np.concatenate((axrow0,axrow1))
-		c = -1
-		for key in self.weight_history:
-			c += 1
-			param_history = self.weight_history[key]
-			x_vals = np.linspace(0, n_epochs, param_history.shape[0])
-			if param_history.ndim==1:
-				param_vals = param_history
-			elif param_history.ndim==3:
-				param_vals = np.linalg.norm(param_history, axis=(1,2))
-			elif param_history.ndim==2:
-				param_vals = np.linalg.norm(param_history, axis=(1))
-			axlist[c].plot(x_vals, param_vals)
-			axlist[c].set_title(key, pad=15)
-			axlist[c].set_xlabel('Epochs')
-		fig.suptitle("Parameter convergence")
-		fig.subplots_adjust(wspace=0.3, hspace=0.3)
-		fig.savefig(fname=os.path.join(self.output_path,'rnn_parameter_convergence_new.png'), dpi=300)
-		plt.close(fig)
-
-		# plot matrix visualizations
-		param_path = os.path.join(self.output_path, 'params')
-		os.makedirs(param_path, exist_ok=True)
-		fig, (axrow0, axrow1) = plt.subplots(2, 3, sharex=True, figsize=[8,6])
-		axlist = np.concatenate((axrow0,axrow1))
-		c = -1
-		for name, val in self.named_parameters():
-			ax = axlist[c]
-			val = val.detach()
-			c += 1
-			if val.ndim==1:
-				val = val[None,:]
-			if val.ndim==3:
-				val = val.squeeze(0)
-			# pdb.set_trace()
-			foo = ax.matshow(val, vmin=torch.min(val), vmax=torch.max(val))
-			ax.axes.xaxis.set_visible(False)
-			ax.axes.yaxis.set_visible(False)
-			ax.set_title(name, pad=20)
-			fig.colorbar(foo, ax=ax)
-
-		# fig.suptitle("Parameter convergence")
-		fig.subplots_adjust(wspace=0.3, hspace=0.5)
-		fig.savefig(fname=os.path.join(param_path,'rnn_parameter_values_{n_epochs}.png'.format(n_epochs=n_epochs-1)), dpi=300)
-		plt.close(fig)
-
 	def normalize(self, y):
 		return normalize(norm_dict=self.norm_dict, y=y)
 
@@ -491,6 +379,118 @@ class RNN(nn.Module):
 		# check these hidden_preds under component-wise situation
 
 		return full_preds, rnn_preds, hidden_preds
+
+	def make_traj_plots(self, Xtrue, Xpred, Xpred_residuals, hidden_states, name, epoch):
+		hidden_inv_dir = os.path.join(self.output_path, 'inv_hidden_{name}'.format(name=name))
+		traj_dir = os.path.join(self.output_path, 'traj_state_{name}'.format(name=name))
+		hidden_dir = os.path.join(self.output_path, 'traj_hidden_{name}'.format(name=name))
+		phase_dir = os.path.join(self.output_path, 'traj_phase_{name}'.format(name=name))
+		os.makedirs(phase_dir, exist_ok=True)
+		os.makedirs(traj_dir, exist_ok=True)
+		os.makedirs(hidden_dir, exist_ok=True)
+		os.makedirs(hidden_inv_dir, exist_ok=True)
+
+		n_hidden_states = hidden_states.shape[-1]
+		n_traj, n_steps, n_states = Xtrue.shape
+		n_plt = min(self.max_plot, n_steps)
+		t_plot = np.linspace(0, n_plt*self.delta_t, n_plt)
+		fig_h, ax_h = plt.subplots(1, 1, figsize=[12,10])
+		for c in range(n_traj):
+			fig, ax_list = plt.subplots(n_states, 1, figsize=[12,10], sharex=True)
+			for s in range(n_states):
+				ax = ax_list[s]
+				ax.plot(t_plot, Xtrue[c,:n_plt,s].cpu().data.numpy(),linestyle='-', label='true')
+				ax.plot(t_plot, Xpred[c,:n_plt,s].cpu().data.numpy(),linestyle='--', label='learned')
+			ax.legend()
+			ax.set_xlabel('Time')
+			fig.suptitle('Trajectory Fit')
+			fig.savefig(fname=os.path.join(traj_dir,'traj{c}_epoch{epoch}'.format(c=c,epoch=epoch)))
+			plt.close(fig)
+
+			output_fname = os.path.join(phase_dir,'traj{c}_epoch{epoch}_'.format(c=c,epoch=epoch))
+			phase_plot(data=Xpred[c,:,:].cpu().data.numpy(), output_fname=output_fname, delta_t=self.delta_t, wspace=0.35, hspace=0.35)
+
+			for comp in range(self.n_components):
+				# first plot hidden inv-density
+				h_norm = np.linalg.norm(hidden_states[c,comp,:,:].cpu().data.numpy(), ord=2, axis=1) / np.sqrt(n_hidden_states)
+				sns.kdeplot(h_norm, ax=ax_h, label='traj-{c} component-{comp}'.format(c=c, comp=comp))
+
+				# now plot hidden dynamics
+				fig, ax = plt.subplots(1, 1, figsize=[12,10], sharex=True)
+				try:
+					ax.plot(t_plot, hidden_states[c,comp,:n_plt,:].cpu().data.numpy())
+				except:
+					pdb.set_trace()
+				ax.set_xlabel('Time')
+				fig.suptitle('Hidden state dynamics')
+				fig.savefig(fname=os.path.join(hidden_dir,'traj{c}_component{comp}_epoch{epoch}'.format(c=c, comp=comp, epoch=epoch)))
+				plt.close(fig)
+
+		ax_h.set_xlabel('||h|| / sqrt(hidden-dimension)')
+		ax_h.set_title('Invariant Density of Hidden State Norm')
+		fig_h.savefig(fname=os.path.join(hidden_inv_dir,'epoch{epoch}'.format(epoch=epoch)))
+		plt.close(fig_h)
+
+		return
+
+	def remember_weights(self):
+		for name, val in self.named_parameters(): #self.state_dict():
+			norm_val = np.linalg.norm(val.data.numpy())
+			if name not in self.weight_history:
+				self.weight_history[name] = norm_val
+			else:
+				self.weight_history[name] = np.hstack((self.weight_history[name],norm_val))
+
+	def plot_weights(self, n_epochs):
+		n_params = len(self.weight_history.keys())
+
+		# plot param convergence
+		fig, (axrow0, axrow1) = plt.subplots(2, 3, sharex=True, figsize=[8,6])
+		axlist = np.concatenate((axrow0,axrow1))
+		c = -1
+		for key in self.weight_history:
+			c += 1
+			param_history = self.weight_history[key]
+			x_vals = np.linspace(0, n_epochs, param_history.shape[0])
+			if param_history.ndim==1:
+				param_vals = param_history
+			elif param_history.ndim==3:
+				param_vals = np.linalg.norm(param_history, axis=(1,2))
+			elif param_history.ndim==2:
+				param_vals = np.linalg.norm(param_history, axis=(1))
+			axlist[c].plot(x_vals, param_vals)
+			axlist[c].set_title(key, pad=15)
+			axlist[c].set_xlabel('Epochs')
+		fig.suptitle("Parameter convergence")
+		fig.subplots_adjust(wspace=0.3, hspace=0.3)
+		fig.savefig(fname=os.path.join(self.output_path,'rnn_parameter_convergence_new.png'), dpi=300)
+		plt.close(fig)
+
+		# plot matrix visualizations
+		param_path = os.path.join(self.output_path, 'params')
+		os.makedirs(param_path, exist_ok=True)
+		fig, (axrow0, axrow1) = plt.subplots(2, 3, sharex=True, figsize=[8,6])
+		axlist = np.concatenate((axrow0,axrow1))
+		c = -1
+		for name, val in self.named_parameters():
+			ax = axlist[c]
+			val = val.detach()
+			c += 1
+			if val.ndim==1:
+				val = val[None,:]
+			if val.ndim==3:
+				val = val.squeeze(0)
+			# pdb.set_trace()
+			foo = ax.matshow(val, vmin=torch.min(val), vmax=torch.max(val))
+			ax.axes.xaxis.set_visible(False)
+			ax.axes.yaxis.set_visible(False)
+			ax.set_title(name, pad=20)
+			fig.colorbar(foo, ax=ax)
+
+		# fig.suptitle("Parameter convergence")
+		fig.subplots_adjust(wspace=0.3, hspace=0.5)
+		fig.savefig(fname=os.path.join(param_path,'rnn_parameter_values_{n_epochs}.png'.format(n_epochs=n_epochs-1)), dpi=300)
+		plt.close(fig)
 
 
 def get_optimizer(params, name='SGD', lr=None):
