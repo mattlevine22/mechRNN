@@ -476,25 +476,23 @@ class RNN(nn.Module):
 		# plot matrix visualizations
 		param_path = os.path.join(self.output_path, 'params')
 		os.makedirs(param_path, exist_ok=True)
-		fig, (axrow0, axrow1) = plt.subplots(2, 3, sharex=True, figsize=[8,6])
+		fig, (axrow0, axrow1) = plt.subplots(2, 3, sharex=False, figsize=[8,6])
 		axlist = np.concatenate((axrow0,axrow1))
 		c = -1
 		for name, val in self.named_parameters():
+			c += 1
 			ax = axlist[c]
 			val = val.detach()
-			c += 1
 			if val.ndim==1:
 				val = val[None,:]
 			if val.ndim==3:
 				val = val.squeeze(0)
-			# pdb.set_trace()
-			foo = ax.matshow(val, vmin=torch.min(val), vmax=torch.max(val))
+			foo = ax.matshow(val, vmin=torch.min(val), vmax=torch.max(val), aspect='auto')
 			ax.axes.xaxis.set_visible(False)
 			ax.axes.yaxis.set_visible(False)
 			ax.set_title(name, pad=20)
 			fig.colorbar(foo, ax=ax)
 
-		# fig.suptitle("Parameter convergence")
 		fig.subplots_adjust(wspace=0.3, hspace=0.5)
 		fig.savefig(fname=os.path.join(param_path,'rnn_parameter_values_{n_epochs}.png'.format(n_epochs=n_epochs-1)), dpi=300)
 		plt.close(fig)
