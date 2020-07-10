@@ -107,7 +107,8 @@ def resubmit_glob_jobs(glob_str, old_str=None, new_str=''):
 			print('Job submitted:', ' '.join(cmd))
 	return
 
-def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=[], jobid_dir=None, master_job_file=None, report_status=True, exclusive=True, hours=24, no_submit=False):
+sbatch
+def make_and_deploy(bash_run_command='echo $HOME', module_load_command='module load python3/3.7.0\n', command_flag_dict={}, jobfile_dir='./my_jobs', jobname='jobbie', depending_jobs=[], jobid_dir=None, master_job_file=None, report_status=True, exclusive=True, hours=24, no_submit=False):
 
 	# build sbatch job script and write to file
 	job_directory = os.path.join(jobfile_dir,'.job')
@@ -127,6 +128,7 @@ def make_and_deploy(bash_run_command='echo $HOME', command_flag_dict={}, jobfile
 	sbatch_str += "#SBATCH --time={0}:00:00\n".format(hours) # default 24hrs. Shorter time gets more priority.
 	if exclusive:
 		sbatch_str += "#SBATCH --exclusive\n" # exclusive use of a node for the submitted job
+	sbatch_str += module_load_command
 	sbatch_str += bash_run_command
 	# sbatch_str += "python $HOME/mechRNN/experiments/scripts/run_fits.py"
 	for key in command_flag_dict:
