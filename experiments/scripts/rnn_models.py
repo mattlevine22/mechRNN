@@ -235,16 +235,20 @@ class RNN(nn.Module):
 			self.c_t.detach_()
 
 	def make_traj_plots(self, Xtrue, Xpred, Xpred_residuals, hidden_states, name, epoch):
+		hidden_inv_dir = os.path.join(self.output_path, 'inv_hidden_{name}'.format(name=name))
 		traj_dir = os.path.join(self.output_path, 'traj_state_{name}'.format(name=name))
 		hidden_dir = os.path.join(self.output_path, 'traj_hidden_{name}'.format(name=name))
 		phase_dir = os.path.join(self.output_path, 'traj_phase_{name}'.format(name=name))
 		os.makedirs(phase_dir, exist_ok=True)
 		os.makedirs(traj_dir, exist_ok=True)
 		os.makedirs(hidden_dir, exist_ok=True)
+		os.makedirs(hidden_inv_dir, exist_ok=True)
 
+		n_hidden_states = hidden_states.shape[-1]
 		n_traj, n_steps, n_states = Xtrue.shape
 		n_plt = min(self.max_plot, n_steps)
 		t_plot = np.linspace(0, n_plt*self.delta_t, n_plt)
+		fig_h, ax_h = plt.subplots(1, 1, figsize=[12,10])
 		for c in range(n_traj):
 			fig, ax_list = plt.subplots(n_states, 1, figsize=[12,10], sharex=True)
 			for s in range(n_states):
@@ -261,6 +265,11 @@ class RNN(nn.Module):
 			phase_plot(data=Xpred[c,:,:].cpu().data.numpy(), output_fname=output_fname, delta_t=self.delta_t, wspace=0.35, hspace=0.35)
 
 			for comp in range(self.n_components):
+				# first plot hidden inv-density
+				h_norm = np.linalg.norm(hidden_states[c,comp,:,:].cpu().data.numpy(), ord=2, axis=1) / np.sqrt(n_hidden_states)
+				sns.kdeplot(h_norm, ax=ax_h, label='traj-{c} component-{comp}'.format(c=c, comp=comp))
+
+				# now plot hidden dynamics
 				fig, ax = plt.subplots(1, 1, figsize=[12,10], sharex=True)
 				try:
 					ax.plot(t_plot, hidden_states[c,comp,:n_plt,:].cpu().data.numpy())
@@ -270,6 +279,13 @@ class RNN(nn.Module):
 				fig.suptitle('Hidden state dynamics')
 				fig.savefig(fname=os.path.join(hidden_dir,'traj{c}_component{comp}_epoch{epoch}'.format(c=c, comp=comp, epoch=epoch)))
 				plt.close(fig)
+
+		ax_h.set_xlabel('||h|| / sqrt(hidden-dimension)')
+		ax_h.set_title('Invariant Density of Hidden State Norm')
+		fig_h.savefig(fname=os.path.join(hidden_inv_dir,'epoch{epoch}'.format(epoch=epoch)))
+		plt.close(fig_h)
+
+		return
 
 	def remember_weights(self):
 		for name, val in self.named_parameters(): #self.state_dict():
