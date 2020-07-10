@@ -122,7 +122,7 @@ class RNN(nn.Module):
 			ode=None,
 			output_path='default_output',
 			max_plot=None,
-			mode='original',
+			mode=None, #'original'
 			use_manual_seed=False,
 			component_wise=False,
 			do_euler=True):

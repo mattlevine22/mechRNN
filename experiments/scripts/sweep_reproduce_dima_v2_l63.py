@@ -79,16 +79,16 @@ RUN_STYLES = {'short': {'rnn_n_epochs': 100,
 EXP_LIST = dict_combiner({'run_style': ['short','long','longest'],
 			'do_euler': [True,False],
 			'old': [True, False],
-			'rnn_hidden_size': [50, 200],
-			'lr': [0.05, 0.01, 0.1, 0.005],
-			'optimizer_name': ['SGD','Adam'],
-			'cell_type': ['RNN','LSTM','GRU'],
+			'rnn_hidden_size': [50, 200, 1000],
+			'lr': [0.05],
+			'optimizer_name': ['Adam'],
+			'cell_type': ['RNN','LSTM'],
 			'component_wise': [False],
 			'use_physics_as_bias': [True, False],
 			'datagen_fidelity': ['defaultfi'],
 			'traintest_fidelity': ['defaultfi'],
-			'omit_z': [True,False],
-			'n_grad_steps': [1,10,100,1000]
+			'omit_z': [True],
+			'n_grad_steps': [100,200,500]
 			})
 
 def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.experiment_dir, no_submit=FLAGS.no_submit):
