@@ -124,11 +124,13 @@ class RNN(nn.Module):
 			max_plot=None,
 			mode='original',
 			use_manual_seed=False,
-			component_wise=False):
+			component_wise=False,
+			do_euler=True):
 
 		super().__init__()
 		if output_size is None:
 			output_size = input_size
+		self.do_euler = do_euler
 		self.component_wise = component_wise
 		self.cell_type = cell_type
 		self.use_manual_seed = use_manual_seed
@@ -315,29 +317,30 @@ class RNN(nn.Module):
 			if train:
 				# consider teacher forcing (using RNN output prediction as next training input instead of training data)
 				if t>self.t_synch and random.random()<self.teacher_force_probability:
-					input_t = full_rnn_pred #feed RNN prediction back in as next input
+					x_now = full_rnn_pred #feed RNN prediction back in as next input
 				else:
-					input_t = input_state_sequence[:,t,:]
+					x_now = input_state_sequence[:,t,:]
 			else:
 				if synch_mode:
-					input_t = input_state_sequence[:,t,:]
+					x_now = input_state_sequence[:,t,:]
 				else:
-					input_t = full_rnn_pred
+					x_now = full_rnn_pred
 
-			input_t = input_t.view((input_state_sequence[:,0].shape))
+			x_now = x_now.view((input_state_sequence[:,0].shape))
 
 			if self.use_physics_as_bias or self.embed_physics_prediction:
 				if physical_prediction_sequence is not None:
 					physics_pred = physical_prediction_sequence[:,t,:]
 				else:
-					if input_t.ndim==1:
-						input_t = input_t[None,:]
-					ic = self.unnormalize(input_t).detach().numpy()
+					if x_now.ndim==1:
+						x_now = x_now[None,:]
+					ic = self.unnormalize(x_now).detach().numpy()
 					physics_pred = self.normalize(self.get_physics_prediction(X=ic))
 
 				if self.embed_physics_prediction:
-					input_t = torch.stack(input_t, physics_pred)
+					input_t = torch.stack(x_now, physics_pred)
 			else:
+				input_t = x_now
 				physics_pred = 0
 
 			# evolve hidden state(s)
@@ -366,7 +369,11 @@ class RNN(nn.Module):
 			if not self.component_wise:
 				h_t_new = h_t_new[None,:,:]
 
-			full_rnn_pred = self.use_physics_as_bias * physics_pred + rnn_pred # normalized
+			if self.do_euler:
+				full_rnn_pred = x_now.view(rnn_pred.shape) + self.delta_t * (self.use_physics_as_bias * physics_pred + rnn_pred)
+			else:
+				full_rnn_pred = self.use_physics_as_bias * physics_pred + rnn_pred
+
 			full_preds += [full_rnn_pred]
 			rnn_preds += [rnn_pred]
 			hidden_preds += [h_t_new]
