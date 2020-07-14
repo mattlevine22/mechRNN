@@ -119,7 +119,7 @@ def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.expe
 
 		# create the run-name
 		goo_str = '{cell_type}_hs{rnn_hidden_size}'.format(**settings)
-		foo_nm = 'res_'*settings['use_physics_as_bias'] + goo_str + '_componentwise'*settings['component_wise'] + '_' + settings['run_style']
+		foo_nm = '_res'*settings['use_physics_as_bias'] + '_componentwise'*settings['component_wise'] + '_' + settings['run_style'] + '_{0}gradsteps'.format(settings['n_grad_steps']) +'_{0}'.format(settings['optimizer_name']) + '_euler'*settings['do_euler']
 		last_nm = goo_str + foo_nm
 
 		data_nm = 'dt{delta_t}/eps{eps}_hx{hx}_F{F}'.format(**settings)
