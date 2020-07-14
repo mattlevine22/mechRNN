@@ -90,7 +90,7 @@ def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 		lp_wrapper(**setts)
 		lp.print_stats()
 	else:
-		setts['mode'] = 'original'
+		# setts['mode'] = 'original'
 		setts['learn_residuals'] = setts['use_physics_as_bias']
 		# setts['output_dir'] += '_old'
 		# train_chaosRNN(**setts)
@@ -210,7 +210,7 @@ class RNN(nn.Module):
 		self.clear_hidden()
 
 	def initialize_weights(self):
-		if self.mode=='original' and self.cell_type=='RNN':
+		if self.mode=='original':
 			for name, val in self.named_parameters(): #self.state_dict():
 				if self.use_manual_seed:
 					torch.manual_seed(0)
@@ -298,17 +298,11 @@ class RNN(nn.Module):
 
 		#useful link for teacher-forcing: https://towardsdatascience.com/lstm-for-time-series-prediction-de8aeb26f2ca
 		if self.h_t is None:
-			if self.component_wise:
-				self.h_t = torch.zeros((self.n_components, input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
-			else:
-				self.h_t = torch.zeros((input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
+			self.h_t = torch.zeros((self.n_components, input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
 			if train:
 				nn.init.normal_(self.h_t,0.0,0.1)
 		if self.c_t is None and self.use_c_cell:
-			if self.component_wise:
-				self.c_t = torch.zeros((self.n_components, input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
-			else:
-				self.c_t = torch.zeros((input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
+			self.c_t = torch.zeros((self.n_components, input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
 			if train:
 				nn.init.normal_(self.c_t,0.0,0.1)
 		full_rnn_pred = input_state_sequence[:,0] #normalized
@@ -350,27 +344,27 @@ class RNN(nn.Module):
 			h_t_new = self.h_t.clone()
 			if self.use_c_cell: # LSTM / GRU
 				c_t_new = self.c_t.clone()
-				if self.component_wise:
-					for n in range(self.n_components):
-						h_t_new[n], c_t_new[n] = self.cell(input_t[None,:,n], (self.h_t[n], self.c_t[n])) # input needs to be dim (batch, input_size)
-				else:
-					h_t_new, c_t_new = self.cell(input_t, (self.h_t, self.c_t)) # input needs to be dim (batch, input_size)
+				for n in range(self.n_components):
+					if self.component_wise:
+						cell_input = input_t[None,:,n].transpose(0,1)
+					else:
+						cell_input = input_t
+					# pdb.set_trace()
+					h_t_new[n], c_t_new[n] = self.cell(cell_input, (self.h_t[n,:].view((self.h_t.shape[1], self.h_t.shape[2])), self.c_t[n].view((self.c_t.shape[1], self.c_t.shape[2])))) # input needs to be dim (batch, input_size)
 				self.c_t = c_t_new
 			else: # standard RNN
-				if self.component_wise:
-					for n in range(self.n_components):
-						h_t_new[n] = self.cell(input_t[:,n].view((input_t.shape[0],1)), self.h_t[n,:].view((self.h_t.shape[1], self.h_t.shape[2])))
-				else:
-					h_t_new = self.cell(input_t, self.h_t) # input needs to be dim (batch, input_size)
+				for n in range(self.n_components):
+					if self.component_wise:
+						cell_input = input_t[None,:,n].transpose(0,1)
+					else:
+						cell_input = input_t
+					h_t_new[n] = self.cell(cell_input, self.h_t[n,:].view((self.h_t.shape[1], self.h_t.shape[2])))
 
 			self.h_t = h_t_new
 			rnn_pred = self.hidden2pred(self.h_t).view(input_t.shape[0], 1, self.input_size*self.n_components) # (batch, n_steps, input_size)
 			# print(rnn_pred.shape)
 			if self.use_physics_as_bias:
 				rnn_pred = rnn_pred.view(physics_pred.shape)
-
-			if not self.component_wise:
-				h_t_new = h_t_new[None,:,:]
 
 			if self.do_euler:
 				full_rnn_pred = x_now.view(rnn_pred.shape) + self.delta_t * (self.use_physics_as_bias * physics_pred + rnn_pred)
@@ -402,7 +396,7 @@ class RNN(nn.Module):
 			ax.legend()
 			ax.set_xlabel(r'$X_k$')
 		else:
-			fig, ax_list = plt.subplots(1, n_states, figsize=[12,10])
+			fig, ax_list = plt.subplots(1, n_states, figsize=[12,6])
 			for s in range(n_states):
 				ax = ax_list[s]
 				sns.kdeplot(Xtrue[:,s], ax=ax, label='True')
@@ -452,10 +446,7 @@ class RNN(nn.Module):
 
 				# now plot hidden dynamics
 				fig, ax = plt.subplots(1, 1, figsize=[12,10], sharex=True)
-				try:
-					ax.plot(t_plot, hidden_states[c,comp,:n_plt,:].cpu().data.numpy())
-				except:
-					pdb.set_trace()
+				ax.plot(t_plot, hidden_states[c,comp,:n_plt,:].cpu().data.numpy())
 				ax.set_xlabel('Time')
 				fig.suptitle('Hidden state dynamics')
 				fig.savefig(fname=os.path.join(hidden_dir,'traj{c}_component{comp}_epoch{epoch}'.format(c=c, comp=comp, epoch=epoch)))
@@ -569,7 +560,7 @@ def train_RNN_new(
 				use_gpu=False,
 				normz_info=None,
 				ODE=None,
-				mode='original',
+				mode=None,
 				do_printing=False,
 				component_wise=False,
 				cell_type='RNN',
@@ -841,10 +832,9 @@ def train_RNN_new(
 
 			#### Step 4. Now, test the invariant measure (use only 1 synch traj)
 			# NOTE: we synchronize using the test-traj synchronization data, not a huge burn-in
-			model.h_t = model.h_t[None,0,:]
+			model.h_t = model.h_t[:,None,0,:] #model.h_t[None,:,0,:]
 			if model.use_c_cell:
-				model.c_t = model.c_t[None,0,:]
-			pdb.set_trace()
+				model.c_t = model.c_t[:,None,0,:]
 			model(input_state_sequence=torch.FloatTensor(Xtest_synch[None,0,:]).type(dtype), physical_prediction_sequence=None, train=False, synch_mode=True)
 			full_predicted_states_test_long, rnn_predicted_residuals_test_long, hidden_states_test_long = model(input_state_sequence=torch.FloatTensor(Xtest_init[None,0]).type(dtype),
 											n_steps = Xtest_long.shape[0],
