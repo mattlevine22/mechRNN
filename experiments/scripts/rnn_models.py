@@ -333,12 +333,13 @@ class RNN(nn.Module):
 						x_now = x_now[None,:]
 					ic = self.unnormalize(x_now).detach().numpy()
 					physics_pred = self.normalize(self.get_physics_prediction(X=ic))
+			else:
+				physics_pred = 0
 
-				if self.embed_physics_prediction:
-					input_t = torch.stack(x_now, physics_pred)
+			if self.embed_physics_prediction:
+				input_t = torch.stack(x_now, physics_pred)
 			else:
 				input_t = x_now
-				physics_pred = 0
 
 			# evolve hidden state(s)
 			h_t_new = self.h_t.clone()
