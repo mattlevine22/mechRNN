@@ -226,6 +226,8 @@ class RNN(nn.Module):
 					fname = os.path.join('/Users/matthewlevine/test_outputs/l63/rnn_output/10_epochs/pureRNN_vanilla_old', self.lookup[name] + '.txt')
 					val.data = torch.FloatTensor(np.loadtxt(fname=fname)).type(self.dtype)
 		else:
+			if self.use_manual_seed:
+				torch.manual_seed(0)
 			print('Using default parameter initialization from PyTorch. Godspeed!')
 
 	def clear_hidden(self):
