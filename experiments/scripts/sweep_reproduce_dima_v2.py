@@ -78,16 +78,16 @@ RUN_STYLES = {'short': {'rnn_n_epochs': 100,
 					'job_hours': 48
 					}
 				}
-
 EXP_LIST = dict_combiner({'run_style': ['short','long','longest'],
-			'old': [True, False],
-			'rnn_hidden_size': [10, 50, 100],
-			'lr': [0.05, 0.01, 0.1, 0.005],
-			'cell_type': ['RNN','LSTM','GRU'],
+			'do_euler': [True, False],
+			'rnn_hidden_size': [50, 200, 1000],
+			'optimizer_name': ['Adam'],
+			'cell_type': ['RNN','LSTM'],
 			'component_wise': [True, False],
 			'use_physics_as_bias': [True, False],
 			'datagen_fidelity': ['defaultfi'],
-			'traintest_fidelity': ['defaultfi']
+			'traintest_fidelity': ['defaultfi'],
+			'n_grad_steps': [10,100,1000]
 			})
 
 def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.experiment_dir, no_submit=FLAGS.no_submit):
@@ -118,11 +118,11 @@ def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.expe
 		settings.update(exp)
 
 		# create the run-name
-		goo_str = '{cell_type}_hs{rnn_hidden_size}_lr{lr}'.format(**settings)
+		goo_str = '{cell_type}_hs{rnn_hidden_size}'.format(**settings)
 		foo_nm = 'res_'*settings['use_physics_as_bias'] + goo_str + '_componentwise'*settings['component_wise'] + '_' + settings['run_style']
 		last_nm = goo_str + foo_nm
 
-		data_nm = 'dt{delta_t}/eps{eps}_hx{hx}_F{F}/datagen{datagen_fidelity}_traintest{traintest_fidelity}'.format(**settings)
+		data_nm = 'dt{delta_t}/eps{eps}_hx{hx}_F{F}'.format(**settings)
 		data_path = os.path.join(experiment_dir, data_nm)
 		run_nm = os.path.join(data_nm, last_nm)
 		run_path = os.path.join(data_path, last_nm)
