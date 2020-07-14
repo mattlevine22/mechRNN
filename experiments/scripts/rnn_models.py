@@ -58,6 +58,7 @@ def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 
 	# read and normalize TEST data
 	test_set = np.load(testing_fname)
+	setts['y_clean_test_long'] = normalize(norm_dict=normz_info, y=test_set['X_test'][:,keep_inds])
 	y_clean_test = []
 	y_noisy_test = []
 	y_clean_testSynch = []
@@ -387,6 +388,31 @@ class RNN(nn.Module):
 
 		return full_preds, rnn_preds, hidden_preds
 
+	def make_invariant_measure_plots(self, Xtrue, Xpred, name, epoch):
+		plot_dir = os.path.join(self.output_path, 'inv_state')
+		os.makedirs(plot_dir, exist_ok=True)
+
+		n_steps, n_states = Xtrue.shape
+		if self.component_wise:
+			fig, ax = plt.subplots(1, 1, figsize=[12,10])
+			sns.kdeplot(Xtrue.flatten(), ax=ax, label='True')
+			sns.kdeplot(Xpred.flatten(), ax=ax, label='Predicted')
+			ax.legend()
+			ax.set_xlabel(r'$X_k$')
+		else:
+			fig, ax_list = plt.subplots(1, n_states, figsize=[12,10])
+			for s in range(n_states):
+				ax = ax_list[s]
+				sns.kdeplot(Xtrue[:,s], ax=ax, label='True')
+				sns.kdeplot(Xpred[:,s], ax=ax, label='Predicted')
+				ax.legend()
+				ax.set_xlabel(r'$X_{s}$'.format(s=s))
+		fig.suptitle('Invariant Measure Predictions')
+		fig.savefig(fname=os.path.join(plot_dir,'epoch{epoch}'.format(epoch=epoch)))
+		plt.close(fig)
+		return
+
+
 	def make_traj_plots(self, Xtrue, Xpred, Xpred_residuals, hidden_states, name, epoch):
 		hidden_inv_dir = os.path.join(self.output_path, 'inv_hidden_{name}'.format(name=name))
 		traj_dir = os.path.join(self.output_path, 'traj_state_{name}'.format(name=name))
@@ -526,7 +552,9 @@ def get_loss(name='nn.MSELoss', weight=None):
 	else:
 		raise('Loss name not recognized')
 
-def train_RNN_new(y_noisy_train,
+def train_RNN_new(
+				y_clean_test_long,
+				y_noisy_train,
 				y_noisy_test,
 				y_noisy_testSynch,
 				model_params=None,
@@ -584,6 +612,8 @@ def train_RNN_new(y_noisy_train,
 	Xtrain = y_noisy_train[None,:-1,:]
 	ytrain = y_noisy_train[None,1:,:]
 	Xtest = y_noisy_test
+	Xtest_long = y_clean_test_long
+
 	# ytest = y_noisy_test[:,1:,:]
 	Xtest_synch = y_noisy_testSynch[:,:-1,:]
 	ytest_synch = y_noisy_testSynch[:,1:,:]
@@ -597,6 +627,7 @@ def train_RNN_new(y_noisy_train,
 
 	Xtest_synch_raw = unnormalize(norm_dict=normz_info, y_norm=Xtest_synch)
 	ytest_synch_raw = unnormalize(norm_dict=normz_info, y_norm=ytest_synch)
+	Xtest_long_raw = unnormalize(norm_dict=normz_info, y_norm=Xtest_long)
 
 	# set up model
 	model = RNN(ode_params=model_params,
@@ -768,7 +799,7 @@ def train_RNN_new(y_noisy_train,
 										n_steps = Xtest.shape[1],
 										physical_prediction_sequence=None, train=False, synch_mode=False)
 
-		# Step 3. Compute the losses
+		# Step 3. Compute the test-traj losses
 		test_loss = (full_predicted_states_test.squeeze() - torch.FloatTensor(Xtest).type(dtype).squeeze()).pow(2).sum()
 		# test_loss = loss_function(full_predicted_states_test, torch.FloatTensor(ytest).type(dtype)).detach().numpy()
 		# print('Test Loss:', test_loss)
@@ -786,7 +817,7 @@ def train_RNN_new(y_noisy_train,
 		for c in range(n_test_traj):
 			model_stats['Test']['t_valid'][epoch,c] = traj_div_time(Xtrue=target_sequence_test[c,:,:], Xpred=full_predicted_states_test[c,:,:], delta_t=model.delta_t, avg_output=model.time_avg_norm)
 			model_stats['Test']['loss'][epoch,c] = target_sequence_test.shape[2]*loss_function(model.normalize(target_sequence_test[c,:,:]), model.normalize(full_predicted_states_test[c,:,:])).cpu().data.numpy().item()
-		test_tvalid = np.median(model_stats['Test']['t_valid'][epoch,:])
+		test_tvalid = np.mean(model_stats['Test']['t_valid'][epoch,:])
 
 		# Print epoch summary after every epoch
 		print_epoch_status(model_stats, epoch)
@@ -805,6 +836,19 @@ def train_RNN_new(y_noisy_train,
 			model.make_traj_plots(all_target_states, all_predicted_states, all_rnn_predicted_residuals, all_hidden_states, name='train', epoch=epoch)
 			model.make_traj_plots(target_sequence_test, full_predicted_states_test, rnn_predicted_residuals_test, hidden_states_test, name='test', epoch=epoch)
 			model.make_traj_plots(target_sequence_synch, full_predicted_states_synch, rnn_predicted_residuals_synch, hidden_states_synch, name='test_synch', epoch=epoch)
+
+			#### Step 4. Now, test the invariant measure (use only 1 synch traj)
+			# NOTE: we synchronize using the test-traj synchronization data, not a huge burn-in
+			model.h_t = model.h_t[None,0,:]
+			if model.use_c_cell:
+				model.c_t = model.c_t[None,0,:]
+			pdb.set_trace()
+			model(input_state_sequence=torch.FloatTensor(Xtest_synch[None,0,:]).type(dtype), physical_prediction_sequence=None, train=False, synch_mode=True)
+			full_predicted_states_test_long, rnn_predicted_residuals_test_long, hidden_states_test_long = model(input_state_sequence=torch.FloatTensor(Xtest_init[None,0]).type(dtype),
+											n_steps = Xtest_long.shape[0],
+											physical_prediction_sequence=None, train=False, synch_mode=False)
+			model.make_invariant_measure_plots(Xtrue=Xtest_long_raw, Xpred=model.unnormalize(full_predicted_states_test_long.squeeze()).cpu().data.numpy(), name='Invariant Measure', epoch=epoch)
+
 
 		if is_save_interval:
 			for name, val in model.named_parameters():
