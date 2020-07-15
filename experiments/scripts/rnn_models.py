@@ -368,7 +368,7 @@ class RNN(nn.Module):
 				rnn_pred = rnn_pred.view(physics_pred.shape)
 
 			if self.do_euler:
-				full_rnn_pred = x_now.view(rnn_pred.shape) + self.delta_t * (self.use_physics_as_bias * physics_pred + rnn_pred)
+				full_rnn_pred = x_now.view(rnn_pred.shape) + (self.use_physics_as_bias * physics_pred) + (self.delta_t * rnn_pred)
 			else:
 				full_rnn_pred = self.use_physics_as_bias * physics_pred + rnn_pred
 
