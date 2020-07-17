@@ -19,6 +19,7 @@ import pdb
 
 
 def normalize(y, norm_dict):
+	print('I am normalizing')
 	return (y - norm_dict['Ymin']) / (norm_dict['Ymax'] - norm_dict['Ymin'])
 
 def unnormalize(y_norm, norm_dict):
