@@ -4,7 +4,7 @@ from utils import dict_combiner, dict_to_file, make_and_deploy, str2bool
 
 CMD_run_fits = 'python3 $HOME/mechRNN/experiments/scripts/reproduce_dima_wrapper_l63.py'
 
-OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/reproduce_dima_sweep/l63'
+OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/reproduce_dima_sweep/l63/longer_inv_measure'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--experiment_dir', type=str, default=OUTPUT_DIR, help='output directory')
@@ -20,8 +20,8 @@ ODE_INT_MAX_STEP = 1e-3
 DEFAULT_SETTINGS = {'rng_seed': 63,
 			't_synch': 5,
 			't_train': 100,
-			't_invariant_measure': 20,
-			't_test_traj_synch': 10,
+			't_invariant_measure': 200,
+			't_test_traj_synch': 1,
 			't_test_traj': 10,
 			'n_test_traj': 2,
 			'n_subsample_gp': 800,
@@ -78,7 +78,7 @@ RUN_STYLES = {'short': {'rnn_n_epochs': 100,
 
 EXP_LIST = dict_combiner({'run_style': ['short','long','longest'],
 			'do_euler': [True,False],
-			'old': [True, False],
+			'old': [False],
 			'rnn_hidden_size': [50, 200, 1000],
 			'lr': [0.05],
 			'optimizer_name': ['Adam'],
