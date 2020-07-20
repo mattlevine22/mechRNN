@@ -54,6 +54,7 @@ class L96M:
     _s.F = F
     _s.eps = eps
     _s.k0 = k0 # for filtered integration
+    _s.exchangeable_states = True
     # 0
     #_s.xk_star = np.random.rand(K) * 15 - 5
     # 1
@@ -451,6 +452,7 @@ class L63:
     _s.K = 3 # state dims
     _s.hx = 1 # just useful when re-using L96 code
     _s.slow_only = False
+    _s.exchangeable_states = False
 
   def get_inits(_s):
     (xmin, xmax) = (-10,10)

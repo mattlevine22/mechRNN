@@ -132,6 +132,7 @@ class RNN(nn.Module):
 		super().__init__()
 		if output_size is None:
 			output_size = input_size
+		self.exchangeable_states = ode.exchangeable_states
 		self.do_euler = do_euler
 		self.component_wise = component_wise
 		self.cell_type = cell_type
@@ -391,7 +392,7 @@ class RNN(nn.Module):
 		os.makedirs(plot_dir, exist_ok=True)
 
 		n_steps, n_states = Xtrue.shape
-		if self.component_wise:
+		if self.exchangeable_states:
 			fig, ax = plt.subplots(1, 1, figsize=[12,10])
 			sns.kdeplot(Xtrue.flatten(), ax=ax, label='True')
 			sns.kdeplot(Xpred.flatten(), ax=ax, label='Predicted')
