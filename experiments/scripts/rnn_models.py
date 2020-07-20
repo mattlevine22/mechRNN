@@ -898,4 +898,31 @@ def plot_stats(model_stats, epoch=-1, output_path='.'):
 
 	fig.savefig(fname=os.path.join(output_path,'TrainTest_Performance'))
 	plt.close(fig)
+
+	## Plot Train vs Test Correlations
+	fig, ax_list = plt.subplots(1,2, figsize=[16,8], sharex=True)
+
+	train_loss = np.mean(train_loss_vec[:epoch,:], axis=1)
+	test_loss = np.mean(test_loss_vec[:epoch,:], axis=1)
+	test_t_valid = np.mean(test_t_valid_vec[:epoch,:], axis=1)
+
+	# loss function
+	ax = ax_list[0]
+	ax.plot(train_loss, test_loss, 'o', markersize=4)
+	ax.set_xlabel('Train Loss')
+	ax.set_ylabel('Test Loss')
+
+	ax = ax_list[1]
+	ax.plot(train_loss, test_t_valid, 'o', markersize=4)
+	ax.set_xlabel('Train Loss')
+	ax.set_ylabel('Test Validity Time')
+
+	fig.savefig(fname=os.path.join(output_path,'TrainTest_Correlations'))
+
+	ax_list[0].set_xscale('log')
+	ax_list[0].set_xscale('log')
+	ax_list[1].set_xscale('log')
+	fig.savefig(fname=os.path.join(output_path,'TrainTest_Correlations_log'))
+
+	plt.close(fig)
 	return
