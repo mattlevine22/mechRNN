@@ -1,4 +1,5 @@
 import os, sys
+import warnings
 import numpy as np
 from time import time
 import torch
@@ -570,6 +571,7 @@ def train_RNN_new(
 				old_optim=False,
 				optimizer_name='SGD',
 				lr=0.05,
+				early_save_fraction=0.66,
 				**kwargs):
 
 	if not save_freq:
@@ -578,11 +580,11 @@ def train_RNN_new(
 	n_test_traj = y_noisy_test.shape[0]
 	n_train_traj = 1 #y_noisy_train.shape[0]
 
-	model_stats = {'Train': {'loss': np.zeros((n_epochs,n_train_traj)),
-							't_valid': np.zeros((n_epochs,n_train_traj))
+	model_stats = {'Train': {'loss': np.zeros((n_epochs,n_train_traj))*np.nan,
+							't_valid': np.zeros((n_epochs,n_train_traj))*np.nan
 							},
-					'Test': {'loss': np.zeros((n_epochs,n_test_traj)),
-							't_valid': np.zeros((n_epochs,n_test_traj))
+					'Test': {'loss': np.zeros((n_epochs,n_test_traj))*np.nan,
+							't_valid': np.zeros((n_epochs,n_test_traj))*np.nan
 							}
 						}
 
@@ -779,6 +781,18 @@ def train_RNN_new(
 			model_stats['Train']['t_valid'][epoch,c] = traj_div_time(Xtrue=all_target_states[c,:,:], Xpred=all_predicted_states[c,:,:], delta_t=model.delta_t, avg_output=model.time_avg_norm, synch_length=Xtest_synch.shape[1])
 			model_stats['Train']['loss'][epoch,c] = all_target_states.shape[2]*loss_function(model.normalize(all_target_states[c,:,:]), model.normalize(all_predicted_states[c,:,:])).cpu().data.numpy().item()
 
+		if (epoch / n_epochs) < early_save_fraction:
+			# Print epoch summary after every epoch
+			print_epoch_status(model_stats, epoch)
+
+			# Plot intermittent stuff after 10% increments
+			is_save_interval = (epoch % save_freq == 0)
+			if is_save_interval:
+				plot_stats(model_stats, epoch=epoch+1, output_path=output_path)
+				model.plot_weights(n_epochs=epoch+1)
+				model.make_traj_plots(all_target_states, all_predicted_states, all_rnn_predicted_residuals, all_hidden_states, name='train', epoch=epoch)
+			continue
+
 		### Report TEST performance after each epoch
 		# Step 0. reset initial hidden states
 		model.clear_hidden()
@@ -854,13 +868,40 @@ def train_RNN_new(
 
 	print('all done!')
 
+def my_nanmean(x, axis=None):
+	with warnings.catch_warnings():
+		warnings.filterwarnings('error')
+		try:
+			val = np.nanmean(x, axis=axis)
+		except RuntimeWarning:
+			val = np.mean(x, axis=axis)
+	return val
+
+def my_nanmedian(x, axis=None):
+	with warnings.catch_warnings():
+		warnings.filterwarnings('error')
+		try:
+			val = np.nanmedian(x, axis=axis)
+		except RuntimeWarning:
+			val = np.median(x, axis=axis)
+	return val
+
+def my_nanstd(x, axis=None):
+	with warnings.catch_warnings():
+		warnings.filterwarnings('error')
+		try:
+			val = np.nanstd(x, axis=axis)
+		except RuntimeWarning:
+			val = np.std(x, axis=axis)
+	return val
+
 def print_epoch_status(model_stats, epoch=-1):
 	vals = {}
 	vals['epoch'] = epoch
-	vals['ltrain'] = np.mean(model_stats['Train']['loss'][epoch,:])
-	vals['ltest'] = np.mean(model_stats['Test']['loss'][epoch,:])
-	vals['ttrain'] = np.median(model_stats['Train']['t_valid'][epoch,:])
-	vals['ttest'] = np.median(model_stats['Test']['t_valid'][epoch,:])
+	vals['ltrain'] = my_nanmean(model_stats['Train']['loss'][epoch,:])
+	vals['ttrain'] = my_nanmedian(model_stats['Train']['t_valid'][epoch,:])
+	vals['ttest'] = my_nanmedian(model_stats['Test']['t_valid'][epoch,:])
+	vals['ltest'] = my_nanmean(model_stats['Test']['loss'][epoch,:])
 	status_string = 'Epoch {epoch}. l-train={ltrain}, l-test={ltest}, t-train={ttrain}, t-test={ttest}'.format(**vals)
 	print(status_string)
 	return
@@ -876,23 +917,23 @@ def plot_stats(model_stats, epoch=-1, output_path='.'):
 
 	# loss function
 	ax = ax_list[0,0]
-	ax.errorbar(x=np.arange(epoch), y=np.mean(train_loss_vec[:epoch,:], axis=1), yerr=np.std(train_loss_vec[:epoch,:], axis=1), label='Training Loss', linestyle='-')
+	ax.errorbar(x=np.arange(epoch), y=my_nanmean(train_loss_vec[:epoch,:], axis=1), yerr=my_nanstd(train_loss_vec[:epoch,:], axis=1), label='Training Loss', linestyle='-')
 	ax.set_title('Training Error')
 	ax.set_ylabel('Loss')
 
 	ax = ax_list[0,1]
-	ax.errorbar(x=np.arange(epoch), y=np.mean(test_loss_vec[:epoch,:], axis=1), yerr=np.std(test_loss_vec[:epoch,:], axis=1), label='Testing Loss', linestyle='--')
+	ax.errorbar(x=np.arange(epoch), y=my_nanmean(test_loss_vec[:epoch,:], axis=1), yerr=my_nanstd(test_loss_vec[:epoch,:], axis=1), label='Testing Loss', linestyle='--')
 	ax.set_title('Testing Error')
 	ax.set_ylabel('Loss')
 
 	# validity time
 	ax = ax_list[1,0]
-	ax.errorbar(x=np.arange(epoch), y=np.mean(train_t_valid_vec[:epoch,:], axis=1), yerr=np.std(train_t_valid_vec[:epoch,:], axis=1), label=' Train', linestyle='-')
+	ax.errorbar(x=np.arange(epoch), y=my_nanmean(train_t_valid_vec[:epoch,:], axis=1), yerr=my_nanstd(train_t_valid_vec[:epoch,:], axis=1), label=' Train', linestyle='-')
 	ax.set_title('Training Validity Time')
 	ax.set_ylabel('Validity Time')
 
 	ax = ax_list[1,1]
-	ax.errorbar(x=np.arange(epoch), y=np.mean(test_t_valid_vec[:epoch,:], axis=1), yerr=np.std(test_t_valid_vec[:epoch,:], axis=1), label=' Test', linestyle='--')
+	ax.errorbar(x=np.arange(epoch), y=my_nanmean(test_t_valid_vec[:epoch,:], axis=1), yerr=my_nanstd(test_t_valid_vec[:epoch,:], axis=1), label=' Test', linestyle='--')
 	ax.set_title('Testing Validity Time')
 	ax.set_ylabel('Validity Time')
 
@@ -902,9 +943,9 @@ def plot_stats(model_stats, epoch=-1, output_path='.'):
 	## Plot Train vs Test Correlations
 	fig, ax_list = plt.subplots(1,2, figsize=[16,8], sharex=True)
 
-	train_loss = np.mean(train_loss_vec[:epoch,:], axis=1)
-	test_loss = np.mean(test_loss_vec[:epoch,:], axis=1)
-	test_t_valid = np.mean(test_t_valid_vec[:epoch,:], axis=1)
+	train_loss = my_nanmean(train_loss_vec[:epoch,:], axis=1)
+	test_loss = my_nanmean(test_loss_vec[:epoch,:], axis=1)
+	test_t_valid = my_nanmean(test_t_valid_vec[:epoch,:], axis=1)
 
 	# loss function
 	ax = ax_list[0]
