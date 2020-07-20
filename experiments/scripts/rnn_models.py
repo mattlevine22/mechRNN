@@ -395,7 +395,10 @@ class RNN(nn.Module):
 		if self.exchangeable_states:
 			fig, ax = plt.subplots(1, 1, figsize=[12,10])
 			sns.kdeplot(Xtrue.flatten(), ax=ax, label='True')
-			sns.kdeplot(Xpred.flatten(), ax=ax, label='Predicted')
+			try:
+				sns.kdeplot(Xpred.flatten(), ax=ax, label='Predicted')
+			except:
+				print('couldnt plot predicted KDE')
 			ax.legend()
 			ax.set_xlabel(r'$X_k$')
 		else:
@@ -403,7 +406,10 @@ class RNN(nn.Module):
 			for s in range(n_states):
 				ax = ax_list[s]
 				sns.kdeplot(Xtrue[:,s], ax=ax, label='True')
-				sns.kdeplot(Xpred[:,s], ax=ax, label='Predicted')
+				try:
+					sns.kdeplot(Xpred[:,s], ax=ax, label='Predicted')
+				except:
+					print('couldnt plot predicted KDE')
 				ax.legend()
 				ax.set_xlabel(r'$X_{s}$'.format(s=s))
 		fig.suptitle('Invariant Measure Predictions')
