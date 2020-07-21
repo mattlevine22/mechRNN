@@ -387,8 +387,8 @@ class RNN(nn.Module):
 
 		return full_preds, rnn_preds, hidden_preds
 
-	def make_invariant_measure_plots(self, Xtrue, Xpred, hidden_states, name, epoch):
-		plot_dir = os.path.join(self.output_path, 'inv_state')
+	def make_invariant_measure_plots(self, Xtrue, Xpred, hidden_states, epoch):
+		plot_dir = os.path.join(self.output_path, 'inv_state_long')
 		os.makedirs(plot_dir, exist_ok=True)
 
 		n_steps, n_states = Xtrue.shape
@@ -417,14 +417,14 @@ class RNN(nn.Module):
 		plt.close(fig)
 
 		# hidden-state invariant measure
-		hidden_inv_dir = os.path.join(self.output_path, 'inv_hidden_{name}'.format(name=name))
+		hidden_inv_dir = os.path.join(self.output_path, 'inv_hidden_long')
 		os.makedirs(hidden_inv_dir, exist_ok=True)
 
 		n_hidden_states = hidden_states.shape[-1]
 		fig_h, ax_h = plt.subplots(1, 1, figsize=[12,10])
 		for comp in range(self.n_components):
 			# first plot hidden inv-density
-			h_norm = np.linalg.norm(hidden_states[0,comp,:,:].cpu().data.numpy(), ord=2, axis=1) / np.sqrt(n_hidden_states)
+			h_norm = np.linalg.norm(hidden_states[0,comp,:,:], ord=2, axis=1) / np.sqrt(n_hidden_states)
 			sns.kdeplot(h_norm, ax=ax_h, label='component-{comp}'.format(comp=comp))
 		ax_h.set_xlabel('||h|| / sqrt(hidden-dimension)')
 		ax_h.set_title('Invariant Density of Hidden State Norm')
@@ -876,7 +876,7 @@ def train_RNN_new(
 			full_predicted_states_test_long, rnn_predicted_residuals_test_long, hidden_states_test_long = model(input_state_sequence=torch.FloatTensor(Xtest_init[None,0]).type(dtype),
 											n_steps = Xtest_long.shape[0],
 											physical_prediction_sequence=None, train=False, synch_mode=False)
-			model.make_invariant_measure_plots(Xtrue=Xtest_long_raw, Xpred=model.unnormalize(full_predicted_states_test_long.squeeze()).cpu().data.numpy(), hidden_states=hidden_states_test_long.cpu().data.numpy(), name='Invariant Measure', epoch=epoch)
+			model.make_invariant_measure_plots(Xtrue=Xtest_long_raw, Xpred=model.unnormalize(full_predicted_states_test_long.squeeze()).cpu().data.numpy(), hidden_states=hidden_states_test_long.cpu().data.numpy(), epoch=epoch)
 
 
 		if is_save_interval:
