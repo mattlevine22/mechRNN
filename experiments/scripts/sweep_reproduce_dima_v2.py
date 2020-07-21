@@ -4,7 +4,7 @@ from utils import dict_combiner, dict_to_file, make_and_deploy, str2bool
 
 CMD_run_fits = 'python3 $HOME/mechRNN/experiments/scripts/reproduce_dima_wrapper_l96.py'
 
-OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/reproduce_dima_sweep/l96'
+OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/reproduce_dima_sweep/l96/longer_inv_measure'
 
 parser = argparse.ArgumentParser(description='L96 Job Submission script')
 parser.add_argument('--experiment_dir', type=str, default=OUTPUT_DIR, help='output directory')
@@ -18,10 +18,10 @@ ODE_INT_RTOL = 1e-3
 ODE_INT_MAX_STEP = 1e-3
 
 DEFAULT_SETTINGS = {'rng_seed': 63,
-			't_synch': 5,
+			't_synch': 100,
 			't_train': 100,
-			't_invariant_measure': 20,
-			't_test_traj_synch': 10,
+			't_invariant_measure': 200,
+			't_test_traj_synch': 5,
 			't_test_traj': 10,
 			'n_test_traj': 2,
 			'n_subsample_gp': 800,
@@ -80,14 +80,14 @@ RUN_STYLES = {'short': {'rnn_n_epochs': 100,
 				}
 EXP_LIST = dict_combiner({'run_style': ['short','long','longest'],
 			'do_euler': [True, False],
-			'rnn_hidden_size': [50, 200, 1000],
+			'rnn_hidden_size': [50, 200, 500],
 			'optimizer_name': ['Adam'],
 			'cell_type': ['RNN','LSTM'],
 			'component_wise': [True, False],
 			'use_physics_as_bias': [True, False],
 			'datagen_fidelity': ['defaultfi'],
 			'traintest_fidelity': ['defaultfi'],
-			'n_grad_steps': [10,100,1000]
+			'n_grad_steps': [100, 200, 500]
 			})
 
 def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.experiment_dir, no_submit=FLAGS.no_submit):
