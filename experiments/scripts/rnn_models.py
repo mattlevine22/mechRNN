@@ -82,31 +82,32 @@ def setup_RNN(setts, training_fname, testing_fname, odeInst, profile=False):
 
 	setts['ODE'] = odeInst
 
+	# setts['mode'] = 'original'
+	setts['learn_residuals'] = setts['use_physics_as_bias']
+	if setts['use_physics_as_bias']:
+		setts['forward'] = forward_chaos_hybrid_full
+	else:
+		setts['forward'] = forward_chaos_pureML
 
 	if profile:
 		lp = LineProfiler()
 		# lp.add_function(forward_chaos_pureML)
-		# lp.add_function(forward_chaos_hybrid_full)
-		lp_wrapper = lp(train_RNN_new)
+		lp.add_function(RNN.forward)
+		if setts['old']:
+			lp_wrapper = lp(train_chaosRNN)
+		else:
+			lp_wrapper = lp(train_RNN_new)
 		lp_wrapper(**setts)
 		lp.print_stats()
 	else:
-		# setts['mode'] = 'original'
-		setts['learn_residuals'] = setts['use_physics_as_bias']
-		# setts['output_dir'] += '_old'
-		# train_chaosRNN(**setts)
-		# setts['output_dir'] = setts['output_dir'].replace('old','new')
 		if setts['old']:
-			if setts['use_physics_as_bias']:
-				setts['forward'] = forward_chaos_hybrid_full
-			else:
-				setts['forward'] = forward_chaos_pureML
 			train_chaosRNN(**setts)
 		else:
 			train_RNN_new(**setts)
 
 	print('Ran training in:', time()-t0)
 	return
+
 
 class RNN(nn.Module):
 	def __init__(self,
@@ -127,13 +128,15 @@ class RNN(nn.Module):
 			mode=None, #'original'
 			use_manual_seed=False,
 			component_wise=False,
-			do_euler=True):
+			do_euler=True,
+			hidden_euler=False):
 
 		super().__init__()
 		if output_size is None:
 			output_size = input_size
 		self.exchangeable_states = ode.exchangeable_states
 		self.do_euler = do_euler
+		self.hidden_euler = hidden_euler
 		self.component_wise = component_wise
 		self.cell_type = cell_type
 		self.use_manual_seed = use_manual_seed
@@ -353,7 +356,13 @@ class RNN(nn.Module):
 					else:
 						cell_input = input_t
 					# pdb.set_trace()
-					h_t_new[n], c_t_new[n] = self.cell(cell_input, (self.h_t[n,:].view((self.h_t.shape[1], self.h_t.shape[2])), self.c_t[n].view((self.c_t.shape[1], self.c_t.shape[2])))) # input needs to be dim (batch, input_size)
+					foo_h_n, foo_c_n = self.cell(cell_input, (self.h_t[n,:].view((self.h_t.shape[1], self.h_t.shape[2])), self.c_t[n].view((self.c_t.shape[1], self.c_t.shape[2])))) # input needs to be dim (batch, input_size)
+					if self.hidden_euler:
+						h_t_new[n] += self.delta_t * foo_h_n
+						c_t_new[n] += self.delta_t * foo_c_n
+					else:
+						h_t_new[n] = foo_h_n
+						c_t_new[n] = foo_c_n
 				self.c_t = c_t_new
 			else: # standard RNN
 				for n in range(self.n_components):
@@ -361,7 +370,12 @@ class RNN(nn.Module):
 						cell_input = input_t[None,:,n].transpose(0,1)
 					else:
 						cell_input = input_t
-					h_t_new[n] = self.cell(cell_input, self.h_t[n,:].view((self.h_t.shape[1], self.h_t.shape[2])))
+
+					foo_h_n = self.cell(cell_input, self.h_t[n,:].view((self.h_t.shape[1], self.h_t.shape[2])))
+					if self.hidden_euler:
+						h_t_new[n] += self.delta_t * foo_h_n
+					else:
+						h_t_new[n] = foo_h_n
 
 			self.h_t = h_t_new
 			rnn_pred = self.hidden2pred(self.h_t).view(input_t.shape[0], 1, self.input_size*self.n_components) # (batch, n_steps, input_size)
@@ -597,7 +611,7 @@ def train_RNN_new(
 				**kwargs):
 
 	if not save_freq:
-		save_freq = int(n_epochs/10)
+		save_freq = max(int(n_epochs/10),1)
 
 	n_test_traj = y_noisy_test.shape[0]
 	n_train_traj = 1 #y_noisy_train.shape[0]
