@@ -634,8 +634,8 @@ def train_RNN_new(
 
 	# choose cuda-GPU or regular
 	if use_gpu:
-		dtype = torch.cuda.float
-		inttype = torch.cuda.int
+		dtype = torch.cuda.FloatTensor
+		inttype = torch.cuda.IntTensor
 	else:
 		dtype = torch.float
 		inttype = torch.int

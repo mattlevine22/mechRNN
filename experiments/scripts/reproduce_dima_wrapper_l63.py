@@ -11,15 +11,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--settings_path', type=str, default='/Users/matthewlevine/test_outputs/l63/settings.json', help='pathname of numpy settings dictionary')
 parser.add_argument('--profile', type=str2bool, default=False, help='option for profiling card')
 parser.add_argument('--skip_datagen', type=str2bool, default=False, help='skipping the make-data step')
-parser.add_argument('--use_gpu', type=str2bool, default=False)
 FLAGS = parser.parse_args()
 
 def main(settings_path=FLAGS.settings_path, skip_datagen=FLAGS.skip_datagen):
 	t0 = time()
 	with open(settings_path) as f:
 		setts = json.load(f)
-
-	setts['use_gpu'] = FLAGS.use_gpu
 
 	if skip_datagen:
 		print('skipping data generation step.')
