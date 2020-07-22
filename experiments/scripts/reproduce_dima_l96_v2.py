@@ -167,6 +167,7 @@ def run_traintest(testing_fname,
 	lr=0.05,
 	optimizer_name='SGD',
 	do_euler=False,
+	use_gpu=False,
 	**kwargs):
 
 

@@ -595,7 +595,7 @@ def train_RNN_new(
 				n_epochs=10,
 				save_freq=None,
 				use_physics_as_bias=False,
-				use_gpu=False,
+				use_gpu=True,
 				normz_info=None,
 				ODE=None,
 				mode=None,
