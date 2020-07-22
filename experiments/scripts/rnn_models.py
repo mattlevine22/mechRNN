@@ -808,10 +808,10 @@ def train_RNN_new(
 				all_hidden_states.append(hidden_states)
 
 		# collect and nnormalize the data
-		all_target_states = model.unnormalize(torch.cat(all_target_states, 1))
-		all_predicted_states = model.unnormalize(torch.cat(all_predicted_states, 1))
-		all_rnn_predicted_residuals = model.unnormalize(torch.cat(all_rnn_predicted_residuals, 1))
-		all_hidden_states = torch.cat(all_hidden_states, 2) # no need to unnormalize hidden states
+		all_target_states = model.unnormalize(torch.cat(all_target_states, 1).cpu())
+		all_predicted_states = model.unnormalize(torch.cat(all_predicted_states, 1).cpu())
+		all_rnn_predicted_residuals = model.unnormalize(torch.cat(all_rnn_predicted_residuals, 1).cpu())
+		all_hidden_states = torch.cat(all_hidden_states, 2).cpu() # no need to unnormalize hidden states
 
 		# Report Train losses after each epoch
 		for c in range(n_train_traj):
@@ -851,12 +851,12 @@ def train_RNN_new(
 
 		# unnormalize the test outputs
 		target_sequence_test = torch.FloatTensor(Xtest_raw).type(dtype)
-		full_predicted_states_test = model.unnormalize(full_predicted_states_test)
-		rnn_predicted_residuals_test = model.unnormalize(rnn_predicted_residuals_test)
+		full_predicted_states_test = model.unnormalize(full_predicted_states_test.cpu())
+		rnn_predicted_residuals_test = model.unnormalize(rnn_predicted_residuals_test.cpu())
 		# unnormalize the test_synch outputs
 		target_sequence_synch = torch.FloatTensor(ytest_synch_raw).type(dtype)
-		full_predicted_states_synch = model.unnormalize(full_predicted_states_synch)
-		rnn_predicted_residuals_synch = model.unnormalize(rnn_predicted_residuals_synch)
+		full_predicted_states_synch = model.unnormalize(full_predicted_states_synch.cpu())
+		rnn_predicted_residuals_synch = model.unnormalize(rnn_predicted_residuals_synch.cpu())
 
 
 		for c in range(n_test_traj):
