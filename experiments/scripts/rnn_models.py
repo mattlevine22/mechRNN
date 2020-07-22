@@ -132,6 +132,7 @@ class RNN(nn.Module):
 			hidden_euler=False):
 
 		super().__init__()
+		self.t0 = time()
 		if output_size is None:
 			output_size = input_size
 		self.exchangeable_states = ode.exchangeable_states
@@ -505,6 +506,22 @@ class RNN(nn.Module):
 			else:
 				self.weight_history[name] = np.hstack((self.weight_history[name],norm_val))
 
+	def print_epoch_status(self, model_stats, epoch=-1):
+
+		elapsed_time = time() - self.t0
+		self.t0 = time()
+
+		vals = {}
+		vals['epoch'] = epoch
+		vals['ltrain'] = my_nanmean(model_stats['Train']['loss'][epoch,:])
+		vals['ttrain'] = my_nanmedian(model_stats['Train']['t_valid'][epoch,:])
+		vals['ttest'] = my_nanmedian(model_stats['Test']['t_valid'][epoch,:])
+		vals['ltest'] = my_nanmean(model_stats['Test']['loss'][epoch,:])
+		vals['time'] = round(elapsed_time/60,3)
+		status_string = 'Epoch {epoch}. l-train={ltrain}, l-test={ltest}, t-train={ttrain}, t-test={ttest}, Elapsed time={time} minutes'.format(**vals)
+		print(status_string)
+		return
+
 	def plot_weights(self, n_epochs):
 		n_params = len(self.weight_history.keys())
 
@@ -820,7 +837,7 @@ def train_RNN_new(
 
 		if (epoch / n_epochs) < early_save_fraction:
 			# Print epoch summary after every epoch
-			print_epoch_status(model_stats, epoch)
+			model.print_epoch_status(model_stats, epoch)
 
 			# Plot intermittent stuff after 10% increments
 			is_save_interval = (epoch % save_freq == 0)
@@ -865,7 +882,7 @@ def train_RNN_new(
 		test_tvalid = np.mean(model_stats['Test']['t_valid'][epoch,:])
 
 		# Print epoch summary after every epoch
-		print_epoch_status(model_stats, epoch)
+		model.print_epoch_status(model_stats, epoch)
 
 		# Plot intermittent stuff after 10% increments
 		has_improved_loss = test_loss < best_test_loss
@@ -931,18 +948,6 @@ def my_nanstd(x, axis=None):
 		except RuntimeWarning:
 			val = np.std(x, axis=axis)
 	return val
-
-def print_epoch_status(model_stats, epoch=-1):
-	vals = {}
-	vals['epoch'] = epoch
-	vals['ltrain'] = my_nanmean(model_stats['Train']['loss'][epoch,:])
-	vals['ttrain'] = my_nanmedian(model_stats['Train']['t_valid'][epoch,:])
-	vals['ttest'] = my_nanmedian(model_stats['Test']['t_valid'][epoch,:])
-	vals['ltest'] = my_nanmean(model_stats['Test']['loss'][epoch,:])
-	status_string = 'Epoch {epoch}. l-train={ltrain}, l-test={ltest}, t-train={ttrain}, t-test={ttest}'.format(**vals)
-	print(status_string)
-	return
-
 
 def plot_stats(model_stats, epoch=-1, output_path='.'):
 	train_loss_vec = model_stats['Train']['loss']
