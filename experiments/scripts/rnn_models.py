@@ -539,7 +539,7 @@ class RNN(nn.Module):
 		for name, val in self.named_parameters():
 			c += 1
 			ax = axlist[c]
-			val = val.detach()
+			val = val.cpu().detach()
 			if val.ndim==1:
 				val = val[None,:]
 			if val.ndim==3:
