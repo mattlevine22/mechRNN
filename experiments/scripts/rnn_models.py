@@ -132,7 +132,8 @@ class RNN(nn.Module):
 			hidden_euler=False):
 
 		super().__init__()
-		self.t0 = time()
+		self.t0_overall = time()
+		self.t0_epoch = time()
 		if output_size is None:
 			output_size = input_size
 		self.exchangeable_states = ode.exchangeable_states
@@ -180,6 +181,7 @@ class RNN(nn.Module):
 		if self.embed_physics_prediction:
 			self.input_size = 2*self.input_size
 
+		self.cum_time = []
 
 		#This is how to add a parameter
 		# self.w = nn.Parameter(scalar(0.1), requires_grad=True)
@@ -506,21 +508,28 @@ class RNN(nn.Module):
 			else:
 				self.weight_history[name] = np.hstack((self.weight_history[name],norm_val))
 
+	def plot_cumulative_time(self):
+		self.cum_time += [(time() - self.t0_overall)/60]
+		fig, ax = plt.subplots(1, 1, figsize=[8,6])
+		ax.plot(self.cum_time)
+		ax.set_xlabel('Epochs')
+		ax.set_ylabel('Time (minutes)')
+		ax.set_title('Cumulative Run Time')
+		fig.savefig(fname=os.path.join(self.output_path,'rnn_run_time.png'), dpi=300)
+		plt.close(fig)
+
+
 	def print_epoch_status(self, model_stats, epoch=-1):
-
-		elapsed_time = time() - self.t0
-		self.t0 = time()
-
 		vals = {}
 		vals['epoch'] = epoch
 		vals['ltrain'] = my_nanmean(model_stats['Train']['loss'][epoch,:])
 		vals['ttrain'] = my_nanmedian(model_stats['Train']['t_valid'][epoch,:])
 		vals['ttest'] = my_nanmedian(model_stats['Test']['t_valid'][epoch,:])
 		vals['ltest'] = my_nanmean(model_stats['Test']['loss'][epoch,:])
-		vals['time'] = round(elapsed_time/60,3)
+		vals['time'] = round((time() - self.t0_epoch)/60,3)
 		status_string = 'Epoch {epoch}. l-train={ltrain}, l-test={ltest}, t-train={ttrain}, t-test={ttest}, Elapsed time={time} minutes'.format(**vals)
 		print(status_string)
-		return
+		self.t0_epoch = time()
 
 	def plot_weights(self, n_epochs):
 		n_params = len(self.weight_history.keys())
@@ -838,6 +847,7 @@ def train_RNN_new(
 		if (epoch / n_epochs) < early_save_fraction:
 			# Print epoch summary after every epoch
 			model.print_epoch_status(model_stats, epoch)
+			model.plot_cumulative_time()
 
 			# Plot intermittent stuff after 10% increments
 			is_save_interval = (epoch % save_freq == 0)
@@ -883,6 +893,7 @@ def train_RNN_new(
 
 		# Print epoch summary after every epoch
 		model.print_epoch_status(model_stats, epoch)
+		model.plot_cumulative_time()
 
 		# Plot intermittent stuff after 10% increments
 		has_improved_loss = test_loss < best_test_loss
