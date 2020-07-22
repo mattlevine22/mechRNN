@@ -499,7 +499,7 @@ class RNN(nn.Module):
 
 	def remember_weights(self):
 		for name, val in self.named_parameters(): #self.state_dict():
-			norm_val = np.linalg.norm(val.data.numpy())
+			norm_val = np.linalg.norm(val.cpu().data.numpy())
 			if name not in self.weight_history:
 				self.weight_history[name] = norm_val
 			else:
