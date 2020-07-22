@@ -4,7 +4,7 @@ from utils import dict_combiner, dict_to_file, make_and_deploy, str2bool
 
 CMD_run_fits = 'python3 $HOME/mechRNN/experiments/scripts/reproduce_dima_wrapper_l63.py'
 
-OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/reproduce_dima_sweep/l63/longer_inv_measure'
+OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/reproduce_dima_sweep/l63/longer_inv_measure_TeacherForced'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--experiment_dir', type=str, default=OUTPUT_DIR, help='output directory')
