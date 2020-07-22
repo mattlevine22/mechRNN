@@ -119,7 +119,7 @@ class RNN(nn.Module):
 			use_physics_as_bias=False,
 			dtype=torch.float,
 			t_synch=1000,
-			teacher_force_probability=0.0,
+			max_teacher_force_probability=1.0,
 			norm_dict=None,
 			ode_params=None,
 			ode=None,
@@ -138,13 +138,16 @@ class RNN(nn.Module):
 			output_size = input_size
 		self.exchangeable_states = ode.exchangeable_states
 		self.do_euler = do_euler
-		self.hidden_euler = hidden_euler
+		if self.do_euler and hidden_euler:
+			self.hidden_euler = True
+		else:
+			self.hidden_euler = False
 		self.component_wise = component_wise
 		self.cell_type = cell_type
 		self.use_manual_seed = use_manual_seed
 		self.mode = mode
 		self.output_path = output_path
-		self.teacher_force_probability = teacher_force_probability
+		self.max_teacher_force_probability = max_teacher_force_probability
 		self.t_synch = t_synch
 		self.dtype = dtype
 		self.hidden_size = hidden_size
@@ -403,6 +406,11 @@ class RNN(nn.Module):
 		# check these hidden_preds under component-wise situation
 
 		return full_preds, rnn_preds, hidden_preds
+
+	def set_teacher_prob(self, epoch, n_epochs, k_char=10):
+		x0 = n_epochs/2 # midpoint of sigmoid
+		k = k_char/n_epochs
+		self.teacher_force_probability = self.max_teacher_force_probability / (1+np.exp(-k*(epoch-x0)))
 
 	def make_invariant_measure_plots(self, Xtrue, Xpred, hidden_states, epoch):
 		plot_dir = os.path.join(self.output_path, 'inv_state_long')
@@ -724,6 +732,8 @@ def train_RNN_new(
 	best_test_loss = np.inf
 	best_test_tvalid = 0
 	for epoch in range(n_epochs):  # again, normally you would NOT do 300 epochs, it is toy data
+		model.set_teacher_prob(epoch=epoch, n_epochs=n_epochs)
+
 		t0 = time()
 		# setence is our features, tags are INDICES of true label
 		all_predicted_states = []
