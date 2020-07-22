@@ -672,7 +672,8 @@ def train_RNN_new(
 				component_wise=component_wise,
 				cell_type=cell_type,
 				hidden_size=hidden_size,
-				use_manual_seed=use_manual_seed)
+				use_manual_seed=use_manual_seed,
+				dtype=dtype)
 	model.remember_weights()
 
 	# generate bias sequences
