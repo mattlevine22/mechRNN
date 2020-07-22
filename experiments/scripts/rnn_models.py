@@ -222,7 +222,7 @@ class RNN(nn.Module):
 				nn.init.normal_(val, mean=0.0, std=0.1)
 			# CUSTOM slight adjustment to parameterization
 			# for some reason, pytorch includes 2 redundant bias terms in the cell
-			self.cell.bias_ih.data = torch.zeros(self.cell.bias_ih.data.shape)
+			self.cell.bias_ih.data = torch.zeros(self.cell.bias_ih.data.shape).type(self.dtype)
 			self.cell.bias_ih.requires_grad = False
 		elif self.mode=='fromfile':
 			for name, val in self.named_parameters():
@@ -303,11 +303,11 @@ class RNN(nn.Module):
 
 		#useful link for teacher-forcing: https://towardsdatascience.com/lstm-for-time-series-prediction-de8aeb26f2ca
 		if self.h_t is None:
-			self.h_t = torch.zeros((self.n_components, input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
+			self.h_t = torch.zeros((self.n_components, input_state_sequence.size(0), self.hidden_size), requires_grad=True).type(self.dtype) # (batch, hidden_size)
 			if train:
 				nn.init.normal_(self.h_t,0.0,0.1)
 		if self.c_t is None and self.use_c_cell:
-			self.c_t = torch.zeros((self.n_components, input_state_sequence.size(0), self.hidden_size), dtype=self.dtype, requires_grad=True) # (batch, hidden_size)
+			self.c_t = torch.zeros((self.n_components, input_state_sequence.size(0), self.hidden_size), requires_grad=True).type(self.dtype) # (batch, hidden_size)
 			if train:
 				nn.init.normal_(self.c_t,0.0,0.1)
 		full_rnn_pred = input_state_sequence[:,0] #normalized
