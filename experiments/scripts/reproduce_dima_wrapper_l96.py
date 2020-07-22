@@ -18,6 +18,8 @@ def main(settings_path=FLAGS.settings_path, skip_datagen=FLAGS.skip_datagen):
 	with open(settings_path) as f:
 		setts = json.load(f)
 
+	setts['profile'] = FLAGS.profile
+
 	if skip_datagen:
 		print('skipping data generation step.')
 	else:

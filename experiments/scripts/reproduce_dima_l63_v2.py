@@ -165,6 +165,7 @@ def run_traintest(testing_fname,
 	lr=0.05,
 	optimizer_name='SGD',
 	do_euler=False,
+	profile=False,
 	**kwargs):
 
 	try:
@@ -212,7 +213,7 @@ def run_traintest(testing_fname,
 	goo_str = '{cell_type}_hs{hidden_size}_lr{lr}'.format(**rnn_settings)
 	foo_nm = 'res_'*rnn_settings['use_physics_as_bias'] + goo_str + '_componentwise'*rnn_settings['component_wise'] + '_' + rnn_settings['run_style'] + '_omitZ'*rnn_settings['omit_z'] + '_{0}gradsteps'.format(n_grad_steps) +'_{0}'.format(optimizer_name)  + '_euler'*rnn_settings['do_euler']
 	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
-	setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst)
+	setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst, profile=profile)
 	print('done with RNN so quitting...no GP stuff this time!')
 	return
 
