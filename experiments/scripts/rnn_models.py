@@ -129,7 +129,7 @@ class RNN(nn.Module):
 			use_manual_seed=False,
 			component_wise=False,
 			do_euler=True,
-			hidden_euler=False):
+			hidden_euler=True):
 
 		super().__init__()
 		self.t0_overall = time()

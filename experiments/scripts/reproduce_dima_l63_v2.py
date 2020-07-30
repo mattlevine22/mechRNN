@@ -215,7 +215,7 @@ def run_traintest(testing_fname,
 	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
 	setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst, profile=profile)
 	print('done with RNN so quitting...no GP stuff this time!')
-	return
+	# return
 
 
 
