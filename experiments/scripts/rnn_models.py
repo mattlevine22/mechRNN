@@ -119,7 +119,7 @@ class RNN(nn.Module):
 			use_physics_as_bias=False,
 			dtype=torch.float,
 			t_synch=1000,
-			max_teacher_force_probability=1.0,
+			max_teacher_force_probability=0.0,
 			norm_dict=None,
 			ode_params=None,
 			ode=None,
