@@ -645,7 +645,7 @@ def train_RNN_new(
 				old_optim=False,
 				optimizer_name='SGD',
 				lr=0.05,
-				early_save_fraction=0.66,
+				early_save_fraction=0.0,
 				**kwargs):
 
 	if not save_freq:
