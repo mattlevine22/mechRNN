@@ -495,7 +495,10 @@ class RNN(nn.Module):
 			for comp in range(self.n_components):
 				# first plot hidden inv-density
 				h_norm = np.linalg.norm(hidden_states[c,comp,:,:].cpu().data.numpy(), ord=2, axis=1) / np.sqrt(n_hidden_states)
-				sns.kdeplot(h_norm, ax=ax_h, label='traj-{c} component-{comp}'.format(c=c, comp=comp))
+				try:
+					sns.kdeplot(h_norm, ax=ax_h, label='traj-{c} component-{comp}'.format(c=c, comp=comp))
+				except:
+					print('idk, couldnt make kde of |hidden|')
 
 				# now plot hidden dynamics
 				fig, ax = plt.subplots(1, 1, figsize=[12,10], sharex=True)
