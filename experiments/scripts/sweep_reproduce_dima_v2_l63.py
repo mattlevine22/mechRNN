@@ -4,7 +4,7 @@ from utils import dict_combiner, dict_to_file, make_and_deploy, str2bool
 
 CMD_run_fits = 'python3 $HOME/mechRNN/experiments/scripts/reproduce_dima_wrapper_l63.py'
 
-OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/reproduce_dima_sweep/l63/longest_inv_measure_TeacherForced'
+OUTPUT_DIR = '/groups/astuart/mlevine/writeup0/reproduce_dima_sweep/l63/longest_inv_measure'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--experiment_dir', type=str, default=OUTPUT_DIR, help='output directory')
@@ -79,16 +79,16 @@ RUN_STYLES = {'short': {'rnn_n_epochs': 100,
 EXP_LIST = dict_combiner({'run_style': ['short','long','longest'],
 			'do_euler': [True,False],
 			'old': [False],
-			'rnn_hidden_size': [50, 200, 1000],
+			'rnn_hidden_size': [50, 200],
 			'lr': [0.05],
 			'optimizer_name': ['Adam'],
 			'cell_type': ['RNN','LSTM'],
 			'component_wise': [False],
-			'use_physics_as_bias': [True, False],
+			'use_physics_as_bias': [False],
 			'datagen_fidelity': ['defaultfi'],
 			'traintest_fidelity': ['defaultfi'],
 			'omit_z': [True],
-			'n_grad_steps': [100,200,500]
+			'n_grad_steps': [100]
 			})
 
 def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.experiment_dir, no_submit=FLAGS.no_submit):

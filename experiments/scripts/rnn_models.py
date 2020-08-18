@@ -256,7 +256,7 @@ class RNN(nn.Module):
 	def unnormalize(self, y_norm):
 		return unnormalize(norm_dict=self.norm_dict, y_norm=y_norm)
 
-	def get_physics_prediction(self, X):
+	def get_physics_prediction(self, X, return_rhs=False):
 		#input and output are unnormalized
 		if X.ndim==2:
 			do_squeeze=True
@@ -267,29 +267,33 @@ class RNN(nn.Module):
 		y_pred = np.zeros(X.shape)
 		for i1 in range(X.shape[0]):
 			for i2 in range(X.shape[1]):
-				# check if bad initial condition
-				if (any(abs(X[i1,i2,:])>1000) or any(np.isnan(X[i1,i2,:]))):
-					if not self.solver_failed[i1]: # only print if it is new/recent news!
-						# pdb.set_trace()
-						print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',X[i1,i2,:])
-					self.solver_failed[i1] = True
+				if return_rhs:
+					y_pred[i1,i2,:] = self.ode.rhs(X[i1,i2,:], None) #t=None for autonomous system
 				else:
-					self.solver_failed[i1] = False
-
-				if not self.solver_failed[i1]:
-					sol = solve_ivp(fun=lambda t, y: self.ode.rhs(y, t), t_span=self.tspan, y0=X[i1,i2,:], t_eval=self.t_eval, **self.ode_params)
-					# sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(self.tspan[0], self.tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=self.tspan)
-					y_out = sol.y.T
-					if not sol.success:
-						# solver failed
-						print('ODE solver has failed at ic=',X[i1,i2,:])
+					# do numerical integration
+					# check if bad initial condition
+					if (any(abs(X[i1,i2,:])>1000) or any(np.isnan(X[i1,i2,:]))):
+						if not self.solver_failed[i1]: # only print if it is new/recent news!
+							# pdb.set_trace()
+							print('ODE initial conditions are huge, so not even trying to solve the system. Applying the Identity forward map instead.',X[i1,i2,:])
 						self.solver_failed[i1] = True
+					else:
+						self.solver_failed[i1] = False
 
-				if self.solver_failed[i1]:
-					y_pred[i1,i2,:] = np.copy(X[i1,i2,:]) # persist previous solution
-				else:
-					# solver is OKAY--use the solution like a good boy!
-					y_pred[i1,i2,:] = y_out[-1,:]
+					if not self.solver_failed[i1]:
+						sol = solve_ivp(fun=lambda t, y: self.ode.rhs(y, t), t_span=self.tspan, y0=X[i1,i2,:], t_eval=self.t_eval, **self.ode_params)
+						# sol = solve_ivp(fun=lambda t, y: model(y, t, *model_params['ode_params']), t_span=(self.tspan[0], self.tspan[-1]), y0=y0.T, method=model_params['ode_int_method'], rtol=model_params['ode_int_rtol'], atol=model_params['ode_int_atol'], max_step=model_params['ode_int_max_step'], t_eval=self.tspan)
+						y_out = sol.y.T
+						if not sol.success:
+							# solver failed
+							print('ODE solver has failed at ic=',X[i1,i2,:])
+							self.solver_failed[i1] = True
+
+					if self.solver_failed[i1]:
+						y_pred[i1,i2,:] = np.copy(X[i1,i2,:]) # persist previous solution
+					else:
+						# solver is OKAY--use the solution like a good boy!
+						y_pred[i1,i2,:] = y_out[-1,:]
 
 		foo_out = torch.FloatTensor(y_pred).type(self.dtype)
 		if do_squeeze:
@@ -343,7 +347,7 @@ class RNN(nn.Module):
 					if x_now.ndim==1:
 						x_now = x_now[None,:]
 					ic = self.unnormalize(x_now).detach().numpy()
-					physics_pred = self.normalize(self.get_physics_prediction(X=ic))
+					physics_pred = self.normalize(self.get_physics_prediction(X=ic, return_rhs=self.do_euler))
 			else:
 				physics_pred = 0
 
@@ -390,7 +394,7 @@ class RNN(nn.Module):
 				rnn_pred = rnn_pred.view(physics_pred.shape)
 
 			if self.do_euler:
-				full_rnn_pred = x_now.view(rnn_pred.shape) + (self.use_physics_as_bias * physics_pred) + (self.delta_t * rnn_pred)
+				full_rnn_pred = x_now.view(rnn_pred.shape) + self.delta_t * (rnn_pred + self.use_physics_as_bias * physics_pred)
 			else:
 				full_rnn_pred = self.use_physics_as_bias * physics_pred + rnn_pred
 
