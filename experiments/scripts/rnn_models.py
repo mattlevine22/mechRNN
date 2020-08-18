@@ -454,7 +454,11 @@ class RNN(nn.Module):
 		for comp in range(self.n_components):
 			# first plot hidden inv-density
 			h_norm = np.linalg.norm(hidden_states[0,comp,:,:], ord=2, axis=1) / np.sqrt(n_hidden_states)
-			sns.kdeplot(h_norm, ax=ax_h, label='component-{comp}'.format(comp=comp))
+			try:
+				sns.kdeplot(h_norm, ax=ax_h, label='component-{comp}'.format(comp=comp))
+			except:
+				print('idk, couldnt make kde of |hidden|')
+
 		ax_h.set_xlabel('||h|| / sqrt(hidden-dimension)')
 		ax_h.set_title('Invariant Density of Hidden State Norm')
 		fig_h.savefig(fname=os.path.join(hidden_inv_dir,'epoch{epoch}'.format(epoch=epoch)))
