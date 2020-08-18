@@ -88,7 +88,7 @@ EXP_LIST = dict_combiner({'run_style': ['short','long','longest'],
 			'datagen_fidelity': ['defaultfi'],
 			'traintest_fidelity': ['defaultfi'],
 			'omit_z': [True],
-			'n_grad_steps': [100]
+			'n_grad_steps': [100, 200]
 			})
 
 def main(settings=DEFAULT_SETTINGS, exp_list=EXP_LIST, experiment_dir=FLAGS.experiment_dir, no_submit=FLAGS.no_submit):
