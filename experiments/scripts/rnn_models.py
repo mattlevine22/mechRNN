@@ -711,7 +711,8 @@ def train_RNN_new(
 				cell_type=cell_type,
 				hidden_size=hidden_size,
 				use_manual_seed=use_manual_seed,
-				dtype=dtype)
+				dtype=dtype,
+				do_euler=kwargs['do_euler'])
 	model.remember_weights()
 
 	# generate bias sequences
