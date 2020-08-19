@@ -241,6 +241,11 @@ class RNN(nn.Module):
 				torch.manual_seed(0)
 			print('Using default parameter initialization from PyTorch. Godspeed!')
 
+		if self.do_euler:
+			# rescale parameter initialization by 0.01 (a value of dt for which the inits work in the discrete setting)
+			for name, val in self.named_parameters():
+				val = val / 0.01
+
 	def clear_hidden(self):
 		self.h_t = None
 		self.c_t = None
