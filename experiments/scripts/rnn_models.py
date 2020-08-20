@@ -244,7 +244,7 @@ class RNN(nn.Module):
 		if self.do_euler:
 			# rescale parameter initialization by 0.01 (a value of dt for which the inits work in the discrete setting)
 			for name, val in self.named_parameters():
-				val = val / 0.01
+				val.data = val.data*0.01
 
 	def clear_hidden(self):
 		self.h_t = None
