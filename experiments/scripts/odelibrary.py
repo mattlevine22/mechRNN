@@ -20,6 +20,102 @@ import pdb
 #     ('xk_star', float64[:])               # a simple scalar field
 # ]
 
+class LDS:
+  """
+  A simple class that implements a linear dynamical system
+
+  The class computes RHS's to make use of scipy's ODE solvers.
+
+  Parameters:
+    A
+
+  """
+
+  def __init__(_s,
+      A = np.array([[0, 1], [-1, 0]]), share_gp=True):
+    '''
+    Initialize an instance: setting parameters and xkstar
+    '''
+    _s.share_gp = share_gp
+    _s.K = A.shape[0] # state dims
+    _s.hx = 1 # just useful when re-using L96 code
+    _s.slow_only = False
+    _s.exchangeable_states = False
+
+  def get_inits(_s):
+    state_inits = np.random.randn(_s.K)
+    return state_inits
+
+  def get_state_names(_s):
+    return ['X_'+ str(k+1) for k in range(_s.K)]
+
+  def plot_state_indices(_s):
+    return [0, _s.K]
+
+  def slow(_s, y, t):
+    return _s.rhs(y,t)
+
+  def rhs(_s, S, t):
+    ''' Full system RHS '''
+    foo_rhs = np.empty(3)
+    return _s.A @ S
+
+  def regressed(_s, x, t):
+    ''' Only slow variables with RHS learned from data '''
+    rhs = _s.rhs(x,t)
+    # add data-learned coupling term
+    rhs += _s.simulate(x)
+    return rhs
+
+  def set_stencil(_s, left = 0, right = 0):
+    _s.stencil = np.arange(left, 1 + right)
+
+  def single_step_implied_Ybar(_s, Xnow, Xnext, delta_t):
+    # use an euler scheme to back-out the implied avg Ybar_t from X_t and X_t+1
+    Ybar = (Xnext - Xnow)/delta_t - _s.rhs(S=Xnow, t=None)
+
+    return Ybar
+
+  def implied_Ybar(_s, X_in, X_out, delta_t):
+    # the idea is that X_in are true data coming from a test/training set
+    # Xout(k) is the 1-step-ahed prediction associated to Xin(k).
+    # In other words Xout(k) = Psi-ML(Xin(k))
+    T = X_in.shape[0]
+    Ybar = np.zeros( (T, _s.K) )
+    for t in range(T):
+      Ybar[t,:] = _s.single_step_implied_Ybar(Xnow=X_in[t,:], Xnext=X_out[t,:], delta_t=delta_t)
+    return Ybar
+
+  def get_state_limits(_s):
+    lims = (None,None)
+    return lims
+
+  def set_predictor(_s, predictor):
+    _s.predictor = predictor
+
+  # def set_G0_predictor(_s):
+  #   _s.predictor = lambda x: _s.hy * x
+
+  def set_null_predictor(_s):
+    _s.predictor = lambda x: 0
+
+  def simulate(_s, slow):
+    if _s.share_gp:
+      return np.reshape(_s.predictor(_s.apply_stencil(slow)), (-1,))
+    else:
+      return np.reshape(_s.predictor(slow.reshape(1,-1)), (-1,))
+
+  def apply_stencil(_s, slow):
+    # behold: the blackest of all black magic!
+    # (in a year, I will not understand what this does)
+    # the idea: shift xk's so that each row corresponds to the stencil:
+    # (x_{k-1}, x_{k}, x_{k+1}), for example,
+    # based on '_s.stencil' and 'slow' array (which is (x1,...,xK) )
+    return slow[np.add.outer(np.arange(_s.K), _s.stencil) % _s.K]
+
+
+
+
 # @jitclass(L96spec)
 class L96M:
   """
