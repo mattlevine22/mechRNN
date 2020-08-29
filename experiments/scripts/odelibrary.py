@@ -37,7 +37,8 @@ class LDS:
     Initialize an instance: setting parameters and xkstar
     '''
     _s.share_gp = share_gp
-    _s.K = A.shape[0] # state dims
+    _s.A = A
+    _s.K = _s.A.shape[0] # state dims
     _s.hx = 1 # just useful when re-using L96 code
     _s.slow_only = False
     _s.exchangeable_states = False
