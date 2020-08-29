@@ -995,30 +995,33 @@ def plot_stats(model_stats, epoch=-1, output_path='.'):
 
 	fig, ax_list = plt.subplots(2,2, figsize=[12,10], sharex=True)
 
-	# loss function
-	ax = ax_list[0,0]
-	ax.errorbar(x=np.arange(epoch), y=my_nanmean(train_loss_vec[:epoch,:], axis=1), yerr=my_nanstd(train_loss_vec[:epoch,:], axis=1), label='Training Loss', linestyle='-')
-	ax.set_title('Training Error')
-	ax.set_ylabel('Loss')
+	try:
+		# loss function
+		ax = ax_list[0,0]
+		ax.errorbar(x=np.arange(epoch), y=my_nanmean(train_loss_vec[:epoch,:], axis=1), yerr=my_nanstd(train_loss_vec[:epoch,:], axis=1), label='Training Loss', linestyle='-')
+		ax.set_title('Training Error')
+		ax.set_ylabel('Loss')
 
-	ax = ax_list[0,1]
-	ax.errorbar(x=np.arange(epoch), y=my_nanmean(test_loss_vec[:epoch,:], axis=1), yerr=my_nanstd(test_loss_vec[:epoch,:], axis=1), label='Testing Loss', linestyle='--')
-	ax.set_title('Testing Error')
-	ax.set_ylabel('Loss')
+		ax = ax_list[0,1]
+		ax.errorbar(x=np.arange(epoch), y=my_nanmean(test_loss_vec[:epoch,:], axis=1), yerr=my_nanstd(test_loss_vec[:epoch,:], axis=1), label='Testing Loss', linestyle='--')
+		ax.set_title('Testing Error')
+		ax.set_ylabel('Loss')
 
-	# validity time
-	ax = ax_list[1,0]
-	ax.errorbar(x=np.arange(epoch), y=my_nanmean(train_t_valid_vec[:epoch,:], axis=1), yerr=my_nanstd(train_t_valid_vec[:epoch,:], axis=1), label=' Train', linestyle='-')
-	ax.set_title('Training Validity Time')
-	ax.set_ylabel('Validity Time')
+		# validity time
+		ax = ax_list[1,0]
+		ax.errorbar(x=np.arange(epoch), y=my_nanmean(train_t_valid_vec[:epoch,:], axis=1), yerr=my_nanstd(train_t_valid_vec[:epoch,:], axis=1), label=' Train', linestyle='-')
+		ax.set_title('Training Validity Time')
+		ax.set_ylabel('Validity Time')
 
-	ax = ax_list[1,1]
-	ax.errorbar(x=np.arange(epoch), y=my_nanmean(test_t_valid_vec[:epoch,:], axis=1), yerr=my_nanstd(test_t_valid_vec[:epoch,:], axis=1), label=' Test', linestyle='--')
-	ax.set_title('Testing Validity Time')
-	ax.set_ylabel('Validity Time')
+		ax = ax_list[1,1]
+		ax.errorbar(x=np.arange(epoch), y=my_nanmean(test_t_valid_vec[:epoch,:], axis=1), yerr=my_nanstd(test_t_valid_vec[:epoch,:], axis=1), label=' Test', linestyle='--')
+		ax.set_title('Testing Validity Time')
+		ax.set_ylabel('Validity Time')
 
-	fig.savefig(fname=os.path.join(output_path,'TrainTest_Performance'))
-	plt.close(fig)
+		fig.savefig(fname=os.path.join(output_path,'TrainTest_Performance'))
+		plt.close(fig)
+	except:
+		return
 
 	## Plot Train vs Test Correlations
 	fig, ax_list = plt.subplots(1,2, figsize=[16,8], sharex=True)

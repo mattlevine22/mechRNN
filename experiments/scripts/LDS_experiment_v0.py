@@ -18,10 +18,10 @@ ODE_INT_RTOL = 1e-3
 ODE_INT_MAX_STEP = 1e-3
 
 DEFAULT_SETTINGS = {'rng_seed': 63,
-			't_synch': 1,
+			't_synch': 10,
 			't_train': 100,
 			't_invariant_measure': 200,
-			't_test_traj_synch': 5,
+			't_test_traj_synch': 10,
 			't_test_traj': 10,
 			'n_test_traj': 2,
 			'n_subsample_gp': 800,
