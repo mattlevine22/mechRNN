@@ -1166,9 +1166,11 @@ def run_traintest(testing_fname,
 
 
 	######## RNN fits! #######
-	if gp_correct_rnn:
+	if use_physics_as_bias and gp_correct_rnn:
 		ODE.add_closure = True
 		ODE.set_predictor(gpr_approx.predict)
+	else:
+		gp_correct_rnn = False
 
 	# update some custom settings
 	rnn_settings = {'max_plot': goo['X_test_traj'].shape[1],
@@ -1197,7 +1199,7 @@ def run_traintest(testing_fname,
 
 	## Run a specific RNN scheme
 	goo_str = '{cell_type}_hs{hidden_size}'.format(**rnn_settings)
-	foo_nm = 'res_'*rnn_settings['use_physics_as_bias'] + goo_str + '_componentwise'*rnn_settings['component_wise'] + '_' + rnn_settings['run_style'] + '_{0}gradsteps'.format(n_grad_steps) +'_{0}'.format(optimizer_name)  + '_euler'*rnn_settings['do_euler'] + _'gp_corrected'*gp_correct_rnn
+	foo_nm = 'res_'*rnn_settings['use_physics_as_bias'] + goo_str + '_componentwise'*rnn_settings['component_wise'] + '_' + rnn_settings['run_style'] + '_{0}gradsteps'.format(n_grad_steps) +'_{0}'.format(optimizer_name)  + '_euler'*rnn_settings['do_euler'] + '_gp_corrected'*gp_correct_rnn
 	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
 	rnn_settings['learn_residuals'] = rnn_settings['use_physics_as_bias']
 	setup_RNN(rnn_settings, training_fname, testing_fname, ODE, profile=profile)
