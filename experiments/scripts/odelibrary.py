@@ -32,7 +32,7 @@ class LDS:
   """
 
   def __init__(_s,
-      A = np.array([[0, 1], [-1, 0]]), share_gp=True):
+      A = np.array([[0, 5], [-5, 0]]), share_gp=True):
     '''
     Initialize an instance: setting parameters and xkstar
     '''
