@@ -1170,6 +1170,7 @@ def run_traintest(testing_fname,
 	if use_physics_as_bias and gp_correct_rnn:
 		ODE.add_closure = True
 		ODE.share_gp = True
+		gpr_approx = my_gpr.fit(X=X[train_inds], y=np.mean(ODE.hx)*Y_inferred[train_inds])
 		ODE.set_predictor(gpr_approx.predict)
 	else:
 		ODE.add_closure = False
