@@ -1166,10 +1166,14 @@ def run_traintest(testing_fname,
 
 
 	######## RNN fits! #######
+	ODE.slow_only = True
 	if use_physics_as_bias and gp_correct_rnn:
 		ODE.add_closure = True
+		ODE.share_gp = True
 		ODE.set_predictor(gpr_approx.predict)
 	else:
+		ODE.add_closure = False
+		ODE.set_null_predictor()
 		gp_correct_rnn = False
 
 	# update some custom settings

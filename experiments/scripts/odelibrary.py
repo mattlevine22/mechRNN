@@ -232,7 +232,7 @@ class L96M:
     if _s.slow_only:
         foo_rhs = _s.slow(z, t)
     else:
-      foo_rhs = _s.full(z, t)
+        foo_rhs = _s.full(z, t)
     if _s.add_closure:
         foo_rhs += _s.simulate(z)
     return foo_rhs
