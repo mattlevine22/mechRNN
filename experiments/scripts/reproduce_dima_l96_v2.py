@@ -168,6 +168,7 @@ def run_traintest(testing_fname,
 	optimizer_name='SGD',
 	do_euler=False,
 	profile=False,
+	gp_correct_rnn=False,
 	**kwargs):
 
 
@@ -180,44 +181,6 @@ def run_traintest(testing_fname,
 	except:
 		print('Unable to load training data---no plots were made!')
 		return
-
-
-	######## RNN fits! #######
-	ODEinst = L96M(K=K, J=J, F=F, eps=eps, hx=hx, slow_only=True)
-
-	# update some custom settings
-	rnn_settings = {'max_plot': goo['X_test_traj'].shape[1],
-					'n_epochs': rnn_n_epochs,
-					'hidden_size': rnn_hidden_size,
-					'model_params': {'delta_t': delta_t,
-								'ode_int_method': psi0_ode_int_method,
-								'ode_int_atol': psi0_ode_int_atol,
-								'ode_int_rtol': psi0_ode_int_rtol,
-								'ode_int_max_step': psi0_ode_int_max_step,
-								'ode_params': (),
-								'time_avg_norm': avg_output
-								},
-					'cell_type': cell_type,
-					'lr': lr,
-					'optimizer_name': optimizer_name,
-					'component_wise': component_wise,
-					'use_physics_as_bias': use_physics_as_bias,
-					'run_style': run_style,
-					'old': old,
-					'use_manual_seed': use_manual_seed,
-					'omit_z': omit_z,
-					'n_grad_steps': n_grad_steps,
-					'do_euler': do_euler
-					}
-
-	## Run a specific RNN scheme
-	goo_str = '{cell_type}_hs{hidden_size}'.format(**rnn_settings)
-	foo_nm = 'res_'*rnn_settings['use_physics_as_bias'] + goo_str + '_componentwise'*rnn_settings['component_wise'] + '_' + rnn_settings['run_style'] + '_{0}gradsteps'.format(n_grad_steps) +'_{0}'.format(optimizer_name)  + '_euler'*rnn_settings['do_euler']
-	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
-	rnn_settings['learn_residuals'] = rnn_settings['use_physics_as_bias']
-	setup_RNN(rnn_settings, training_fname, testing_fname, ODEinst, profile=profile)
-	print('done with RNN so quitting...no GP stuff this time!')
-	return
 
 	### NOW DO THE REST OF THE STUFF (GP)
 	n_subsample_gp = int(n_subsample_gp)
@@ -945,7 +908,6 @@ def run_traintest(testing_fname,
 	fig_discrete.savefig(fname=os.path.join(output_dir,'gp_discrete_fits.png'), dpi=300)
 	fig.savefig(fname=os.path.join(output_dir,'continuous_fits.png'), dpi=300)
 
-
 	# fit GPR-Ybarpprox to Xk vs Ybar-infer
 	foo_nm = 'GP_continuous_Yinfer_full'
 	ODE.share_gp = False
@@ -1201,6 +1163,47 @@ def run_traintest(testing_fname,
 	figbig.savefig(fname=os.path.join(output_dir,'big_summary.png'), dpi=300)
 
 	plt.close(figbig)
+
+
+	######## RNN fits! #######
+	if gp_correct_rnn:
+		ODE.add_closure = True
+		ODE.set_predictor(gpr_approx.predict)
+
+	# update some custom settings
+	rnn_settings = {'max_plot': goo['X_test_traj'].shape[1],
+					'n_epochs': rnn_n_epochs,
+					'hidden_size': rnn_hidden_size,
+					'model_params': {'delta_t': delta_t,
+								'ode_int_method': psi0_ode_int_method,
+								'ode_int_atol': psi0_ode_int_atol,
+								'ode_int_rtol': psi0_ode_int_rtol,
+								'ode_int_max_step': psi0_ode_int_max_step,
+								'ode_params': (),
+								'time_avg_norm': avg_output
+								},
+					'cell_type': cell_type,
+					'lr': lr,
+					'optimizer_name': optimizer_name,
+					'component_wise': component_wise,
+					'use_physics_as_bias': use_physics_as_bias,
+					'run_style': run_style,
+					'old': old,
+					'use_manual_seed': use_manual_seed,
+					'omit_z': omit_z,
+					'n_grad_steps': n_grad_steps,
+					'do_euler': do_euler
+					}
+
+	## Run a specific RNN scheme
+	goo_str = '{cell_type}_hs{hidden_size}'.format(**rnn_settings)
+	foo_nm = 'res_'*rnn_settings['use_physics_as_bias'] + goo_str + '_componentwise'*rnn_settings['component_wise'] + '_' + rnn_settings['run_style'] + '_{0}gradsteps'.format(n_grad_steps) +'_{0}'.format(optimizer_name)  + '_euler'*rnn_settings['do_euler'] + _'gp_corrected'*gp_correct_rnn
+	rnn_settings['output_dir'] = os.path.join(output_dir,'rnn_output',foo_nm)
+	rnn_settings['learn_residuals'] = rnn_settings['use_physics_as_bias']
+	setup_RNN(rnn_settings, training_fname, testing_fname, ODE, profile=profile)
+	print('done with RNN so quitting...no GP stuff this time!')
+
+
 
 	return
 

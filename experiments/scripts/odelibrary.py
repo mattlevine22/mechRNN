@@ -32,7 +32,7 @@ class LDS:
   """
 
   def __init__(_s,
-      A = np.array([[0, 5], [-5, 0]]), share_gp=True):
+      A = np.array([[0, 5], [-5, 0]]), share_gp=True, add_closure=False):
     '''
     Initialize an instance: setting parameters and xkstar
     '''
@@ -42,6 +42,7 @@ class LDS:
     _s.hx = 1 # just useful when re-using L96 code
     _s.slow_only = False
     _s.exchangeable_states = False
+    _s.add_closure = add_closure
 
   def get_inits(_s):
     state_inits = np.random.randn(_s.K)
@@ -58,8 +59,10 @@ class LDS:
 
   def rhs(_s, S, t):
     ''' Full system RHS '''
-    foo_rhs = np.empty(3)
-    return _s.A @ S
+    foo_rhs = _s.A @ S
+    if _s.add_closure:
+        foo_rhs += _s.simulate(S)
+    return foo_rhs
 
   def regressed(_s, x, t):
     ''' Only slow variables with RHS learned from data '''
@@ -132,7 +135,7 @@ class L96M:
   """
 
   def __init__(_s,
-      K = 9, J = 8, hx = -0.8, hy = 1, F = 10, eps = 2**(-7), k0 = 0, slow_only=False, dima_style=False, share_gp=True):
+      K = 9, J = 8, hx = -0.8, hy = 1, F = 10, eps = 2**(-7), k0 = 0, slow_only=False, dima_style=False, share_gp=True, add_closure=False):
     '''
     Initialize an instance: setting parameters and xkstar
     '''
@@ -164,6 +167,7 @@ class L96M:
     _s.xk_star[0] = 5
     _s.xk_star[1] = 5
     _s.xk_star[-1] = 5
+    _s.add_closure = add_closure
 
   def get_inits(_s, sigma = 15, mu = -5):
     z0 = np.zeros((_s.K + _s.K * _s.J))
@@ -226,9 +230,11 @@ class L96M:
 
   def rhs(_s, z, t):
     if _s.slow_only:
-      foo_rhs = _s.slow(z, t)
+        foo_rhs = _s.slow(z, t)
     else:
       foo_rhs = _s.full(z, t)
+    if _s.add_closure:
+        foo_rhs += _s.simulate(z)
     return foo_rhs
 
   def full(_s, z, t):
@@ -538,7 +544,7 @@ class L63:
   """
 
   def __init__(_s,
-      a = 10, b = 28, c = 8/3, share_gp=True):
+      a = 10, b = 28, c = 8/3, share_gp=True, add_closure=False):
     '''
     Initialize an instance: setting parameters and xkstar
     '''
@@ -550,6 +556,7 @@ class L63:
     _s.hx = 1 # just useful when re-using L96 code
     _s.slow_only = False
     _s.exchangeable_states = False
+    _s.add_closure = add_closure
 
   def get_inits(_s):
     (xmin, xmax) = (-10,10)
@@ -585,6 +592,8 @@ class L63:
     foo_rhs[1] = b*x - y - x*z
     foo_rhs[2] = -c*z + x*y
 
+    if _s.add_closure:
+        foo_rhs += _s.simulate(S)
     return foo_rhs
 
   def regressed(_s, x, t):
